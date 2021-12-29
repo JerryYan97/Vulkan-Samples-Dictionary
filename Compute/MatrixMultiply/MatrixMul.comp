@@ -1,0 +1,27 @@
+#version 450
+
+layout (local_size_x = 3, local_size_y = 3) in;
+layout (binding = 0, std140) uniform i1 {
+    float matIn1[9];
+};
+layout (binding = 1, std140) uniform i2 {
+    float matIn2[9];
+};
+layout (binding = 2, std430) buffer o1 {
+    float matOut[9];
+};
+
+void main()
+{
+    uint g_id_x = gl_GlobalInvocationID.x;
+    uint g_id_y = gl_GlobalInvocationID.y;
+    uint mat1_row_id = g_id_x;
+    uint mat2_col_id = g_id_y;
+    uint matOut_id =  gl_LocalInvocationIndex;
+
+    uint mat1_ele_id1 = mat1_row_id * 3;
+    uint mat2_ele_id1 = mat2_col_id;
+    matOut[matOut_id] = matIn1[mat1_ele_id1] * matIn2[mat2_ele_id1] +
+                        matIn1[mat1_ele_id1 + 1] * matIn2[mat2_ele_id1 + 3] +
+                        matIn1[mat1_ele_id1 + 2] * matIn2[mat2_ele_id1 + 6];
+}
