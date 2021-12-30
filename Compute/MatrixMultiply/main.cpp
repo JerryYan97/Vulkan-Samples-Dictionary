@@ -16,13 +16,15 @@ uint32_t findMemoryType( vk::PhysicalDeviceMemoryProperties const & memoryProper
 int main()
 {
     // Initialize matrix data
-    float mat1[9] = {
+    float mat1[9] =
+    {
             1.f, 2.f, 3.f,
             4.f, 5.f, 6.f,
             7.f, 8.f, 9.f
     };
 
-    float mat2[9] = {
+    float mat2[9] =
+    {
             1.f, 1.f, 1.f,
             2.f, 3.f, 4.f,
             1.f, 3.f, 5.f
@@ -224,6 +226,9 @@ int main()
     vk::Pipeline computePipeline;
     device.createComputePipelines(VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &computePipeline);
 
+    /*
+        Command buffer creation (for compute work submission)
+    */
     // Create a CommandPool to allocate a CommandBuffer from
     vk::CommandPool commandPool = device.createCommandPool(
             vk::CommandPoolCreateInfo(vk::CommandPoolCreateFlags(), computeQueueFamilyIndex)
@@ -238,6 +243,68 @@ int main()
 
     // Get a compute queue from the device
     vk::Queue computeQueue = device.getQueue(computeQueueFamilyIndex, 0);
+
+    commandBuffer.begin( vk::CommandBufferBeginInfo( vk::CommandBufferUsageFlags() ) );
+
+    // Barrier to ensure that input buffer transfer is finished before compute shader reads from it
+    vk::BufferMemoryBarrier inputBufferBarriers[] =
+    {
+        vk::BufferMemoryBarrier(vk::AccessFlagBits::eHostWrite, vk::AccessFlagBits::eHostRead, VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, uniformDataBuffer1, 0, VK_WHOLE_SIZE),
+        vk::BufferMemoryBarrier(vk::AccessFlagBits::eHostWrite, vk::AccessFlagBits::eHostRead, VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, uniformDataBuffer2, 0, VK_WHOLE_SIZE)
+    };
+
+    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eHost,
+                                  vk::PipelineStageFlagBits::eComputeShader,
+                                  vk::DependencyFlags(),
+                                  0,
+                                  nullptr,
+                                  0,
+                                  inputBufferBarriers,
+                                  0,
+                                  nullptr
+                                  );
+
+    commandBuffer.bindPipeline(vk::PipelineBindPoint::eCompute, computePipeline);
+    commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
+    commandBuffer.dispatch(1, 1, 1);
+
+    // Barrier to ensure that shader writes are finished before buffer is read back from GPU
+    vk::BufferMemoryBarrier bufferOutBarrier(
+            vk::AccessFlagBits::eHostRead,
+            vk::AccessFlagBits::eShaderWrite,
+            VK_QUEUE_FAMILY_IGNORED,
+            VK_QUEUE_FAMILY_IGNORED,
+            storageDataBuffer,
+            0,
+            VK_WHOLE_SIZE
+    );
+    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
+                                  vk::PipelineStageFlagBits::eTransfer,
+                                  vk::DependencyFlags(),
+                                  0, nullptr,
+                                  1, &bufferOutBarrier,
+                                  0, nullptr);
+    commandBuffer.end();
+
+    vk::FenceCreateInfo fenceCreateInfo((vk::FenceCreateFlags()));
+    vk::Fence fence;
+    device.createFence(&fenceCreateInfo, nullptr, &fence);
+    vk::SubmitInfo submitInfo;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffer;
+    // Submit compute work
+    computeQueue.submit(1, &submitInfo, fence);
+    device.waitForFences(1, &fence, VK_TRUE, UINT64_MAX);
+
+    // Make device writes visible to the host
+    void* mapped;
+    device.mapMemory(storageDataMemoryOut, 0, VK_WHOLE_SIZE, vk::MemoryMapFlags(), &mapped);
+    vk::MappedMemoryRange mappedRange(storageDataMemoryOut, 0, VK_WHOLE_SIZE);
+    device.invalidateMappedMemoryRanges(1, &mappedRange);
+
+    // Copy to output
+    memcpy(matRes, mapped, 9 * sizeof(float));
+    device.unmapMemory(storageDataMemoryOut);
 
     std::cout << "Hello World." << std::endl;
 
