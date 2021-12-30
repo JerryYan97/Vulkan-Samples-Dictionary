@@ -205,7 +205,7 @@ int main()
     //                         the CMakeLists.txt file in the same level of repository.
     std::cout << SOURCE_PATH << std::endl;
     std::string shaderPath = std::string(SOURCE_PATH) + std::string("/MatrixMul.comp.spv");
-    std::ifstream inputShader(shaderPath.c_str(), std::ios::binary | std::ios::in | std::ios::ate);
+    std::ifstream inputShader(shaderPath.c_str(), std::ios::binary | std::ios::in);
     std::vector<unsigned char> buffer(std::istreambuf_iterator<char>(inputShader), {});
     inputShader.close();
     vk::ShaderModuleCreateInfo shaderModuleCreateInfo(
@@ -307,6 +307,9 @@ int main()
     device.unmapMemory(storageDataMemoryOut);
 
     std::cout << "Hello World." << std::endl;
+    std::cout << matRes[0] << ", " << matRes[1] << ", " << matRes[2] << std::endl;
+    std::cout << matRes[3] << ", " << matRes[4] << ", " << matRes[5] << std::endl;
+    std::cout << matRes[6] << ", " << matRes[7] << ", " << matRes[8] << std::endl;
 
     //
     device.destroyShaderModule(shaderModule);
