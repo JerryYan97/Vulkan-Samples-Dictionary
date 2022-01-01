@@ -3,6 +3,7 @@
 //
 #include <iostream>
 #include <vector>
+#include <cassert>
 #include "vulkan/vulkan.h"
 
 #define STR(r)    \
@@ -78,6 +79,7 @@ int main()
     // Verify that the debug extension for the callback messenger is supported.
     uint32_t propNum;
     VK_CHECK(vkEnumerateInstanceExtensionProperties(nullptr, &propNum, nullptr));
+    assert(propNum >= 1);
     std::vector<VkExtensionProperties> props(propNum);
     VK_CHECK(vkEnumerateInstanceExtensionProperties(nullptr, &propNum, props.data()));
     for (int i = 0; i < props.size(); ++i)
@@ -109,6 +111,7 @@ int main()
     // Verify that the validation layer for Khronos validation is supported
     uint32_t layerNum;
     VK_CHECK(vkEnumerateInstanceLayerProperties(&layerNum, nullptr));
+    assert(layerNum >= 1);
     std::vector<VkLayerProperties> layers(layerNum);
     VK_CHECK(vkEnumerateInstanceLayerProperties(&layerNum, layers.data()));
     for (int i = 0; i < layerNum; ++i)
@@ -128,7 +131,7 @@ int main()
     VkApplicationInfo appInfo{}; // TIPS: You can delete this bracket to see what happens.
     {
         appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-        appInfo.pApplicationName = "EnumerateDevices";
+        appInfo.pApplicationName = "InitDevice";
         appInfo.applicationVersion = 1;
         appInfo.pEngineName = "VulkanDict";
         appInfo.engineVersion = 1;
@@ -162,12 +165,53 @@ int main()
     // Enumerate the physicalDevices, select the first one and display the name of it.
     uint32_t phyDeviceCount;
     VK_CHECK(vkEnumeratePhysicalDevices(instance, &phyDeviceCount, nullptr));
+    assert(phyDeviceCount >= 1);
     std::vector<VkPhysicalDevice> phyDeviceVec(phyDeviceCount);
     VK_CHECK(vkEnumeratePhysicalDevices(instance, &phyDeviceCount, phyDeviceVec.data()));
     VkPhysicalDevice physicalDevice = phyDeviceVec[0];
     VkPhysicalDeviceProperties physicalDevProperties;
     vkGetPhysicalDeviceProperties(physicalDevice, &physicalDevProperties);
     std::cout << "Device name:" << physicalDevProperties.deviceName << std::endl;
+
+    // Initialize the device with graphics queue
+    uint32_t queueFamilyPropCount;
+    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyPropCount, nullptr);
+    assert(queueFamilyPropCount >= 1);
+    std::vector<VkQueueFamilyProperties> queueFamilyProps(queueFamilyPropCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyPropCount, queueFamilyProps.data());
+
+    bool found = false;
+    unsigned int queueFamilyIdx = -1;
+    for (unsigned int i = 0; i < queueFamilyPropCount; ++i) {
+        if(queueFamilyProps[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+        {
+            queueFamilyIdx = i;
+            found = true;
+            break;
+        }
+    }
+    assert(found);
+
+    float queue_priorities[1] = {0.0};
+    VkDeviceQueueCreateInfo queueInfo{};
+    {
+        queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queueInfo.queueFamilyIndex = queueFamilyIdx;
+        queueInfo.queueCount = 1;
+        queueInfo.pQueuePriorities = queue_priorities;
+    }
+
+    VkDeviceCreateInfo deviceInfo{};
+    {
+        deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        deviceInfo.queueCreateInfoCount = 1;
+        deviceInfo.pQueueCreateInfos = &queueInfo;
+    }
+    VkDevice device;
+    VK_CHECK(vkCreateDevice(physicalDevice, &deviceInfo, nullptr, &device));
+
+    // Destroy the device
+    vkDestroyDevice(device, nullptr);
 
     // Destroy debug messenger
     auto fpVkDestroyDebugUtilsMessengerEXT = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");

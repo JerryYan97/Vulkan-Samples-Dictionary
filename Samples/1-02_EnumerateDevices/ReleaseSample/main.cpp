@@ -2,6 +2,8 @@
 // Created by Jerry on 11/28/2021.
 //
 #include "vulkan/vulkan.h"
+#include <vector>
+#include <iostream>
 
 int main()
 {
@@ -23,6 +25,16 @@ int main()
     }
     VkInstance instance;
     vkCreateInstance(&instanceCreateInfo, nullptr, &instance);
+
+    // Enumerate the physicalDevices, select the first one and display the name of it.
+    uint32_t phyDeviceCount;
+    vkEnumeratePhysicalDevices(instance, &phyDeviceCount, nullptr);
+    std::vector<VkPhysicalDevice> phyDeviceVec(phyDeviceCount);
+    vkEnumeratePhysicalDevices(instance, &phyDeviceCount, phyDeviceVec.data());
+    VkPhysicalDevice physicalDevice = phyDeviceVec[0];
+    VkPhysicalDeviceProperties physicalDevProperties;
+    vkGetPhysicalDeviceProperties(physicalDevice, &physicalDevProperties);
+    std::cout << "Device name:" << physicalDevProperties.deviceName << std::endl;
 
     // Destroy instance
     vkDestroyInstance(instance, nullptr);
