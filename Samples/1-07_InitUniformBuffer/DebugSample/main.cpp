@@ -131,7 +131,7 @@ int main()
     VkApplicationInfo appInfo{}; // TIPS: You can delete this bracket to see what happens.
     {
         appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-        appInfo.pApplicationName = "InitDevice";
+        appInfo.pApplicationName = "InitUniformBuffer";
         appInfo.applicationVersion = 1;
         appInfo.pEngineName = "VulkanDict";
         appInfo.engineVersion = 1;
@@ -173,6 +173,10 @@ int main()
     vkGetPhysicalDeviceProperties(physicalDevice, &physicalDevProperties);
     std::cout << "Device name:" << physicalDevProperties.deviceName << std::endl;
 
+    // Enumerate this physical device's memory properties
+    VkPhysicalDeviceMemoryProperties phyDeviceMemProps;
+    vkGetPhysicalDeviceMemoryProperties(physicalDevice, &phyDeviceMemProps);
+
     // Initialize the device with graphics queue
     uint32_t queueFamilyPropCount;
     vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyPropCount, nullptr);
@@ -210,6 +214,88 @@ int main()
     }
     VkDevice device;
     VK_CHECK(vkCreateDevice(physicalDevice, &deviceInfo, nullptr, &device));
+
+    // Create a command pool to allocate our command buffer from
+    VkCommandPoolCreateInfo cmdPoolInfo{};
+    {
+        cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        cmdPoolInfo.queueFamilyIndex = queueFamilyIdx;
+        cmdPoolInfo.flags = 0;
+    }
+    VkCommandPool cmdPool;
+    VK_CHECK(vkCreateCommandPool(device, &cmdPoolInfo, nullptr, &cmdPool));
+
+    // Allocate the command buffer from the command pool
+    VkCommandBufferAllocateInfo cmdBufferAllocInfo{};
+    {
+        cmdBufferAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        cmdBufferAllocInfo.commandPool = cmdPool;
+        cmdBufferAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        cmdBufferAllocInfo.commandBufferCount = 1;
+    }
+    VkCommandBuffer cmdBuffer;
+    VK_CHECK(vkAllocateCommandBuffers(device, &cmdBufferAllocInfo, &cmdBuffer));
+
+    // Data for the uniform buffer
+    float mat[] = {1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f, 9.f};
+    VkBufferCreateInfo bufCreateInfo{};
+    {
+        bufCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufCreateInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+        bufCreateInfo.size = 9 * sizeof(float);
+        bufCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    }
+    VkBuffer uniformBuffer;
+    VK_CHECK(vkCreateBuffer(device, &bufCreateInfo, nullptr, &uniformBuffer));
+
+    VkMemoryRequirements memReqs;
+    vkGetBufferMemoryRequirements(device, uniformBuffer, &memReqs);
+
+    bool memMatch = false;
+    uint32_t memTypeIdx = 0;
+    for (int i = 0; i < phyDeviceMemProps.memoryTypeCount; ++i)
+    {
+        if(memReqs.memoryTypeBits & (1 << i))
+        {
+            if(phyDeviceMemProps.memoryTypes[i].propertyFlags &
+               (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
+            {
+                memTypeIdx = i;
+                memMatch = true;
+                break;
+            }
+        }
+    }
+    assert(memMatch);
+
+    VkMemoryAllocateInfo allocInfo{};
+    {
+        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        allocInfo.memoryTypeIndex = memTypeIdx;
+        allocInfo.allocationSize = memReqs.size;
+    }
+
+    VkDeviceMemory deviceUniformBufMem;
+    VK_CHECK(vkAllocateMemory(device, &allocInfo, nullptr, &deviceUniformBufMem));
+
+    uint8_t *pData;
+    VK_CHECK(vkMapMemory(device, deviceUniformBufMem, 0, memReqs.size, 0, (void**) &pData));
+    memcpy(pData, mat, 9 * sizeof(float));
+    vkUnmapMemory(device, deviceUniformBufMem);
+
+    VK_CHECK(vkBindBufferMemory(device, uniformBuffer, deviceUniformBufMem, 0));
+
+    // Destroy Uniform buffer
+    vkDestroyBuffer(device, uniformBuffer, nullptr);
+
+    // Free memory
+    vkFreeMemory(device, deviceUniformBufMem, nullptr);
+
+    // Free Command Buffer
+    vkFreeCommandBuffers(device, cmdPool, 1, &cmdBuffer);
+
+    // Destroy the Command Pool
+    vkDestroyCommandPool(device, cmdPool, nullptr);
 
     // Destroy the device
     vkDestroyDevice(device, nullptr);

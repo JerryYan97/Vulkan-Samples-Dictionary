@@ -211,6 +211,33 @@ int main()
     VkDevice device;
     VK_CHECK(vkCreateDevice(physicalDevice, &deviceInfo, nullptr, &device));
 
+    // Create a command pool to allocate our command buffer from
+    VkCommandPoolCreateInfo cmdPoolInfo{};
+    {
+        cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        cmdPoolInfo.queueFamilyIndex = queueFamilyIdx;
+        cmdPoolInfo.flags = 0;
+    }
+    VkCommandPool cmdPool;
+    VK_CHECK(vkCreateCommandPool(device, &cmdPoolInfo, nullptr, &cmdPool));
+
+    // Allocate the command buffer from the command pool
+    VkCommandBufferAllocateInfo cmdBufferAllocInfo{};
+    {
+        cmdBufferAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        cmdBufferAllocInfo.commandPool = cmdPool;
+        cmdBufferAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        cmdBufferAllocInfo.commandBufferCount = 1;
+    }
+    VkCommandBuffer cmdBuffer;
+    VK_CHECK(vkAllocateCommandBuffers(device, &cmdBufferAllocInfo, &cmdBuffer));
+
+    // Free Command Buffer
+    vkFreeCommandBuffers(device, cmdPool, 1, &cmdBuffer);
+
+    // Destroy the Command Pool
+    vkDestroyCommandPool(device, cmdPool, nullptr);
+
     // Destroy the device
     vkDestroyDevice(device, nullptr);
 
