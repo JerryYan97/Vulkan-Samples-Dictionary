@@ -173,10 +173,6 @@ int main()
     vkGetPhysicalDeviceProperties(physicalDevice, &physicalDevProperties);
     std::cout << "Device name:" << physicalDevProperties.deviceName << std::endl;
 
-    // Enumerate this physical device's memory properties
-    VkPhysicalDeviceMemoryProperties phyDeviceMemProps;
-    vkGetPhysicalDeviceMemoryProperties(physicalDevice, &phyDeviceMemProps);
-
     // Initialize the device with graphics queue
     uint32_t queueFamilyPropCount;
     vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyPropCount, nullptr);
@@ -215,65 +211,40 @@ int main()
     VkDevice device;
     VK_CHECK(vkCreateDevice(physicalDevice, &deviceInfo, nullptr, &device));
 
-    // Data for the uniform buffer
-    float mat[] = {1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f, 9.f};
-
-    // Create the uniform buffer
-    VkBufferCreateInfo bufCreateInfo{};
+    // Create a descriptor set layout binding
+    VkDescriptorSetLayoutBinding layoutBinding{};
     {
-        bufCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufCreateInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-        bufCreateInfo.size = 9 * sizeof(float);
-        bufCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    }
-    VkBuffer uniformBuffer;
-    VK_CHECK(vkCreateBuffer(device, &bufCreateInfo, nullptr, &uniformBuffer));
-
-    // Allocate memory for the uniform buffer
-    VkMemoryRequirements memReqs;
-    vkGetBufferMemoryRequirements(device, uniformBuffer, &memReqs);
-
-    bool memMatch = false;
-    uint32_t memTypeIdx = 0;
-    for (int i = 0; i < phyDeviceMemProps.memoryTypeCount; ++i)
-    {
-        if(memReqs.memoryTypeBits & (1 << i))
-        {
-            if(phyDeviceMemProps.memoryTypes[i].propertyFlags &
-               (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
-            {
-                memTypeIdx = i;
-                memMatch = true;
-                break;
-            }
-        }
-    }
-    assert(memMatch);
-
-    VkMemoryAllocateInfo allocInfo{};
-    {
-        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        allocInfo.memoryTypeIndex = memTypeIdx;
-        allocInfo.allocationSize = memReqs.size;
+        layoutBinding.binding = 0;
+        layoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        layoutBinding.descriptorCount = 1;
+        layoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     }
 
-    VkDeviceMemory deviceUniformBufMem;
-    VK_CHECK(vkAllocateMemory(device, &allocInfo, nullptr, &deviceUniformBufMem));
+    // Create a descriptor set layout
+    VkDescriptorSetLayoutCreateInfo desSetLayoutInfo{};
+    {
+        desSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        desSetLayoutInfo.bindingCount = 1;
+        desSetLayoutInfo.pBindings = &layoutBinding;
+    }
+    VkDescriptorSetLayout desSetLayout{};
+    VK_CHECK(vkCreateDescriptorSetLayout(device, &desSetLayoutInfo, nullptr, &desSetLayout));
 
-    // Copy mat data to the allocated memory.
-    uint8_t *pData;
-    VK_CHECK(vkMapMemory(device, deviceUniformBufMem, 0, memReqs.size, 0, (void**) &pData));
-    memcpy(pData, mat, 9 * sizeof(float));
-    vkUnmapMemory(device, deviceUniformBufMem);
+    // Create a pipeline layout by using a descriptor set layout
+    VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{};
+    {
+        pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        pipelineLayoutCreateInfo.setLayoutCount = 1;
+        pipelineLayoutCreateInfo.pSetLayouts = &desSetLayout;
+    }
+    VkPipelineLayout pipelineLayout;
+    VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelineLayout));
 
-    // Bind the memory and the uniform buffer together.
-    VK_CHECK(vkBindBufferMemory(device, uniformBuffer, deviceUniformBufMem, 0));
+    // Destroy the descriptor set layout
+    vkDestroyDescriptorSetLayout(device, desSetLayout, nullptr);
 
-    // Destroy Uniform buffer
-    vkDestroyBuffer(device, uniformBuffer, nullptr);
-
-    // Free memory
-    vkFreeMemory(device, deviceUniformBufMem, nullptr);
+    // Destroy the pipeline layout
+    vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 
     // Destroy the device
     vkDestroyDevice(device, nullptr);

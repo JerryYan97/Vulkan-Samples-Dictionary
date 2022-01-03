@@ -5,10 +5,11 @@
 #include <vector>
 #include <iostream>
 
+
 int main()
 {
     // Initialize instance and application
-    VkApplicationInfo appInfo{};
+    VkApplicationInfo appInfo{}; // TIPS: You can delete this bracket to see what happens.
     {
         appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
         appInfo.pApplicationName = "InitUniformBuffer";
@@ -74,8 +75,39 @@ int main()
     VkDevice device;
     vkCreateDevice(physicalDevice, &deviceInfo, nullptr, &device);
 
+    // Create a descriptor set layout binding
+    VkDescriptorSetLayoutBinding layoutBinding{};
+    {
+        layoutBinding.binding = 0;
+        layoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        layoutBinding.descriptorCount = 1;
+        layoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    }
+
+    // Create a descriptor set layout
+    VkDescriptorSetLayoutCreateInfo desSetLayoutInfo{};
+    {
+        desSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        desSetLayoutInfo.bindingCount = 1;
+        desSetLayoutInfo.pBindings = &layoutBinding;
+    }
+    VkDescriptorSetLayout desSetLayout{};
+    vkCreateDescriptorSetLayout(device, &desSetLayoutInfo, nullptr, &desSetLayout);
+
+    // Create a pipeline layout by using a descriptor set layout
+    VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{};
+    {
+        pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        pipelineLayoutCreateInfo.setLayoutCount = 1;
+        pipelineLayoutCreateInfo.pSetLayouts = &desSetLayout;
+    }
+    VkPipelineLayout pipelineLayout;
+    vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelineLayout);
+
     // Data for the uniform buffer
     float mat[] = {1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f, 9.f};
+
+    // Create the uniform buffer
     VkBufferCreateInfo bufCreateInfo{};
     {
         bufCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -86,6 +118,7 @@ int main()
     VkBuffer uniformBuffer;
     vkCreateBuffer(device, &bufCreateInfo, nullptr, &uniformBuffer);
 
+    // Allocate memory for the uniform buffer
     VkMemoryRequirements memReqs;
     vkGetBufferMemoryRequirements(device, uniformBuffer, &memReqs);
 
@@ -113,18 +146,75 @@ int main()
     VkDeviceMemory deviceUniformBufMem;
     vkAllocateMemory(device, &allocInfo, nullptr, &deviceUniformBufMem);
 
+    // Copy mat data to the allocated memory.
     uint8_t *pData;
     vkMapMemory(device, deviceUniformBufMem, 0, memReqs.size, 0, (void**) &pData);
     memcpy(pData, mat, 9 * sizeof(float));
     vkUnmapMemory(device, deviceUniformBufMem);
 
+    // Bind the memory and the uniform buffer together.
     vkBindBufferMemory(device, uniformBuffer, deviceUniformBufMem, 0);
+
+    // Create the descriptor pool
+    VkDescriptorPoolSize desPoolSize{};
+    {
+        desPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        desPoolSize.descriptorCount = 1;
+    }
+
+    VkDescriptorPoolCreateInfo desPoolInfo{};
+    {
+        desPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        desPoolInfo.maxSets = 1;
+        desPoolInfo.poolSizeCount = 1;
+        desPoolInfo.pPoolSizes = &desPoolSize;
+    }
+
+    VkDescriptorPool descriptorPool;
+    vkCreateDescriptorPool(device, &desPoolInfo, nullptr, &descriptorPool);
+
+    // Allocate the descriptor set
+    VkDescriptorSetAllocateInfo desSetAllocInfo{};
+    {
+        desSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        desSetAllocInfo.descriptorPool = descriptorPool;
+        desSetAllocInfo.descriptorSetCount = 1;
+        desSetAllocInfo.pSetLayouts = &desSetLayout;
+    }
+    VkDescriptorSet descriptorSet;
+    vkAllocateDescriptorSets(device, &desSetAllocInfo, &descriptorSet);
+
+    // Write Info to the descriptor
+    VkDescriptorBufferInfo desBufInfo{};
+    {
+        desBufInfo.buffer = uniformBuffer;
+        desBufInfo.offset = 0;
+        desBufInfo.range = 9 * sizeof(float);
+    }
+    VkWriteDescriptorSet writeDesSet{};
+    {
+        writeDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeDesSet.dstSet = descriptorSet;
+        writeDesSet.descriptorCount = 1;
+        writeDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        writeDesSet.pBufferInfo = &desBufInfo;
+    }
+    vkUpdateDescriptorSets(device, 1, &writeDesSet, 0, nullptr);
+
+    // Destroy the descriptor pool
+    vkDestroyDescriptorPool(device, descriptorPool, nullptr);
 
     // Destroy Uniform buffer
     vkDestroyBuffer(device, uniformBuffer, nullptr);
 
     // Free memory
     vkFreeMemory(device, deviceUniformBufMem, nullptr);
+
+    // Destroy the descriptor set layout
+    vkDestroyDescriptorSetLayout(device, desSetLayout, nullptr);
+
+    // Destroy the pipeline layout
+    vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 
     // Destroy the device
     vkDestroyDevice(device, nullptr);
