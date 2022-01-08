@@ -497,11 +497,9 @@ int main()
 
     // Submit all recorded works
     VK_CHECK(vkResetFences(device, 1, &fence));
-    const VkPipelineStageFlags waitStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
     VkSubmitInfo computeSubmitInfo{};
     {
         computeSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        computeSubmitInfo.pWaitDstStageMask = &waitStageMask; // 这个好像可以删掉
         computeSubmitInfo.commandBufferCount = 1;
         computeSubmitInfo.pCommandBuffers = &cmdBuf;
     }

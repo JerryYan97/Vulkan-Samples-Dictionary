@@ -5,361 +5,389 @@
 #include <fstream>
 #include "vulkan/vulkan.hpp"
 
-// NOTE: You can use glslc in Vulkan SDK to generate .spv SPIRV shader files from .comp/.vert/.frag .etc glsl or hlsl
-//       files. This tool should be attached to your command line tool as soon as you install the Vulkan SDK.
-
-// TODO: May need Boost to find the main.cpp path.
-uint32_t findMemoryType( vk::PhysicalDeviceMemoryProperties const & memoryProperties,
-                         uint32_t                                   typeBits,
-                         vk::MemoryPropertyFlags                    requirementsMask );
-
 int main()
 {
-    // Initialize matrix data
-    float mat1[9] =
+    // Initialize instance and application
+    VkApplicationInfo appInfo{};
     {
-            1.f, 2.f, 3.f,
-            4.f, 5.f, 6.f,
-            7.f, 8.f, 9.f
-    };
+        appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+        appInfo.pApplicationName = "ArrayPow2";
+        appInfo.applicationVersion = 1;
+        appInfo.pEngineName = "VulkanDict";
+        appInfo.engineVersion = 1;
+        appInfo.apiVersion = VK_API_VERSION_1_1;
+    }
 
-    float mat2[9] =
+    VkInstanceCreateInfo instanceCreateInfo{};
     {
-            1.f, 1.f, 1.f,
-            2.f, 3.f, 4.f,
-            1.f, 3.f, 5.f
-    };
+        instanceCreateInfo.sType = VkStructureType::VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+        instanceCreateInfo.pApplicationInfo = &appInfo;
+    }
+    VkInstance instance;
+    vkCreateInstance(&instanceCreateInfo, nullptr, &instance);
 
-    float matRes[9];
+    // Enumerate the physicalDevices, select the first one and display the name of it.
+    uint32_t phyDeviceCount;
+    vkEnumeratePhysicalDevices(instance, &phyDeviceCount, nullptr);
+    std::vector<VkPhysicalDevice> phyDeviceVec(phyDeviceCount);
+    vkEnumeratePhysicalDevices(instance, &phyDeviceCount, phyDeviceVec.data());
+    VkPhysicalDevice physicalDevice = phyDeviceVec[0];
+    VkPhysicalDeviceProperties physicalDevProperties;
+    vkGetPhysicalDeviceProperties(physicalDevice, &physicalDevProperties);
+    std::cout << "Device name:" << physicalDevProperties.deviceName << std::endl;
 
-    /*
-       Vulkan Device Creation
-    */
+    // Enumerate this physical device's memory properties
+    VkPhysicalDeviceMemoryProperties phyDeviceMemProps;
+    vkGetPhysicalDeviceMemoryProperties(physicalDevice, &phyDeviceMemProps);
 
-    // Initialize vulkan
-    // Initialize the vk::ApplicationInfo structure
-    vk::ApplicationInfo appInfo(
-                                "Matrix Multiply",
-                                1,
-                                "Vulkan.hpp",
-                                1,
-                                VK_API_VERSION_1_1);
+    // Initialize the device with compute queue
+    uint32_t queueFamilyPropCount;
+    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyPropCount, nullptr);
+    std::vector<VkQueueFamilyProperties> queueFamilyProps(queueFamilyPropCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyPropCount, queueFamilyProps.data());
 
-    // Initialize the vk::InstanceCreateInfo
-    vk::InstanceCreateInfo instanceCreateInfo({}, &appInfo);
-
-    // Create an Instance
-    vk::Instance instance = vk::createInstance(instanceCreateInfo);
-
-    // Enumerate the physicalDevice and print the first physical device's name
-    vk::PhysicalDevice physicalDevice = instance.enumeratePhysicalDevices().front();
-    vk::PhysicalDeviceProperties physicalDeviceProperties;
-    physicalDevice.getProperties(&physicalDeviceProperties);
-    std::cout << "Device name:" << physicalDeviceProperties.deviceName << std::endl;
-
-    // Get the QueueFamilyProperties of the first PhysicalDevice
-    std::vector<vk::QueueFamilyProperties> queueFamilyProperties = physicalDevice.getQueueFamilyProperties();
-
-    // Find the first index into queueFamilyProperties which supports graphics
-    size_t computeQueueFamilyIndex = ~0;
-    for (int i = 0; i < queueFamilyProperties.size(); ++i)
+    bool found = false;
+    unsigned int queueFamilyIdx = -1;
+    for (int i = 0; i < queueFamilyPropCount; ++i)
     {
-        if (queueFamilyProperties[i].queueFlags & vk::QueueFlagBits::eCompute)
+        if(queueFamilyProps[i].queueFlags & VK_QUEUE_COMPUTE_BIT)
         {
-            computeQueueFamilyIndex = i;
+            queueFamilyIdx = i;
+            found = true;
             break;
         }
     }
+    assert(found);
 
-    // Create a Device
-    float queuePriority = 0.f;
-    vk::DeviceQueueCreateInfo deviceQueueCreateInfo(
-            vk::DeviceQueueCreateFlags(),
-            static_cast<uint32_t>(computeQueueFamilyIndex),
-            1,
-            &queuePriority
-    );
-    vk::Device device = physicalDevice.createDevice(
-            vk::DeviceCreateInfo(
-                    vk::DeviceCreateFlags(),
-                    deviceQueueCreateInfo
-            )
-    );
+    float queuePriorities[1] = {0.f};
+    VkDeviceQueueCreateInfo queueInfo{};
+    {
+        queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queueInfo.queueFamilyIndex = queueFamilyIdx;
+        queueInfo.queueCount = 1;
+        queueInfo.pQueuePriorities = queuePriorities;
+    }
+
+    VkDeviceCreateInfo deviceInfo{};
+    {
+        deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        deviceInfo.queueCreateInfoCount = 1;
+        deviceInfo.pQueueCreateInfos = &queueInfo;
+    }
+    VkDevice device;
+    vkCreateDevice(physicalDevice, &deviceInfo, nullptr, &device);
+
+    // Get a compute queue
+    VkQueue computeQueue;
+    vkGetDeviceQueue(device, queueFamilyIdx, 0, &computeQueue);
+
+    // Create a command pool supporting compute commands
+    VkCommandPoolCreateInfo cmdPoolInfo{};
+    {
+        cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        cmdPoolInfo.queueFamilyIndex = queueFamilyIdx;
+        cmdPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    }
+    VkCommandPool cmdPool;
+    vkCreateCommandPool(device, &cmdPoolInfo, nullptr, &cmdPool);
+
+    // Data for the input buffer
+    uint32_t vals[9] = {0, 1, 2, 3, 4, 5, 6, 7, 8};
+    VkDeviceSize valsSize = 9 * sizeof(uint32_t);
+
+    // Create host buffer and device buffer as well as memory that they need
+    VkBuffer ioBuffer;
+    VkDeviceMemory ioMemory;
+
+    // Create the input output buffer
+    VkBufferCreateInfo ioBufInfo{};
+    {
+        ioBufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        ioBufInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+        ioBufInfo.size = valsSize;
+        ioBufInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    }
+    vkCreateBuffer(device, &ioBufInfo, nullptr, &ioBuffer);
+
+    // Allocate memory for the io buffer
+    VkMemoryRequirements ioMemReqs;
+    vkGetBufferMemoryRequirements(device, ioBuffer, &ioMemReqs);
+
+    bool ioMemMatch = false;
+    uint32_t ioMemTypeIdx = 0;
+    VkMemoryPropertyFlagBits reqMemProp = static_cast<VkMemoryPropertyFlagBits>(
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
+                VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    for (int i = 0; i < phyDeviceMemProps.memoryTypeCount; ++i)
+    {
+        if (ioMemReqs.memoryTypeBits & (1 << i))
+        {
+            if(phyDeviceMemProps.memoryTypes[i].propertyFlags & reqMemProp)
+            {
+                ioMemTypeIdx = i;
+                ioMemMatch = true;
+            }
+        }
+    }
+    assert(ioMemMatch);
+
+    VkMemoryAllocateInfo ioMemAllocInfo{};
+    {
+        ioMemAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        ioMemAllocInfo.memoryTypeIndex = ioMemTypeIdx;
+        ioMemAllocInfo.allocationSize = ioMemReqs.size;
+    }
+    vkAllocateMemory(device, &ioMemAllocInfo, nullptr, &ioMemory);
+
+    // Copy data to the allocated io memory
+    void *mapped;
+    vkMapMemory(device, ioMemory, 0, valsSize, 0, &mapped);
+    memcpy(mapped, vals, valsSize);
+    vkUnmapMemory(device, ioMemory);
+
+    // Bind io buffer and its memory
+    vkBindBufferMemory(device, ioBuffer, ioMemory, 0);
 
     /*
-        Prepare storage buffers
-    */
-    // Initialize buffer data and memory backend for matrices
-    vk::Buffer uniformDataBuffer1 = device.createBuffer(
-            vk::BufferCreateInfo(
-                    vk::BufferCreateFlags(),
-                    9 * sizeof(float),
-                    vk::BufferUsageFlagBits::eUniformBuffer)
-    );
+     * Prepare compute pipeline
+     * */
+    VkDescriptorPoolSize desPoolSize{};
+    {
+        desPoolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        desPoolSize.descriptorCount = 1;
+    }
 
-    vk::Buffer uniformDataBuffer2 = device.createBuffer(
-        vk::BufferCreateInfo(
-            vk::BufferCreateFlags(),
-            9 * sizeof(float),
-            vk::BufferUsageFlagBits::eUniformBuffer)
-    );
+    VkDescriptorPoolCreateInfo desPoolInfo{};
+    {
+        desPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        desPoolInfo.poolSizeCount = 1;
+        desPoolInfo.pPoolSizes = &desPoolSize;
+        desPoolInfo.maxSets = 1;
+    }
+    VkDescriptorPool desPool;
+    vkCreateDescriptorPool(device, &desPoolInfo, nullptr, &desPool);
 
-    vk::Buffer storageDataBuffer = device.createBuffer(
-        vk::BufferCreateInfo(
-            vk::BufferCreateFlags(),
-            9 * sizeof(float),
-            vk::BufferUsageFlagBits::eStorageBuffer)
-    );
+    VkDescriptorSetLayoutBinding desSetLayoutBinding{};
+    {
+        desSetLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        desSetLayoutBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+        desSetLayoutBinding.binding = 0;
+        desSetLayoutBinding.descriptorCount = 1;
+    }
 
-    vk::MemoryRequirements memory1Requirements = device.getBufferMemoryRequirements(uniformDataBuffer1);
-    vk::MemoryRequirements memory2Requirements = device.getBufferMemoryRequirements(uniformDataBuffer2);
-    vk::MemoryRequirements memoryOutRequirements = device.getBufferMemoryRequirements(storageDataBuffer);
+    VkDescriptorSetLayoutCreateInfo desSetLayoutInfo{};
+    {
+        desSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        desSetLayoutInfo.pBindings = &desSetLayoutBinding;
+        desSetLayoutInfo.bindingCount = 1;
+    }
+    VkDescriptorSetLayout desSetLayout;
+    vkCreateDescriptorSetLayout(device, &desSetLayoutInfo, nullptr, &desSetLayout);
 
-    vk::MemoryPropertyFlags requiredMemFlags = vk::MemoryPropertyFlagBits::eDeviceLocal |
-                                               vk::MemoryPropertyFlagBits::eHostVisible |
-                                               vk::MemoryPropertyFlagBits::eHostCoherent;
-    vk::PhysicalDeviceMemoryProperties deviceMemProperties = physicalDevice.getMemoryProperties();
-    uint32_t mem1TypeIndex = findMemoryType(deviceMemProperties, memory1Requirements.memoryTypeBits, requiredMemFlags);
-    uint32_t mem2TypeIndex = findMemoryType(deviceMemProperties, memory2Requirements.memoryTypeBits, requiredMemFlags);
-    uint32_t memOutTypeIndex = findMemoryType(deviceMemProperties, memoryOutRequirements.memoryTypeBits, requiredMemFlags);
+    VkPipelineLayoutCreateInfo pipeLayoutInfo{};
+    {
+        pipeLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        pipeLayoutInfo.setLayoutCount = 1;
+        pipeLayoutInfo.pSetLayouts = &desSetLayout;
+    }
+    VkPipelineLayout pipelineLayout;
+    vkCreatePipelineLayout(device, &pipeLayoutInfo, nullptr, &pipelineLayout);
 
-    vk::DeviceMemory uniformDataMemory1 = device.allocateMemory(
-            vk::MemoryAllocateInfo(memory1Requirements.size, mem1TypeIndex)
-    );
+    VkDescriptorSetAllocateInfo desSetAllocInfo{};
+    {
+        desSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        desSetAllocInfo.descriptorPool = desPool;
+        desSetAllocInfo.pSetLayouts = &desSetLayout;
+        desSetAllocInfo.descriptorSetCount = 1;
+    }
+    VkDescriptorSet descriptorSet;
+    vkAllocateDescriptorSets(device, &desSetAllocInfo, &descriptorSet);
 
-    vk::DeviceMemory uniformDataMemory2 = device.allocateMemory(
-            vk::MemoryAllocateInfo(memory2Requirements.size, mem2TypeIndex)
-    );
+    VkDescriptorBufferInfo bufferDesInfo{};
+    {
+        // bufferDesInfo.buffer = deviceBuffer;
+        bufferDesInfo.buffer = ioBuffer;
+        bufferDesInfo.offset = 0;
+        bufferDesInfo.range = VK_WHOLE_SIZE;
+    }
 
-    vk::DeviceMemory storageDataMemoryOut = device.allocateMemory(
-        vk::MemoryAllocateInfo(memoryOutRequirements.size, memOutTypeIndex)
-    );
+    VkWriteDescriptorSet computeWriteDesSets{};
+    {
+        computeWriteDesSets.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        computeWriteDesSets.dstSet = descriptorSet;
+        computeWriteDesSets.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        computeWriteDesSets.dstBinding = 0;
+        computeWriteDesSets.pBufferInfo = &bufferDesInfo;
+        computeWriteDesSets.descriptorCount = 1;
+    }
+    vkUpdateDescriptorSets(device, 1, &computeWriteDesSets, 0, nullptr);
 
-    uint8_t* pDevMem1Data = static_cast<uint8_t*>(device.mapMemory(uniformDataMemory1, 0, memory1Requirements.size));
-    uint8_t* pDevMem2Data = static_cast<uint8_t*>(device.mapMemory(uniformDataMemory2, 0, memory2Requirements.size));
+    VkPipelineCacheCreateInfo pipelineCacheCreateInfo{};
+    {
+        pipelineCacheCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+    }
+    VkPipelineCache pipelineCache;
+    vkCreatePipelineCache(device, &pipelineCacheCreateInfo, nullptr, &pipelineCache);
 
-    memcpy(pDevMem1Data, mat1, 9 * sizeof(float));
-    memcpy(pDevMem2Data, mat2, 9 * sizeof(float));
+    // Pass SSBO size via specialization constant
+    struct SpecializationData{
+        uint32_t BUFFER_ELEMENT_COUNT = 9; // You can try to decrease this number to see how it affects output.
+    } specializationData;
+    VkSpecializationMapEntry specializationMapEntry{};
+    {
+        specializationMapEntry.constantID = 0;
+        specializationMapEntry.offset = 0;
+        specializationMapEntry.size = sizeof(uint32_t);
+    }
+    VkSpecializationInfo specializationInfo{};
+    {
+        specializationInfo.mapEntryCount = 1;
+        specializationInfo.pMapEntries = &specializationMapEntry;
+        specializationInfo.dataSize = sizeof(SpecializationData);
+        specializationInfo.pData = &specializationData;
+    }
 
-    device.unmapMemory(uniformDataMemory1);
-    device.unmapMemory(uniformDataMemory2);
+    std::string shaderComputePath = std::string(SOURCE_PATH) + std::string("/ArrayPow2.comp.spv");
+    std::ifstream inputCompShader(shaderComputePath.c_str(), std::ios::binary | std::ios::in);
+    std::vector<unsigned char> inputCompShaderStr(std::istreambuf_iterator<char>(inputCompShader), {});
+    inputCompShader.close();
+    VkShaderModuleCreateInfo shaderCompModuleCreateInfo{};
+    {
+        shaderCompModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        shaderCompModuleCreateInfo.codeSize = inputCompShaderStr.size();
+        shaderCompModuleCreateInfo.pCode = (uint32_t*) inputCompShaderStr.data();
+    }
+    VkShaderModule shaderCompModule;
+    vkCreateShaderModule(device, &shaderCompModuleCreateInfo, nullptr, &shaderCompModule);
 
-    device.bindBufferMemory(uniformDataBuffer1, uniformDataMemory1, 0);
-    device.bindBufferMemory(uniformDataBuffer2, uniformDataMemory2, 0);
-    device.bindBufferMemory(storageDataBuffer, storageDataMemoryOut, 0);
+    VkPipelineShaderStageCreateInfo compPipelineShaderStageInfo{};
+    {
+        compPipelineShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        compPipelineShaderStageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+        compPipelineShaderStageInfo.module = shaderCompModule;
+        compPipelineShaderStageInfo.pName = "main";
+        compPipelineShaderStageInfo.pSpecializationInfo = &specializationInfo;
+    }
+
+    // Create pipeline
+    VkComputePipelineCreateInfo computePipelineCreateInfo{};
+    {
+        computePipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+        computePipelineCreateInfo.layout = pipelineLayout;
+        computePipelineCreateInfo.flags = 0;
+        computePipelineCreateInfo.stage = compPipelineShaderStageInfo;
+    }
+    VkPipeline pipeline;
+    vkCreateComputePipelines(device, pipelineCache, 1, &computePipelineCreateInfo, nullptr, &pipeline);
 
     /*
-        Prepare Compute Pipeline
-    */
-    // Create Compute pipeline
-    vk::DescriptorSetLayoutBinding myDescriptorSetLayoutBindings[] =
+     * Command buffer creation (for compute work submission)
+     */
+    // Create a command buffer for compute operations
+    VkCommandBufferAllocateInfo cmdBufAllocInfo{};
     {
-            {0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eCompute},
-            {1, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eCompute},
-            {2, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute}
-    };
+        cmdBufAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        cmdBufAllocInfo.commandPool = cmdPool;
+        cmdBufAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        cmdBufAllocInfo.commandBufferCount = 1;
+    }
+    VkCommandBuffer cmdBuf;
+    vkAllocateCommandBuffers(device, &cmdBufAllocInfo, &cmdBuf);
 
-    // Create a DescriptorSetLayout using that bindings
-    vk::DescriptorSetLayout descriptorSetLayout = device.createDescriptorSetLayout(
-            vk::DescriptorSetLayoutCreateInfo(vk::DescriptorSetLayoutCreateFlags(), 3, myDescriptorSetLayoutBindings)
-    );
-
-    // Create a pipelineLayout using that DescriptorSetLayout
-    vk::PipelineLayout pipelineLayout = device.createPipelineLayout(
-        vk::PipelineLayoutCreateInfo(vk::PipelineLayoutCreateFlags(), descriptorSetLayout)
-    );
-
-    /* Initialize Descriptor Set */
-    // Create a descriptor pool
-    vk::DescriptorPoolSize poolSizes[] =
+    // Fence for compute CB sync
+    VkFenceCreateInfo fenceCreateInfo{};
     {
-            vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, 2),
-            vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1)
-    };
+        fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+    }
+    VkFence fence;
+    vkCreateFence(device, &fenceCreateInfo, nullptr, &fence);
 
-    vk::DescriptorPool descriptorPool = device.createDescriptorPool(
-            vk::DescriptorPoolCreateInfo(vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet, 1, 3, poolSizes)
-    );
-
-    // Allocate a descriptor set
-    vk::DescriptorSet descriptorSet = device.allocateDescriptorSets(
-        vk::DescriptorSetAllocateInfo(descriptorPool, 1, &descriptorSetLayout)
-    ).front();
-
-    // Initialize a descriptor set
-    vk::DescriptorBufferInfo descriptorBufferInfos[] =
+    VkCommandBufferBeginInfo cmdBufBeginInfo{};
     {
-            vk::DescriptorBufferInfo(uniformDataBuffer1, 0, 9 * sizeof(float)),
-            vk::DescriptorBufferInfo(uniformDataBuffer2, 0, 9 * sizeof(float)),
-            vk::DescriptorBufferInfo(storageDataBuffer, 0, 9 * sizeof(float))
-    };
-    vk::WriteDescriptorSet descriptorSetWrites[] =
-    {
-            vk::WriteDescriptorSet(descriptorSet, 0, 0, 1, vk::DescriptorType::eUniformBuffer, nullptr, descriptorBufferInfos),
-            vk::WriteDescriptorSet(descriptorSet, 1, 1, 1, vk::DescriptorType::eUniformBuffer, nullptr, descriptorBufferInfos),
-            vk::WriteDescriptorSet(descriptorSet, 2, 2, 1, vk::DescriptorType::eStorageBuffer, nullptr, descriptorBufferInfos)
-    };
-    device.updateDescriptorSets(3, descriptorSetWrites, 0, nullptr);
-
-    // Create Shader Module -- SOURCE_PATH is a MACRO definition passed in during compilation, which is specified in
-    //                         the CMakeLists.txt file in the same level of repository.
-    std::cout << SOURCE_PATH << std::endl;
-    std::string shaderPath = std::string(SOURCE_PATH) + std::string("/MatrixMul.comp.spv");
-    std::ifstream inputShader(shaderPath.c_str(), std::ios::binary | std::ios::in);
-    std::vector<unsigned char> buffer(std::istreambuf_iterator<char>(inputShader), {});
-    inputShader.close();
-    vk::ShaderModuleCreateInfo shaderModuleCreateInfo(
-            vk::ShaderModuleCreateFlags(), buffer.size(), (uint32_t*)buffer.data()
-    );
-    vk::ShaderModule shaderModule;
-    device.createShaderModule(&shaderModuleCreateInfo, nullptr, &shaderModule);
-
-    // Create Compute Shader Pipeline
-    vk::PipelineShaderStageCreateInfo pipelineShaderStageCreateInfo(
-            vk::PipelineShaderStageCreateFlags(), vk::ShaderStageFlagBits::eCompute, shaderModule, "main"
-    );
-    vk::ComputePipelineCreateInfo computePipelineCreateInfo(
-            vk::PipelineCreateFlags(),
-            pipelineShaderStageCreateInfo,
-            pipelineLayout
-    );
-    vk::Pipeline computePipeline;
-    device.createComputePipelines(VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &computePipeline);
-
-    /*
-        Command buffer creation (for compute work submission)
-    */
-    // Create a CommandPool to allocate a CommandBuffer from
-    vk::CommandPool commandPool = device.createCommandPool(
-            vk::CommandPoolCreateInfo(vk::CommandPoolCreateFlags(), computeQueueFamilyIndex)
-    );
-
-    // Allocate a CommandBuffer from the CommandPool
-    vk::CommandBuffer commandBuffer = device.allocateCommandBuffers(
-            vk::CommandBufferAllocateInfo(commandPool,
-                                          vk::CommandBufferLevel::ePrimary,
-                                          1)
-    ).front();
-
-    // Get a compute queue from the device
-    vk::Queue computeQueue = device.getQueue(computeQueueFamilyIndex, 0);
-
-    commandBuffer.begin( vk::CommandBufferBeginInfo( vk::CommandBufferUsageFlags() ) );
+        cmdBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    }
+    vkBeginCommandBuffer(cmdBuf, &cmdBufBeginInfo);
 
     // Barrier to ensure that input buffer transfer is finished before compute shader reads from it
-    vk::BufferMemoryBarrier inputBufferBarriers[] =
+    VkBufferMemoryBarrier bufBarrier{};
     {
-        vk::BufferMemoryBarrier(vk::AccessFlagBits::eHostWrite, vk::AccessFlagBits::eHostRead, VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, uniformDataBuffer1, 0, VK_WHOLE_SIZE),
-        vk::BufferMemoryBarrier(vk::AccessFlagBits::eHostWrite, vk::AccessFlagBits::eHostRead, VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, uniformDataBuffer2, 0, VK_WHOLE_SIZE)
-    };
-
-    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eHost,
-                                  vk::PipelineStageFlagBits::eComputeShader,
-                                  vk::DependencyFlags(),
-                                  0,
-                                  nullptr,
-                                  0,
-                                  inputBufferBarriers,
-                                  0,
-                                  nullptr
-                                  );
-
-    commandBuffer.bindPipeline(vk::PipelineBindPoint::eCompute, computePipeline);
-    commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
-    commandBuffer.dispatch(1, 1, 1);
+        bufBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        bufBarrier.buffer = ioBuffer;
+        bufBarrier.size = VK_WHOLE_SIZE;
+        bufBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
+        bufBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        bufBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        bufBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    }
+    vkCmdPipelineBarrier(
+            cmdBuf,
+            VK_PIPELINE_STAGE_HOST_BIT,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            0,
+            0, nullptr,
+            1, &bufBarrier,
+            0, nullptr);
+    vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+    vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &descriptorSet, 0, 0);
+    vkCmdDispatch(cmdBuf, 9, 1, 1);
 
     // Barrier to ensure that shader writes are finished before buffer is read back from GPU
-    vk::BufferMemoryBarrier bufferOutBarrier(
-            vk::AccessFlagBits::eHostRead,
-            vk::AccessFlagBits::eShaderWrite,
-            VK_QUEUE_FAMILY_IGNORED,
-            VK_QUEUE_FAMILY_IGNORED,
-            storageDataBuffer,
-            0,
-            VK_WHOLE_SIZE
-    );
-    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
-                                  vk::PipelineStageFlagBits::eTransfer,
-                                  vk::DependencyFlags(),
-                                  0, nullptr,
-                                  1, &bufferOutBarrier,
-                                  0, nullptr);
-    commandBuffer.end();
+    bufBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    bufBarrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+    bufBarrier.buffer = ioBuffer;
+    bufBarrier.size = VK_WHOLE_SIZE;
+    bufBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    bufBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    vkCmdPipelineBarrier(cmdBuf,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         VK_PIPELINE_STAGE_HOST_BIT,
+                         0,
+                         0, nullptr,
+                         1, &bufBarrier,
+                         0, nullptr);
 
-    vk::FenceCreateInfo fenceCreateInfo((vk::FenceCreateFlags()));
-    vk::Fence fence;
-    device.createFence(&fenceCreateInfo, nullptr, &fence);
-    vk::SubmitInfo submitInfo;
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &commandBuffer;
-    // Submit compute work
-    computeQueue.submit(1, &submitInfo, fence);
-    device.waitForFences(1, &fence, VK_TRUE, UINT64_MAX);
+    vkEndCommandBuffer(cmdBuf);
+
+    // Submit all recorded works
+    vkResetFences(device, 1, &fence);
+    VkSubmitInfo computeSubmitInfo{};
+    {
+        computeSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        computeSubmitInfo.commandBufferCount = 1;
+        computeSubmitInfo.pCommandBuffers = &cmdBuf;
+    }
+    vkQueueSubmit(computeQueue, 1, &computeSubmitInfo, fence);
+    vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
 
     // Make device writes visible to the host
-    void* mapped;
-    device.mapMemory(storageDataMemoryOut, 0, VK_WHOLE_SIZE, vk::MemoryMapFlags(), &mapped);
-    vk::MappedMemoryRange mappedRange(storageDataMemoryOut, 0, VK_WHOLE_SIZE);
-    device.invalidateMappedMemoryRanges(1, &mappedRange);
+    vkMapMemory(device, ioMemory, 0, VK_WHOLE_SIZE, 0, &mapped);
 
     // Copy to output
-    memcpy(matRes, mapped, 9 * sizeof(float));
-    device.unmapMemory(storageDataMemoryOut);
+    uint32_t output[9] = {0};
+    memcpy(output, mapped, 9 * sizeof(uint32_t));
+    vkUnmapMemory(device, ioMemory);
 
-    std::cout << "Hello World." << std::endl;
-    std::cout << matRes[0] << ", " << matRes[1] << ", " << matRes[2] << std::endl;
-    std::cout << matRes[3] << ", " << matRes[4] << ", " << matRes[5] << std::endl;
-    std::cout << matRes[6] << ", " << matRes[7] << ", " << matRes[8] << std::endl;
+    vkQueueWaitIdle(computeQueue);
 
-    //
-    device.destroyShaderModule(shaderModule);
-    device.destroyPipelineLayout(pipelineLayout);
-    device.destroyDescriptorSetLayout(descriptorSetLayout);
-    device.freeDescriptorSets(descriptorPool, descriptorSet);
-    device.destroyDescriptorPool(descriptorPool);
+    // Output
+    std::cout << output[0] << ", " << output[1] << ", " << output[2] << std::endl;
+    std::cout << output[3] << ", " << output[4] << ", " << output[5] << std::endl;
+    std::cout << output[6] << ", " << output[7] << ", " << output[8] << std::endl;
 
-    // Free memory and destroy buffer
-    device.freeMemory(uniformDataMemory1);
-    device.freeMemory(uniformDataMemory2);
-    device.freeMemory(storageDataMemoryOut);
-    device.destroyBuffer(uniformDataBuffer1);
-    device.destroyBuffer(uniformDataBuffer2);
-    device.destroyBuffer(storageDataBuffer);
-
-    // Freeing the commandBuffer
-    device.freeCommandBuffers(commandPool, commandBuffer);
-
-    // Destroy the commandPool
-    device.destroyCommandPool(commandPool);
-
-    // Destroy the device
-    device.destroy();
-
-    // Destroy the Instance
-    instance.destroy();
-}
-
-void readShaderFile(const std::string& iPath)
-{
-
-    return;
-}
-
-uint32_t findMemoryType( vk::PhysicalDeviceMemoryProperties const & memoryProperties,
-                         uint32_t                                   typeBits,
-                         vk::MemoryPropertyFlags                    requirementsMask )
-{
-    uint32_t typeIndex = ~0;
-    for ( uint32_t i = 0; i < memoryProperties.memoryTypeCount; i++ )
-    {
-        if ( ( typeBits & 1 ) &&
-             ( ( memoryProperties.memoryTypes[i].propertyFlags & requirementsMask ) == requirementsMask ) )
-        {
-            typeIndex = i;
-            break;
-        }
-        typeBits >>= 1;
-    }
-    assert(typeIndex != uint32_t( ~0 ));
-    return typeIndex;
+    // Clean up
+    vkDestroyBuffer(device, ioBuffer, nullptr);
+    vkFreeMemory(device, ioMemory, nullptr);
+    vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+    vkDestroyDescriptorSetLayout(device, desSetLayout, nullptr);
+    vkDestroyDescriptorPool(device, desPool, nullptr);
+    vkDestroyPipeline(device, pipeline, nullptr);
+    vkDestroyPipelineCache(device, pipelineCache, nullptr);
+    vkDestroyFence(device, fence, nullptr);
+    vkDestroyCommandPool(device, cmdPool, nullptr);
+    vkDestroyShaderModule(device, shaderCompModule, nullptr);
+    vkDestroyDevice(device, nullptr);
+    // Destroy instance
+    vkDestroyInstance(instance, nullptr);
 }
