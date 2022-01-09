@@ -1,3 +1,6 @@
 [submodule "ThirdPartyLibs/EasyBMP"]
 	path = ThirdPartyLibs/EasyBMP
 	url = https://github.com/aburgh/EasyBMP.git
+[submodule "ThirdPartyLibs/lodepng"]
+	path = ThirdPartyLibs/lodepng
+	url = https://github.com/lvandeve/lodepng.git
