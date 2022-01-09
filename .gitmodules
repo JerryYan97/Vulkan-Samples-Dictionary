@@ -1,6 +1,3 @@
-[submodule "ThirdPartyLibs/libpng"]
-	path = ThirdPartyLibs/libpng
-	url = https://github.com/glennrp/libpng.git
 [submodule "ThirdPartyLibs/EasyBMP"]
 	path = ThirdPartyLibs/EasyBMP
 	url = https://github.com/aburgh/EasyBMP.git
