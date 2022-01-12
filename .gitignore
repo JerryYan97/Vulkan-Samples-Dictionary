@@ -47,3 +47,6 @@ _deps
 # CLion
 .idea
 cmake-build*
+
+# Ouput images
+*.png
