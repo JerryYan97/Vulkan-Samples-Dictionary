@@ -248,7 +248,7 @@ int main()
         depthImgViewInfo.subresourceRange.layerCount = 1;
     }
     VkImageView depthImgView;
-    vkCreateImageView(device, &imageViewInfo, nullptr, &depthImgView);
+    vkCreateImageView(device, &depthImgViewInfo, nullptr, &depthImgView);
 
     // Create attachment descriptions for the color image and the depth image
     // 0: color image attachment; 1: depth buffer attachment.
