@@ -293,9 +293,7 @@ int main()
     // Bind io buffer and its memory
     VK_CHECK(vkBindBufferMemory(device, ioBuffer, ioMemory, 0));
 
-    /*
-     * Prepare compute pipeline
-     * */
+    // Prepare compute pipeline
     VkDescriptorPoolSize desPoolSize{};
     {
         desPoolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -350,7 +348,6 @@ int main()
 
     VkDescriptorBufferInfo bufferDesInfo{};
     {
-        // bufferDesInfo.buffer = deviceBuffer;
         bufferDesInfo.buffer = ioBuffer;
         bufferDesInfo.offset = 0;
         bufferDesInfo.range = VK_WHOLE_SIZE;
@@ -425,9 +422,6 @@ int main()
     VkPipeline pipeline;
     VK_CHECK(vkCreateComputePipelines(device, pipelineCache, 1, &computePipelineCreateInfo, nullptr, &pipeline));
 
-    /*
-     * Command buffer creation (for compute work submission)
-     */
     // Create a command buffer for compute operations
     VkCommandBufferAllocateInfo cmdBufAllocInfo{};
     {
