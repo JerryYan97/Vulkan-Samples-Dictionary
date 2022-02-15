@@ -50,3 +50,6 @@ cmake-build*
 
 # Ouput images
 *.png
+
+# Read the doc build files
+docs/build
