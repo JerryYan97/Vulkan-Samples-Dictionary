@@ -1,2 +1,2 @@
-Mid level samples!
+Mid level samples
 =====================================================

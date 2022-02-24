@@ -1,2 +1,2 @@
-Entry level samples!
+Entry level samples
 =====================================================
