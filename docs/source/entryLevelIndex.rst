@@ -3,7 +3,6 @@ Entry level samples
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents
 
    ./entryLevel/1-01_InitInstance.rst
    ./entryLevel/1-02_EnumerateDevices.rst
