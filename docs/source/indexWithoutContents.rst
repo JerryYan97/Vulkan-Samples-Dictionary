@@ -1,8 +1,3 @@
-.. Vulkan Samples Dictionary documentation master file, created by
-   sphinx-quickstart on Mon Feb 14 21:02:47 2022.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
 Welcome to Vulkan Samples Dictionary's documentation!
 =====================================================
 
@@ -15,14 +10,6 @@ learning curve and reduce the costs of using Vulkan API to build useful compute/
 Currently, you can find some good resources to learn Vulkan. But no one can be used as an efficient reference and
 we are introducing them here (:ref:`my-reference-label`) to help you understand why this project maybe more helpful than them for reference as 
 well as in case you don't know these places.
-
-.. toctree::
-   :maxdepth: 3
-   :caption: Contents
-
-   ./entryLevelIndex.rst
-   ./midLevelIndex.rst
-   ./upperLevelIndex.rst
 
 Design principles 
 ==================
