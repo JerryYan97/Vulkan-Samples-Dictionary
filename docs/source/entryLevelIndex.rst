@@ -19,3 +19,4 @@ Entry level samples
    ./entryLevel/1-13_InitFrameBuffers.rst
    ./entryLevel/1-14_InitVertexBuffers.rst
    ./entryLevel/1-15_InitPipeline.rst
+   ./entryLevel/1-16_InitVMA.rst
