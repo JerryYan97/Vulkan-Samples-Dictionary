@@ -10,7 +10,7 @@ This project aims to provide people who use Vulkan an efficient reference place,
 
 Currently, you can find some good resources to learn Vulkan. But no one can be used as an efficient reference and we are introducing them here ([Current Vulkan resources](https://vulkan-samples-dictionary.readthedocs.io/en/latest/#current-vulkan-resources)) to help you understand why this project maybe more helpful than them for reference as well as in case you don’t know these places.
 
-However, this project is not suitable as a starting point to learn Vulkan. I recomend you to check the [Vulkan tutorial](https://vulkan-tutorial.com/) and get some basic ideas about Vulkan before you dive into this repo.
+However, this project is not suitable as a starting point to learn Vulkan. I recommend you to check the [Vulkan tutorial](https://vulkan-tutorial.com/) to get some basic ideas about Vulkan before you dive into this repo.
 
 ## Design Principles
 

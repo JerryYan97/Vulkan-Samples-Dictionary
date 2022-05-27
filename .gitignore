@@ -49,7 +49,7 @@ _deps
 cmake-build*
 
 # Ouput images
-*.png
+test.png
 
 # Read the doc build files
 docs/build
