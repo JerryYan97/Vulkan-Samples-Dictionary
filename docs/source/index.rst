@@ -25,6 +25,7 @@ well as in case you don't know these places.
    :maxdepth: 3
    :caption: Contents
 
+   configureProj.rst
    ./entryLevelIndex.rst
    ./midLevelIndex.rst
    ./upperLevelIndex.rst
