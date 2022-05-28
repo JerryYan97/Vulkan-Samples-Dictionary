@@ -30,10 +30,17 @@ However, this project is not suitable as a starting point to learn Vulkan. I rec
 
     You can search keywords that you are interested in in the dictionary. 
 
+* *Easy to read*:
+
+  Code would be extensively commented and you can find more info on their own pages. Besides, we also separate debug mode code and release mode code of each samples to make your reading more enjoyable. In addition, most topics have two versions of examples: debug and release. The release version wouldn't contain extensively debug checking while the debug version would have. So, the release version maybe better for referencing necessary functionalities. 
+
 * *Convenient to copy and paste*:
 
     Abstraction of the code would be kept as less as possible. Although it doesn’t fulfill software engineering principles, it is helpful for the learning process like copying the code to your own projects and run them.
 
+## Clone this repo
+
+`git clone --recurse-submodules https://github.com/JerryYan97/Vulkan-Samples-Dictionary.git`
 
 ## For more details
 

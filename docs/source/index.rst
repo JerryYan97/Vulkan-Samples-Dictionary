@@ -48,6 +48,10 @@ Design principles
    Abstraction of the code would be kept as less as possible. Although it doesn't fulfill software engineering principles,
    it is helpful for the learning process like copying the code to your own projects and run them.
 
+Setting up this project
+=======================
+
+
 .. _my-reference-label:
 
 Current Vulkan resources
