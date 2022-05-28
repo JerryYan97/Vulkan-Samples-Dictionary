@@ -18,8 +18,6 @@ int main()
         appInfo.apiVersion = VK_API_VERSION_1_1;
     }
 
-    const char* extensionName = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
-    const char* validationLayerName = "VK_LAYER_KHRONOS_validation";
     VkInstanceCreateInfo instanceCreateInfo{};
     {
         instanceCreateInfo.sType = VkStructureType::VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;

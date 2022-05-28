@@ -11,9 +11,9 @@ Entry level samples
    ./entryLevel/1-05_InitSwapchain.rst
    ./entryLevel/1-06_InitColorBuffer.rst
    ./entryLevel/1-07_InitDepthBuffer.rst
-   ./entryLevel/1-08_InitPipelineLayout.rst
-   ./entryLevel/1-09_InitUniformBuffer.rst
-   ./entryLevel/1-10_InitDescriptorSet.rst
+   ./entryLevel/1-08_InitUniformBuffer.rst
+   ./entryLevel/1-09_InitDescriptorSet.rst
+   ./entryLevel/1-10_InitPipelineLayout.rst
    ./entryLevel/1-11_InitRenderPass.rst
    ./entryLevel/1-12_InitShaders.rst
    ./entryLevel/1-13_InitFrameBuffers.rst

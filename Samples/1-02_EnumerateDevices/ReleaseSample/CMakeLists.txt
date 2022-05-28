@@ -1,9 +1,9 @@
 # Release version
 include(../../../CMakeFuncSupport/CMakeUtil.cmake)
-set(MY_APP_NAME "InitInstance")
+set(MY_APP_NAME "EnumerateDevices")
 CheckVulkanSDK()
 cmake_minimum_required(VERSION 3.5)
-project(InitInstance VERSION 0.1 LANGUAGES CXX)
+project(EnumerateDevices VERSION 0.1 LANGUAGES CXX)
 include_directories("$ENV{VULKAN_SDK}/Include")
 link_directories("$ENV{VULKAN_SDK}/lib")
 add_definitions(-DSOURCE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}\")
