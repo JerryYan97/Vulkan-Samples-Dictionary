@@ -10,6 +10,20 @@ function(CheckVulkanSDK)
     ENDIF()
 endfunction()
 
+function(CheckQtEnv)
+    IF(DEFINED ENV{QT_CMAKE_ENV_PATH})
+        message(STATUS "Qt cmake environment variable is found.")
+        IF(EXISTS ${QT_CMAKE_ENV_PATH})
+            message(STATUS "QT_CMAKE_ENV_PATH path is valid.")
+        ELSE
+            message(FATAL_ERROR "The path set in QT_CMAKE_ENV_PATH doesn't exist.")
+    ELSE()
+        # Cannot find Qt cmake environment variable
+        message(FATAL_ERROR "Cannot find Qt Cmake environment variable. Please set the QT_CMAKE_ENV_PATH env variable.")
+    ENDIF()
+endfunction()
+
+
 # Copy Qt's core, Gui and Widgets to the project's folder so that the app can find these libraries.
 # It needs the PROJECT_NAME and QT_CMAKE_PATH.
 function(CopyQtLibs PROJECT_NAME QT_CMAKE_PATH)

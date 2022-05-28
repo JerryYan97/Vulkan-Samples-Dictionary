@@ -53,3 +53,9 @@ test.png
 
 # Read the doc build files
 docs/build
+
+# VS folder
+vs/
+
+# Ninja folder
+ninja/

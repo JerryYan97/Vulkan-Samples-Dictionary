@@ -8,7 +8,7 @@ Vulkan Samples Dictionary is a project that includes both vulkan examples writte
 
 This project aims to provide people who use Vulkan an efficient reference place, which I believe it can smooth the learning curve and reduce the costs of using Vulkan API to build useful compute/graphics products.
 
-Currently, you can find some good resources to learn Vulkan. But no one can be used as an efficient reference and we are introducing them here ([Current Vulkan resources](https://vulkan-samples-dictionary.readthedocs.io/en/latest/#current-vulkan-resources)) to help you understand why this project maybe more helpful than them for reference as well as in case you don’t know these places.
+Currently, you can find some good resources to learn Vulkan. But no one can be used as an efficient reference and we are introducing them here ([Current Vulkan resources](https://vulkan-samples-dictionary.readthedocs.io/en/latest/#current-vulkan-resources)) to help you understand why this project maybe more helpful than them for reference as well as in case you don't know these places.
 
 However, this project is not suitable as a starting point to learn Vulkan. I recommend you to check the [Vulkan tutorial](https://vulkan-tutorial.com/) to get some basic ideas about Vulkan before you dive into this repo.
 
@@ -36,7 +36,7 @@ However, this project is not suitable as a starting point to learn Vulkan. I rec
 
 * *Convenient to copy and paste*:
 
-    Abstraction of the code would be kept as less as possible. Although it doesn’t fulfill software engineering principles, it is helpful for the learning process like copying the code to your own projects and run them.
+    Abstraction of the code would be kept as less as possible. Although it doesn't fulfill software engineering principles, it is helpful for the learning process like copying the code to your own projects and run them.
 
 ## Clone this repo
 
