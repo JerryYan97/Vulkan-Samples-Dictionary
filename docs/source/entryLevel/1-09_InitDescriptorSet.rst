@@ -3,11 +3,11 @@
 
 **Keywords:** ``VkInstance``, ``Debug Layer``, ``VkPhysicalDevice``, ``VkDevice``, ``VkPipelineLayout``, ``VkBuffer``, ``VkDeviceMemory``, ``Descriptor Set``, ``Uniform Buffer``.
 
-**Link to Repo:** `1-09 InitDescriptorSet <https://github.com/JerryYan97/Vulkan-Samples-Dictionary/tree/master/Samples/1-10_InitPipelineLayout>`_.
+**Link to Repo:** `1-09 InitDescriptorSet <https://github.com/JerryYan97/Vulkan-Samples-Dictionary/tree/master/Samples/1-09_InitDescriptorSet>`_.
 
 Introduction
 -------------
-This is a simple example used to illustrate how to create a ``Uniform Buffer`` and connect it to its descriptor and then link the descriptor set to the pipeline layout. It would print
+This is a simple example used to illustrate how to create a ``Uniform Buffer`` and connect it to its descriptor. It would print
 the first physical device's device name.
 
 An Example Output

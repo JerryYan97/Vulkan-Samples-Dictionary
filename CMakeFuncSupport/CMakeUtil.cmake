@@ -13,10 +13,11 @@ endfunction()
 function(CheckQtEnv)
     IF(DEFINED ENV{QT_CMAKE_ENV_PATH})
         message(STATUS "Qt cmake environment variable is found.")
-        IF(EXISTS ${QT_CMAKE_ENV_PATH})
+        IF(EXISTS $ENV{VULKAN_SDK})
             message(STATUS "QT_CMAKE_ENV_PATH path is valid.")
-        ELSE
+        ELSE()
             message(FATAL_ERROR "The path set in QT_CMAKE_ENV_PATH doesn't exist.")
+        ENDIF()
     ELSE()
         # Cannot find Qt cmake environment variable
         message(FATAL_ERROR "Cannot find Qt Cmake environment variable. Please set the QT_CMAKE_ENV_PATH env variable.")

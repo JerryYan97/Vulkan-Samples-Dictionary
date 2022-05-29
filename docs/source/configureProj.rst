@@ -72,3 +72,12 @@ Some of the examples using Qt. So, if you are interested in these examples, you 
 ``C:\Qt\6.2.4\mingw_64\lib\cmake``
 
 3. Build the example by using ways introduced above.
+
+In addition, I try to avoid using Qt Creator as my IDE for Qt development because I want to make my development process consistent under
+CLion, which I think it has a clear process from buliding a project to running an application and you can control it.
+
+Due to Qt's cross-platform nature, we cannot use MSVC. However, if you are a fan of VS, here is a `tutorial <https://devblogs.microsoft.com/cppblog/using-mingw-and-cygwin-with-visual-cpp-and-open-folder/>`_ 
+that can let your VS use MinGW environment downloaded.
+
+It is also possible to use Ninja and MinGW64 to build and compile the project. But, specific steps that you need to follow is under exploration. Currently, CLion with its default MinGW toolchain
+is the most stable way to build the Qt projects.
