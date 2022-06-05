@@ -80,7 +80,7 @@ int main()
     VK_CHECK(vkEnumerateInstanceExtensionProperties(nullptr, &propNum, nullptr));
     std::vector<VkExtensionProperties> props(propNum);
     VK_CHECK(vkEnumerateInstanceExtensionProperties(nullptr, &propNum, props.data()));
-    for (int i = 0; i < props.size(); ++i)
+    for (size_t i = 0; i < props.size(); ++i)
     {
         if(strcmp(props[i].extensionName, VK_EXT_DEBUG_UTILS_EXTENSION_NAME) == 0)
         {
@@ -111,7 +111,7 @@ int main()
     VK_CHECK(vkEnumerateInstanceLayerProperties(&layerNum, nullptr));
     std::vector<VkLayerProperties> layers(layerNum);
     VK_CHECK(vkEnumerateInstanceLayerProperties(&layerNum, layers.data()));
-    for (int i = 0; i < layerNum; ++i)
+    for (uint32_t i = 0; i < layerNum; ++i)
     {
         if(strcmp("VK_LAYER_KHRONOS_validation", layers[i].layerName) == 0)
         {
