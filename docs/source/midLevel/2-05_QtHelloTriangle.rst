@@ -16,5 +16,6 @@ An Example Output
 
 Reference
 -----------
-`Qt Vulkan examples <https://code.qt.io/cgit/qt/qtbase.git/tree/examples/vulkan?h=5.15>`_.
-`Vulkan Memory Allocator doc <https://gpuopen-librariesandsdks.github.io/VulkanMemoryAllocator/html/>`_.
+* `Qt Vulkan examples <https://code.qt.io/cgit/qt/qtbase.git/tree/examples/vulkan?h=5.15>`_.
+
+* `Vulkan Memory Allocator doc <https://gpuopen-librariesandsdks.github.io/VulkanMemoryAllocator/html/>`_.

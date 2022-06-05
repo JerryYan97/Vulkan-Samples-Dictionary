@@ -1,0 +1,36 @@
+# Release version
+include(../../../CMakeFuncSupport/CMakeUtil.cmake)
+CheckVulkanSDK()
+CheckQtEnv()
+cmake_minimum_required(VERSION 3.5)
+project(QtTriUI VERSION 0.1 LANGUAGES CXX)
+set(MY_APP_NAME "QtTriUI")
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTOUIC ON)
+
+set(CMAKE_PREFIX_PATH $ENV{QT_CMAKE_ENV_PATH})
+find_package(Qt6 REQUIRED COMPONENTS Widgets Core Gui)
+
+add_definitions(-DSOURCE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}\")
+
+include_directories("$ENV{VULKAN_SDK}/Include" "../../../ThirdPartyLibs/VMA")
+
+link_directories("$ENV{VULKAN_SDK}/lib")
+
+qt_add_executable(${MY_APP_NAME} "main.cpp" QtVulkanMainWin.ui)
+
+
+target_link_libraries(${MY_APP_NAME} PUBLIC
+                      vulkan-1
+                      Qt::Core
+                      Qt::Gui
+                      Qt::Widgets)
+
+CopyQtLibs(${MY_APP_NAME} ${CMAKE_PREFIX_PATH})
+
+execute_process(COMMAND glslc qtTri.vert -o qtTri_vert.spv
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+execute_process(COMMAND glslc qtTri.frag -o qtTri_frag.spv
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})

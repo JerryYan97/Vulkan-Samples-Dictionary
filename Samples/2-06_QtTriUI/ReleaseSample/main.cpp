@@ -1,21 +1,12 @@
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
-
-#include <QGuiApplication>
-#include <QVulkanInstance>
-#include <QLoggingCategory>
+#include "ui_qtvulkanmainwin.h"
+#include <QApplication>
 #include <QVulkanWindow>
+#include <QVulkanInstance>
 #include <QVulkanDeviceFunctions>
 #include <fstream>
 
-Q_LOGGING_CATEGORY(lcVk, "qt.vulkan")
-
-/* QT dynamically loads the vulkan functions, which is set by VK_NO_PROTOTYPES. So, we cannot statically use them.
- * Alternatively, we can also use the following function to load the vulkan functions if they are not specified in the
- * QVulkanDeviceFunctions.
- * Besides, VMA also needs to load vulkan functions dynamically so if we need VMA then the declaration below is also
- * necessary.
- * */
 extern "C" {
     VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL vkGetInstanceProcAddr(VkInstance instance, const char *pName);
     VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL vkGetDeviceProcAddr(VkDevice device, const char *pName);
@@ -24,9 +15,9 @@ extern "C" {
 // Format: local_x, local_y, local_z, col_r, col_g, col_b;
 // Front: CCW
 static float vertexData[] = {
-    0.5f, 0.f, 0.f, 1.f, 0.f, 0.f, // Right bottom
-    0.f, 1.f, 0.f, 0.f, 1.f, 0.f, // Top
-    -0.5f, 0.f, 0.f, 0.f, 0.f, 1.f // Left bottom
+        0.5f, 0.f, 0.f, 1.f, 0.f, 0.f, // Right bottom
+        0.f, 1.f, 0.f, 0.f, 1.f, 0.f, // Top
+        -0.5f, 0.f, 0.f, 0.f, 0.f, 1.f // Left bottom
 };
 
 VkShaderModule createShaderModule(const std::string& spvName, const VkDevice& device)
@@ -52,8 +43,8 @@ VkShaderModule createShaderModule(const std::string& spvName, const VkDevice& de
 class VulkanRenderer : public QVulkanWindowRenderer
 {
 public:
-    VulkanRenderer(QVulkanWindow *w)
-        : m_window(w)
+    explicit VulkanRenderer(QVulkanWindow *w)
+            : m_window(w)
     {}
 
     void initResources() override
@@ -418,7 +409,7 @@ public:
         if(m_uniformBuffer)
         {
             vmaDestroyBuffer(m_vmaAllocator, m_uniformBuffer, m_uniformAllocation);
-            m_vmaAllocator = VK_NULL_HANDLE;
+            m_uniformBuffer = VK_NULL_HANDLE;
             m_uniformAllocation = VK_NULL_HANDLE;
         }
 
@@ -453,7 +444,6 @@ public:
         rpBeginInfo.pClearValues = clearValues;
         m_devFuncs->vkCmdBeginRenderPass(cmdBuf, &rpBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-
         // Upload MVP matrix data to GPU
         QMatrix4x4 m = m_mvp;
         m.rotate(m_rotation, 0, 1, 0);
@@ -461,9 +451,6 @@ public:
         vmaMapMemory(m_vmaAllocator, m_uniformAllocation, &mappedData);
         memcpy(mappedData, m.data(), sizeof(float) * 16);
         vmaUnmapMemory(m_vmaAllocator, m_uniformAllocation);
-
-        // Update rotation
-        m_rotation += 1.0f;
 
         // Bind the graphics pipeline
         m_devFuncs->vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
@@ -494,8 +481,12 @@ public:
         m_window->requestUpdate();
     }
 
+    void addRotation() { m_rotation += 15.f; }
+    void minRotation() { m_rotation -= 15.f; }
 
-protected:
+    float getRotation() { return m_rotation; }
+
+private:
     QVulkanWindow *m_window;
     QVulkanDeviceFunctions *m_devFuncs;
 
@@ -520,18 +511,58 @@ protected:
 
 class VulkanWindow : public QVulkanWindow
 {
+Q_OBJECT
+
 public:
     QVulkanWindowRenderer *createRenderer() override
     {
-        return new VulkanRenderer(this);
+        m_renderer = new VulkanRenderer(this);
+        return m_renderer;
     }
+
+    QVulkanWindowRenderer* m_renderer;
 };
+
+class QtVulkanUI : public QMainWindow
+{
+Q_OBJECT
+
+public:
+    explicit QtVulkanUI(VulkanWindow *w)
+        : QMainWindow(nullptr), m_vkWin(w)
+    {
+        ui.setupUi(this);
+
+        // The input vulkanWinWidget is a placeholder for the vulkan window here.
+        QWidget *wrapper = QWidget::createWindowContainer(w);
+        wrapper->resize(ui.vulkanWinWidget->size());
+
+        ui.verticalLayout->replaceWidget(ui.vulkanWinWidget, wrapper);
+    }
+
+private slots:
+    void on_leftRotButton_clicked(bool checked = false)
+    {
+        dynamic_cast<VulkanRenderer*>(m_vkWin->m_renderer)->minRotation();
+        ui.rotationDegVal->setText(QString::number(dynamic_cast<VulkanRenderer*>(m_vkWin->m_renderer)->getRotation()));
+    }
+
+    void on_rightRotButton_clicked(bool checked = false)
+    {
+        dynamic_cast<VulkanRenderer*>(m_vkWin->m_renderer)->addRotation();
+        ui.rotationDegVal->setText(QString::number(dynamic_cast<VulkanRenderer*>(m_vkWin->m_renderer)->getRotation()));
+    }
+
+private:
+    Ui::MainWindow ui;
+    VulkanWindow* m_vkWin;
+};
+
+#include "main.moc"
 
 int main(int argc, char *argv[])
 {
-    QGuiApplication app(argc, argv);
-
-    QLoggingCategory::setFilterRules(QStringLiteral("qt.vulkan=true"));
+    QApplication app(argc, argv);
 
     QVulkanInstance inst;
     inst.setLayers({ "VK_LAYER_KHRONOS_validation" });
@@ -540,13 +571,11 @@ int main(int argc, char *argv[])
     if (!inst.create())
         qFatal("Failed to create Vulkan instance: %d", inst.errorCode());
 
-    qDebug(qUtf8Printable(inst.apiVersion().toString()));
+    VulkanWindow *vulkanWindow = new VulkanWindow;
+    vulkanWindow->setVulkanInstance(&inst);
 
-    VulkanWindow w;
-    w.setVulkanInstance(&inst);
-
-    w.resize(1024, 768);
-    w.show();
+    QtVulkanUI vulkanUI(vulkanWindow);
+    vulkanUI.show();
 
     return app.exec();
 }
