@@ -17,5 +17,6 @@ An Example Output
 
 Reference
 -----------
-`Qt HellowWindow page <https://doc.qt.io/qt-5/qtgui-hellovulkanwindow-example.html>`_.
-`Qt Vulkan examples <https://code.qt.io/cgit/qt/qtbase.git/tree/examples/vulkan?h=5.15>`_.
+* `Qt HellowWindow page <https://doc.qt.io/qt-5/qtgui-hellovulkanwindow-example.html>`_.
+
+* `Qt Vulkan examples <https://code.qt.io/cgit/qt/qtbase.git/tree/examples/vulkan?h=5.15>`_.
