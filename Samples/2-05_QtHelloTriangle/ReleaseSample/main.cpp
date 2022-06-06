@@ -453,7 +453,6 @@ public:
         rpBeginInfo.pClearValues = clearValues;
         m_devFuncs->vkCmdBeginRenderPass(cmdBuf, &rpBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-
         // Upload MVP matrix data to GPU
         QMatrix4x4 m = m_mvp;
         m.rotate(m_rotation, 0, 1, 0);
