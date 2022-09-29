@@ -1,3 +1,6 @@
 [submodule "ThirdPartyLibs/lodepng"]
 	path = ThirdPartyLibs/lodepng
 	url = https://github.com/lvandeve/lodepng.git
+[submodule "ThirdPartyLibs/glfw"]
+	path = ThirdPartyLibs/glfw
+	url = https://github.com/glfw/glfw.git
