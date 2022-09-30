@@ -264,6 +264,43 @@ int main()
     VkDevice device;
     VK_CHECK(vkCreateDevice(physicalDevice, &deviceInfo, nullptr, &device));
 
+    // Create the swapchain
+    // Qurery surface capabilities.
+    VkSurfaceCapabilitiesKHR surfaceCapabilities;
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &surfaceCapabilities);
+
+    // Query surface formates
+    uint32_t surfaceFormatCount;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &surfaceFormatCount, nullptr);
+    std::vector<VkSurfaceFormatKHR> surfaceFormats(surfaceFormatCount);
+    if (surfaceFormatCount != 0)
+    {
+        vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &surfaceFormatCount, surfaceFormats.data());
+    }
+
+    // Query the present mode
+    uint32_t surfacePresentModeCount;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &surfacePresentModeCount, nullptr);
+    std::vector<VkPresentModeKHR> surfacePresentModes(surfacePresentModeCount);
+    if (surfacePresentModeCount != 0)
+    {
+        vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &surfacePresentModeCount, surfacePresentModes.data());
+    }
+
+    // Choose the surface format that supports VK_FORMAT_B8G8R8A8_SRGB and color space VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
+    VkSurfaceFormatKHR choisenSurfaceFormat;
+    bool foundFormat = false;
+    for (auto curFormat : surfaceFormats)
+    {
+        if (curFormat.format == VK_FORMAT_B8G8R8A8_SRGB && curFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+        {
+            foundFormat = true;
+            choisenSurfaceFormat = curFormat;
+            break;
+        }
+    }
+    assert(foundFormat);
+
     // Destroy the device
     vkDestroyDevice(device, nullptr);
 
