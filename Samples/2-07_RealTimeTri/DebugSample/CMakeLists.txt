@@ -18,3 +18,8 @@ target_compile_features(${MY_APP_NAME} PRIVATE cxx_std_17)
 
 target_link_libraries(${MY_APP_NAME} vulkan-1)
 target_link_libraries(${MY_APP_NAME} glfw3)
+
+execute_process(COMMAND glslc ./glsl/glsl.vert -o vert.spv
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+execute_process(COMMAND glslc ./glsl/glsl.frag -o frag.spv
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
