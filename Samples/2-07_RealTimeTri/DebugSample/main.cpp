@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <set>
+#include <algorithm>
 #include <cassert>
 #include <iostream>
 
@@ -236,6 +237,7 @@ int main()
     // Queue family index should be unique in vk1.2:
     // https://vulkan.lunarg.com/doc/view/1.2.198.0/windows/1.2-extensions/vkspec.html#VUID-VkDeviceCreateInfo-queueFamilyIndex-02802
     std::set<uint32_t> uniqueQueueFamilies = { graphicsQueueFamilyIdx, presentQueueFamilyIdx };
+    uint32_t queueFamiliesIndices[] = { graphicsQueueFamilyIdx, presentQueueFamilyIdx };
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
     float queuePriority = 1.0f;
     for (uint32_t queueFamily : uniqueQueueFamilies) {
@@ -287,6 +289,23 @@ int main()
         vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &surfacePresentModeCount, surfacePresentModes.data());
     }
 
+    // Choose the VK_PRESENT_MODE_MAILBOX_KHR first. If we don't find it then we would use the FIFO.
+    VkPresentModeKHR choisenPresentMode;
+    bool foundMailBoxPresentMode = false;
+    for (const auto& avaPresentMode : surfacePresentModes)
+    {
+        if (avaPresentMode == VK_PRESENT_MODE_MAILBOX_KHR)
+        {
+            choisenPresentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+            foundMailBoxPresentMode = true;
+            break;
+        }
+    }
+    if (!foundMailBoxPresentMode)
+    {
+        choisenPresentMode = VK_PRESENT_MODE_FIFO_KHR;
+    }
+
     // Choose the surface format that supports VK_FORMAT_B8G8R8A8_SRGB and color space VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
     VkSurfaceFormatKHR choisenSurfaceFormat;
     bool foundFormat = false;
@@ -300,6 +319,62 @@ int main()
         }
     }
     assert(foundFormat);
+
+    // Init swapchain's image extent
+    int glfwFrameBufferWidth;
+    int glfwFrameBufferHeight;
+    glfwGetFramebufferSize(window, &glfwFrameBufferWidth, &glfwFrameBufferHeight);
+
+    VkExtent2D swapchainImageExtent = {
+        std::clamp(static_cast<uint32_t>(glfwFrameBufferWidth), surfaceCapabilities.minImageExtent.width, surfaceCapabilities.maxImageExtent.width),
+        std::clamp(static_cast<uint32_t>(glfwFrameBufferHeight), surfaceCapabilities.minImageExtent.height, surfaceCapabilities.maxImageExtent.height)
+    };
+    
+    uint32_t imageCount = surfaceCapabilities.minImageCount + 1;
+    if (surfaceCapabilities.maxImageCount > 0 && imageCount > surfaceCapabilities.maxImageCount)
+    {
+        imageCount = surfaceCapabilities.maxImageCount;
+    }
+
+    VkSwapchainCreateInfoKHR swapchainCreateInfo{};
+    {
+        swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+        swapchainCreateInfo.surface = surface;
+        swapchainCreateInfo.minImageCount = imageCount;
+        swapchainCreateInfo.imageFormat = choisenSurfaceFormat.format;
+        swapchainCreateInfo.imageColorSpace = choisenSurfaceFormat.colorSpace;
+        swapchainCreateInfo.imageExtent = swapchainImageExtent;
+        swapchainCreateInfo.imageArrayLayers = 1;
+        swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        if (graphicsQueueFamilyIdx != presentQueueFamilyIdx)
+        {
+            swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+            swapchainCreateInfo.queueFamilyIndexCount = 2;
+            swapchainCreateInfo.pQueueFamilyIndices = queueFamiliesIndices;
+        }
+        else
+        {
+            swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        }
+        swapchainCreateInfo.preTransform = surfaceCapabilities.currentTransform;
+        swapchainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+        swapchainCreateInfo.presentMode = choisenPresentMode;
+        swapchainCreateInfo.clipped = VK_TRUE;
+    }
+    VkSwapchainKHR swapChain;
+    VK_CHECK(vkCreateSwapchainKHR(device, &swapchainCreateInfo, nullptr, &swapChain));
+
+    std::vector<VkImage> swapchainImages;
+    uint32_t swapchainImageCount;
+    vkGetSwapchainImagesKHR(device, swapChain, &swapchainImageCount, nullptr);
+    swapchainImages.resize(swapchainImageCount);
+    vkGetSwapchainImagesKHR(device, swapChain, &swapchainImageCount, swapchainImages.data());
+
+    // Cleanup the swap chain
+    // Clean the frame buffers
+    // Clean the image views
+    // Destroy the swapchain
+    vkDestroySwapchainKHR(device, swapChain, nullptr);
 
     // Destroy the device
     vkDestroyDevice(device, nullptr);
