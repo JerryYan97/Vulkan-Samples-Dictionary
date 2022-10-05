@@ -819,7 +819,7 @@ int main()
             presentInfo.pSwapchains = &swapchain;
             presentInfo.pImageIndices = &imageIndex;
         }
-        VK_CHECK(vkQueuePresentKHR(presentQueue, &presentInfo));
+        result = vkQueuePresentKHR(presentQueue, &presentInfo);
 
         if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized)
         {
