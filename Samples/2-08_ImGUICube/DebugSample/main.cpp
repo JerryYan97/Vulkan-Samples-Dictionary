@@ -1,3 +1,7 @@
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_vulkan.h"
+
 #include <vulkan/vulkan.h>
 #include <glfw3.h>
 
@@ -81,6 +85,15 @@ bool framebufferResized = false;
 static void framebufferResizeCallback(GLFWwindow* window, int width, int height)
 {
     framebufferResized = true;
+}
+
+static void CheckVkResult(VkResult err)
+{
+    if (err == 0)
+        return;
+    fprintf(stderr, "[vulkan] Error: VkResult = %d\n", err);
+    if (err < 0)
+        abort();
 }
 
 VkShaderModule createShaderModule(const std::string& spvName, const VkDevice& device)
@@ -195,22 +208,19 @@ void CreateSwapchain()
         vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &surfacePresentModeCount, surfacePresentModes.data());
     }
 
-    // Choose the VK_PRESENT_MODE_MAILBOX_KHR first. If we don't find it then we would use the FIFO.
-    VkPresentModeKHR choisenPresentMode;
+    // Choose the VK_PRESENT_MODE_FIFO_KHR.
+    VkPresentModeKHR choisenPresentMode{};
     bool foundMailBoxPresentMode = false;
     for (const auto& avaPresentMode : surfacePresentModes)
     {
-        if (avaPresentMode == VK_PRESENT_MODE_MAILBOX_KHR)
+        if (avaPresentMode == VK_PRESENT_MODE_FIFO_KHR)
         {
-            choisenPresentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+            choisenPresentMode = VK_PRESENT_MODE_FIFO_KHR;
             foundMailBoxPresentMode = true;
             break;
         }
     }
-    if (!foundMailBoxPresentMode)
-    {
-        choisenPresentMode = VK_PRESENT_MODE_FIFO_KHR;
-    }
+    assert(choisenPresentMode == VK_PRESENT_MODE_FIFO_KHR);
 
     // Choose the surface format that supports VK_FORMAT_B8G8R8A8_SRGB and color space VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
     bool foundFormat = false;
@@ -348,7 +358,7 @@ int main()
     assert(layerNum >= 1);
     std::vector<VkLayerProperties> layers(layerNum);
     VK_CHECK(vkEnumerateInstanceLayerProperties(&layerNum, layers.data()));
-    for (int i = 0; i < layerNum; ++i)
+    for (uint32_t i = 0; i < layerNum; ++i)
     {
         if (strcmp("VK_LAYER_KHRONOS_validation", layers[i].layerName) == 0)
         {
@@ -366,7 +376,7 @@ int main()
     uint32_t glfwExtensionCount = 0;
     const char** glfwExtensions;
     glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-    
+
     // Initialize instance and application
     VkApplicationInfo appInfo{};
     {
@@ -496,9 +506,35 @@ int main()
     vkGetDeviceQueue(device, graphicsQueueFamilyIdx, 0, &graphicsQueue);
     vkGetDeviceQueue(device, presentQueueFamilyIdx, 0, &presentQueue);
 
+    // Create the descriptor pool
+    VkDescriptorPoolSize poolSizes[] =
+    {
+        { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+        { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+        { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+        { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
+    };
+    VkDescriptorPoolCreateInfo pool_info{};
+    {
+        pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+        pool_info.maxSets = 1000 * sizeof(poolSizes) / sizeof(VkDescriptorPoolSize);
+        pool_info.poolSizeCount = (uint32_t)(sizeof(poolSizes) / sizeof(VkDescriptorPoolSize));
+        pool_info.pPoolSizes = poolSizes;
+    }
+    VkDescriptorPool descriptorPool;
+    VK_CHECK(vkCreateDescriptorPool(device, &pool_info, nullptr, &descriptorPool));
+
     CreateSwapchain();
     CreateImageViews();
-    
+
     // Create the render pass
     // Specify the color attachment
     VkAttachmentDescription colorAttachment{};
@@ -520,41 +556,61 @@ int main()
         colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     }
 
-    // Specity the subpass executed during the render pass
-    VkSubpassDescription subpass{};
+    // Specity the subpass executed for the GUI
+    VkSubpassDescription sceneSubpass{};
     {
-        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        subpass.colorAttachmentCount = 1;
-        subpass.pColorAttachments = &colorAttachmentRef;
+        sceneSubpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        sceneSubpass.colorAttachmentCount = 1;
+        sceneSubpass.pColorAttachments = &colorAttachmentRef;
     }
-    
-    // Specify the dependency between subpasses.
+
+    // Specify the dependency between the GUI subpass and operations before it.
     // Here, the subpass 0 depends on the operations set before the render pass.
     // The VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT operations in the subpass 0 executes after 
     // VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT operations before the render pass finishes.
     // The VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT operations in the VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
     // would happen after 0 operations finishes in the VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT.
     // (So, I believe the memory access dependency is not necessary here.)
-    VkSubpassDependency subpassesDependency{};
+    VkSubpassDependency sceneSubpassesDependency{};
     {
-        subpassesDependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-        subpassesDependency.dstSubpass = 0;
-        subpassesDependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        subpassesDependency.srcAccessMask = 0;
-        subpassesDependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        subpassesDependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        sceneSubpassesDependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+        sceneSubpassesDependency.dstSubpass = 0;
+        sceneSubpassesDependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        sceneSubpassesDependency.srcAccessMask = 0;
+        sceneSubpassesDependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        sceneSubpassesDependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    }
+
+    // Specity the subpass executed for the scene
+    VkSubpassDescription guiSubpass{};
+    {
+        guiSubpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        guiSubpass.colorAttachmentCount = 1;
+        guiSubpass.pColorAttachments = &colorAttachmentRef;
+    }
+
+    // Specify the dependency between the GUI subpass (0) and the scene subpass (1).
+    // The scene subpass' rendering output should wait for the GUI subpass' rendering output.
+    VkSubpassDependency guiSubpassesDependency{};
+    {
+        guiSubpassesDependency.srcSubpass = 0;
+        guiSubpassesDependency.dstSubpass = 1;
+        guiSubpassesDependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        guiSubpassesDependency.dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
     }
 
     // Create the render pass
+    VkSubpassDescription subpasses[] = { sceneSubpass, guiSubpass };
+    VkSubpassDependency  dependencies[] = { sceneSubpassesDependency, guiSubpassesDependency };
     VkRenderPassCreateInfo renderPassInfo{};
     {
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
         renderPassInfo.attachmentCount = 1;
         renderPassInfo.pAttachments = &colorAttachment;
-        renderPassInfo.subpassCount = 1;
-        renderPassInfo.pSubpasses = &subpass;
-        renderPassInfo.dependencyCount = 1;
-        renderPassInfo.pDependencies = &subpassesDependency;
+        renderPassInfo.subpassCount = 2;
+        renderPassInfo.pSubpasses = subpasses;
+        renderPassInfo.dependencyCount = 2;
+        renderPassInfo.pDependencies = dependencies;
     }
     VK_CHECK(vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass));
 
@@ -643,39 +699,44 @@ int main()
 
     // Create pipeline layout
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 0;
-    pipelineLayoutInfo.pushConstantRangeCount = 0;
+    {
+        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        pipelineLayoutInfo.setLayoutCount = 0;
+        pipelineLayoutInfo.pushConstantRangeCount = 0;
+    }
     VkPipelineLayout pipelineLayout;
     VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout));
 
     // Create the graphics pipeline
     VkGraphicsPipelineCreateInfo pipelineInfo{};
-    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    pipelineInfo.stageCount = 2;
-    pipelineInfo.pStages = shaderStgInfo;
-    pipelineInfo.pVertexInputState = &vertexInputInfo;
-    pipelineInfo.pInputAssemblyState = &inputAssembly;
-    pipelineInfo.pViewportState = &viewportState;
-    pipelineInfo.pRasterizationState = &rasterizer;
-    pipelineInfo.pMultisampleState = &multisampling;
-    pipelineInfo.pColorBlendState = &colorBlending;
-    pipelineInfo.pDynamicState = &dynamicState;
-    pipelineInfo.layout = pipelineLayout;
-    pipelineInfo.renderPass = renderPass;
-    pipelineInfo.subpass = 0; // It looks like the pipeline is an auxiliary of the render pass.
-    pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
-
+    {
+        pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+        pipelineInfo.stageCount = 2;
+        pipelineInfo.pStages = shaderStgInfo;
+        pipelineInfo.pVertexInputState = &vertexInputInfo;
+        pipelineInfo.pInputAssemblyState = &inputAssembly;
+        pipelineInfo.pViewportState = &viewportState;
+        pipelineInfo.pRasterizationState = &rasterizer;
+        pipelineInfo.pMultisampleState = &multisampling;
+        pipelineInfo.pColorBlendState = &colorBlending;
+        pipelineInfo.pDynamicState = &dynamicState;
+        pipelineInfo.layout = pipelineLayout;
+        pipelineInfo.renderPass = renderPass;
+        pipelineInfo.subpass = 0; // The first subpass for GUI rendering; the second for triangle rendering.
+        pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+    }
     VkPipeline graphicsPipeline;
     VK_CHECK(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline));
 
     CreateFramebuffer();
-    
+
     // Create the command pool belongs to the graphics queue
     VkCommandPoolCreateInfo commandPoolInfo{};
-    commandPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    commandPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    commandPoolInfo.queueFamilyIndex = graphicsQueueFamilyIdx;
+    {
+        commandPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        commandPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        commandPoolInfo.queueFamilyIndex = graphicsQueueFamilyIdx;
+    }
     VkCommandPool commandPool;
     VK_CHECK(vkCreateCommandPool(device, &commandPoolInfo, nullptr, &commandPool));
 
@@ -694,7 +755,7 @@ int main()
     std::vector<VkSemaphore> imageAvailableSemaphores(MAX_FRAMES_IN_FLIGHT);
     std::vector<VkSemaphore> renderFinishedSemaphores(MAX_FRAMES_IN_FLIGHT);
     std::vector<VkFence> inFlightFences(MAX_FRAMES_IN_FLIGHT);
-    
+
     VkSemaphoreCreateInfo semaphoreInfo{};
     {
         semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -712,6 +773,74 @@ int main()
         VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]));
         VK_CHECK(vkCreateFence(device, &fenceInfo, nullptr, &inFlightFences[i]))
     }
+
+    // Setup Dear ImGui context
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+
+    // Setup Dear ImGui style
+    ImGui::StyleColorsDark();
+
+    // Setup Platform/Renderer backends
+    ImGui_ImplGlfw_InitForVulkan(window, true);
+    ImGui_ImplVulkan_InitInfo initInfo{};
+    {
+        initInfo.Instance = instance;
+        initInfo.PhysicalDevice = physicalDevice;
+        initInfo.Device = device;
+        initInfo.QueueFamily = graphicsQueueFamilyIdx;
+        initInfo.Queue = graphicsQueue;
+        initInfo.DescriptorPool = descriptorPool;
+        initInfo.Subpass = 1; // GUI render will use the first subpass.
+        initInfo.MinImageCount = MAX_FRAMES_IN_FLIGHT;
+        initInfo.ImageCount = MAX_FRAMES_IN_FLIGHT;
+        initInfo.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+        initInfo.CheckVkResultFn = CheckVkResult;
+    }
+    ImGui_ImplVulkan_Init(&initInfo, renderPass);
+
+    // Upload Fonts
+    {
+        // Use any command queue
+        VK_CHECK(vkResetCommandPool(device, commandPool, 0));
+
+        VkCommandBufferAllocateInfo fontUploadCmdBufAllocInfo{};
+        {
+            fontUploadCmdBufAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            fontUploadCmdBufAllocInfo.commandPool = commandPool;
+            fontUploadCmdBufAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            fontUploadCmdBufAllocInfo.commandBufferCount = 1;
+        }
+        VkCommandBuffer fontUploadCmdBuf;
+        VK_CHECK(vkAllocateCommandBuffers(device, &fontUploadCmdBufAllocInfo, &fontUploadCmdBuf));
+
+        VkCommandBufferBeginInfo begin_info{};
+        {
+            begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        }
+        VK_CHECK(vkBeginCommandBuffer(fontUploadCmdBuf, &begin_info));
+
+        ImGui_ImplVulkan_CreateFontsTexture(fontUploadCmdBuf);
+
+        VkSubmitInfo end_info = {};
+        {
+            end_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            end_info.commandBufferCount = 1;
+            end_info.pCommandBuffers = &fontUploadCmdBuf;
+        }
+        
+        VK_CHECK(vkEndCommandBuffer(fontUploadCmdBuf));
+        
+        VK_CHECK(vkQueueSubmit(graphicsQueue, 1, &end_info, VK_NULL_HANDLE));
+
+        VK_CHECK(vkDeviceWaitIdle(device));
+        ImGui_ImplVulkan_DestroyFontUploadObjects();
+    }
+
+    // UI State
+    bool show_demo_window = true;
 
     // Main Loop
     while (!glfwWindowShouldClose(window))
@@ -742,6 +871,17 @@ int main()
         vkResetFences(device, 1, &inFlightFences[currentFrame]);
         vkResetCommandBuffer(commandBuffers[currentFrame], 0);
 
+        // Prepare the Dear ImGUI frame data
+        ImGui_ImplVulkan_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        ImGui::ShowDemoWindow(&show_demo_window);
+
+        ImGui::Render();
+        ImDrawData* draw_data = ImGui::GetDrawData();
+        const bool is_minimized = (draw_data->DisplaySize.x <= 0.0f || draw_data->DisplaySize.y <= 0.0f);
+
         // Fill the command buffer
         VkCommandBufferBeginInfo beginInfo{};
         {
@@ -749,11 +889,12 @@ int main()
         }
         VK_CHECK(vkBeginCommandBuffer(commandBuffers[currentFrame], &beginInfo));
 
+        // Begin the render pass and record relevant commands
         // Link framebuffer into the render pass
         VkRenderPassBeginInfo renderPassInfo{};
         VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
         {
-            renderPassInfo.sType      = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+            renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
             renderPassInfo.renderPass = renderPass;
             renderPassInfo.framebuffer = swapchainFramebuffers[imageIndex];
             renderPassInfo.renderArea.offset = { 0, 0 };
@@ -787,6 +928,13 @@ int main()
         }
 
         vkCmdDraw(commandBuffers[currentFrame], 3, 1, 0, 0);
+
+        // Record the scene rendering commands.
+        // Start next subpass
+        vkCmdNextSubpass(commandBuffers[currentFrame], VK_SUBPASS_CONTENTS_INLINE);
+
+        // Record the GUI rendering commands.
+        ImGui_ImplVulkan_RenderDrawData(draw_data, commandBuffers[currentFrame]);
 
         vkCmdEndRenderPass(commandBuffers[currentFrame]);
 
@@ -835,6 +983,9 @@ int main()
     }
 
     vkDeviceWaitIdle(device);
+    ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
 
     // Cleanup
     // Cleanup Swapchain
@@ -856,7 +1007,6 @@ int main()
         vkDestroyFence(device, itr, nullptr);
     }
 
-    
     // Destroy the command pool
     vkDestroyCommandPool(device, commandPool, nullptr);
 
@@ -872,6 +1022,9 @@ int main()
 
     // Destroy the render pass
     vkDestroyRenderPass(device, renderPass, nullptr);
+
+    // Destroy the descriptor pool
+    vkDestroyDescriptorPool(device, descriptorPool, nullptr);
 
     // Destroy the device
     vkDestroyDevice(device, nullptr);
@@ -891,6 +1044,6 @@ int main()
     vkDestroyInstance(instance, nullptr);
 
     glfwDestroyWindow(window);
-    
+
     glfwTerminate();
 }
