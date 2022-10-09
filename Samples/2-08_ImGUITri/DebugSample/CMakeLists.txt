@@ -1,9 +1,9 @@
 # Debug version
 include(../../../CMakeFuncSupport/CMakeUtil.cmake)
-set(MY_APP_NAME "ImGUICube")
+set(MY_APP_NAME "ImGUITri")
 CheckVulkanSDK()
 cmake_minimum_required(VERSION 3.5)
-project(ImGUICube VERSION 0.1 LANGUAGES CXX)
+project(ImGUITri VERSION 0.1 LANGUAGES CXX)
 
 include_directories("$ENV{VULKAN_SDK}/Include")
 include_directories(../../../ThirdPartyLibs/glfw/include/GLFW)

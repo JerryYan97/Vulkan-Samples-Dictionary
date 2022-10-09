@@ -564,7 +564,7 @@ int main()
         sceneSubpass.pColorAttachments = &colorAttachmentRef;
     }
 
-    // Specify the dependency between the GUI subpass and operations before it.
+    // Specify the dependency between the scene subpass and operations before it.
     // Here, the subpass 0 depends on the operations set before the render pass.
     // The VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT operations in the subpass 0 executes after 
     // VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT operations before the render pass finishes.
@@ -589,8 +589,8 @@ int main()
         guiSubpass.pColorAttachments = &colorAttachmentRef;
     }
 
-    // Specify the dependency between the GUI subpass (0) and the scene subpass (1).
-    // The scene subpass' rendering output should wait for the GUI subpass' rendering output.
+    // Specify the dependency between the scene subpass (0) and the gui subpass (1).
+    // The gui subpass' rendering output should wait for the scene subpass' rendering output.
     VkSubpassDependency guiSubpassesDependency{};
     {
         guiSubpassesDependency.srcSubpass = 0;
@@ -722,7 +722,7 @@ int main()
         pipelineInfo.pDynamicState = &dynamicState;
         pipelineInfo.layout = pipelineLayout;
         pipelineInfo.renderPass = renderPass;
-        pipelineInfo.subpass = 0; // The first subpass for GUI rendering; the second for triangle rendering.
+        pipelineInfo.subpass = 0; // The first subpass for scene rendering; the second for gui rendering.
         pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
     }
     VkPipeline graphicsPipeline;
@@ -929,7 +929,8 @@ int main()
 
         vkCmdDraw(commandBuffers[currentFrame], 3, 1, 0, 0);
 
-        // Record the scene rendering commands.
+        // Record the gui rendering commands. We draw GUI after scene because we don't have depth test. So, GUI
+        // should be drawn later or the scene would overlay on the GUI.
         // Start next subpass
         vkCmdNextSubpass(commandBuffers[currentFrame], VK_SUBPASS_CONTENTS_INLINE);
 

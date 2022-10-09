@@ -1,6 +1,6 @@
 # Debug version
 include(../../../CMakeFuncSupport/CMakeUtil.cmake)
-set(MY_APP_NAME "RealTimeTri")
+set(MY_APP_NAME "GlfwTri")
 CheckVulkanSDK()
 cmake_minimum_required(VERSION 3.5)
 project(RealTimeTriangle VERSION 0.1 LANGUAGES CXX)
