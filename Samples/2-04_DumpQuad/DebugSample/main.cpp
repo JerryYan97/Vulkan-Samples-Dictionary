@@ -153,7 +153,7 @@ int main()
         appInfo.applicationVersion = 1;
         appInfo.pEngineName = "VulkanDict";
         appInfo.engineVersion = 1;
-        appInfo.apiVersion = VK_API_VERSION_1_1;
+        appInfo.apiVersion = VK_API_VERSION_1_2;
     }
 
     const char* extensionName = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
