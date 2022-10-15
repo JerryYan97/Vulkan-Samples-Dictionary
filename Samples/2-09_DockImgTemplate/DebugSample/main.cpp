@@ -130,12 +130,16 @@ unsigned int graphicsQueueFamilyIdx = -1;
 unsigned int presentQueueFamilyIdx = -1;
 VkSurfaceFormatKHR choisenSurfaceFormat;
 VkExtent2D swapchainImageExtent;
-VkRenderPass renderPass;
+// NOTE: Each render pass' attachments should have same extent for render area when we start the render pass.
+// In our case, the first scene rendering would be smaller than the overall gui rendering. So, we will use two render
+// pass.
+VkRenderPass sceneRenderPass;
+VkRenderPass guiRenderPass;
 std::vector<VkFramebuffer> swapchainFramebuffers;
 std::vector<VkImageView> swapchainImageViews;
 std::vector<VkFramebuffer> sceneRenderFramebuffers;
 std::vector<VkImage> sceneRenderImages;
-std::vector<VkExtent3D> sceneRenderImagesExtents;
+std::vector<VkExtent2D> sceneRenderImagesExtents;
 std::vector<VmaAllocation> sceneRenderImgsAllocs;
 std::vector<VkImageView> sceneRenderImageViews;
 
@@ -151,7 +155,7 @@ void CreateSwapchainFramebuffer()
         VkImageView attachments[] = { swapchainImageViews[i] };
         VkFramebufferCreateInfo framebufferInfo{};
         framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        framebufferInfo.renderPass = renderPass;
+        framebufferInfo.renderPass = guiRenderPass;
         framebufferInfo.attachmentCount = 1;
         framebufferInfo.pAttachments = attachments;
         framebufferInfo.width = swapchainImageExtent.width;
@@ -355,8 +359,8 @@ void RecreateSceneRenderObjs(uint32_t width, uint32_t height)
         sceneImgsInfo.arrayLayers = 1;
         sceneImgsInfo.samples = VK_SAMPLE_COUNT_1_BIT;
         sceneImgsInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-        sceneImgsInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-        sceneImgsInfo.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        sceneImgsInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+        sceneImgsInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     }
 
     vmaCreateImage(allocator,
@@ -366,7 +370,137 @@ void RecreateSceneRenderObjs(uint32_t width, uint32_t height)
                    &sceneRenderImgsAllocs[currentFrame],
                    nullptr);
 
-    sceneRenderImagesExtents[currentFrame] = extent;
+    sceneRenderImagesExtents[currentFrame] = VkExtent2D{ width, height };
+
+    vkDestroyImageView(device, sceneRenderImageViews[currentFrame], nullptr);
+
+    // Create the Image View
+    VkImageViewCreateInfo info = {};
+    {
+        info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        info.image = sceneRenderImages[currentFrame];
+        info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        info.format = choisenSurfaceFormat.format;
+        info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        info.subresourceRange.levelCount = 1;
+        info.subresourceRange.layerCount = 1;
+    }
+    VK_CHECK(vkCreateImageView(device, &info, nullptr, &sceneRenderImageViews[currentFrame]));
+
+    vkDestroyFramebuffer(device, sceneRenderFramebuffers[currentFrame], nullptr);
+
+    VkFramebufferCreateInfo sceneRenderFramebufferInfo{};
+    {
+        sceneRenderFramebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        sceneRenderFramebufferInfo.renderPass = sceneRenderPass;
+        sceneRenderFramebufferInfo.attachmentCount = 1;
+        sceneRenderFramebufferInfo.pAttachments = &sceneRenderImageViews[currentFrame];
+        sceneRenderFramebufferInfo.width = extent.width;
+        sceneRenderFramebufferInfo.height = extent.height;
+        sceneRenderFramebufferInfo.layers = 1;
+    }
+    VK_CHECK(vkCreateFramebuffer(device, &sceneRenderFramebufferInfo, nullptr, &sceneRenderFramebuffers[currentFrame]));
+}
+
+void InitSceneRenderObjs()
+{
+    VmaAllocationCreateInfo sceneImgsAllocInfo{};
+    {
+        sceneImgsAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        sceneImgsAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+    }
+
+    VkExtent3D extent{};
+    {
+        extent.width = 100;
+        extent.height = 100;
+        extent.depth = 1;
+    }
+
+    VkImageCreateInfo sceneImgsInfo{};
+    {
+        sceneImgsInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        sceneImgsInfo.imageType = VK_IMAGE_TYPE_2D;
+        sceneImgsInfo.format = choisenSurfaceFormat.format;
+        sceneImgsInfo.extent = extent;
+        sceneImgsInfo.mipLevels = 1;
+        sceneImgsInfo.arrayLayers = 1;
+        sceneImgsInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+        sceneImgsInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+        sceneImgsInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+        sceneImgsInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    }
+
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        vmaCreateImage(allocator,
+            &sceneImgsInfo,
+            &sceneImgsAllocInfo,
+            &sceneRenderImages[i],
+            &sceneRenderImgsAllocs[i],
+            nullptr);
+
+        sceneRenderImagesExtents[i] = VkExtent2D{ extent.width, extent.height };
+
+        // Create the Image View
+        VkImageViewCreateInfo info = {};
+        {
+            info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            info.image = sceneRenderImages[i];
+            info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            info.format = choisenSurfaceFormat.format;
+            info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            info.subresourceRange.levelCount = 1;
+            info.subresourceRange.layerCount = 1;
+        }
+
+        VK_CHECK(vkCreateImageView(device, &info, nullptr, &sceneRenderImageViews[i]));
+
+        VkFramebufferCreateInfo sceneRenderFramebufferInfo{};
+        {
+            sceneRenderFramebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+            sceneRenderFramebufferInfo.renderPass = sceneRenderPass;
+            sceneRenderFramebufferInfo.attachmentCount = 1;
+            sceneRenderFramebufferInfo.pAttachments = &sceneRenderImageViews[i];
+            sceneRenderFramebufferInfo.width = extent.width;
+            sceneRenderFramebufferInfo.height = extent.height;
+            sceneRenderFramebufferInfo.layers = 1;
+        }
+        VK_CHECK(vkCreateFramebuffer(device, &sceneRenderFramebufferInfo, nullptr, &sceneRenderFramebuffers[i]));
+    }
+}
+
+void CleanupSceneRenderObjs()
+{
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        vmaDestroyImage(allocator, sceneRenderImages[i], sceneRenderImgsAllocs[i]);
+        vkDestroyImageView(device, sceneRenderImageViews[i], nullptr);
+        vkDestroyFramebuffer(device, sceneRenderFramebuffers[i], nullptr);
+    }
+}
+
+void AddTextureToImGUI(VkDescriptorSet* img_ds, int image_width, int image_height)
+{
+    // Create the Sampler
+    VkSampler sampler;
+    VkSamplerCreateInfo sampler_info{};
+    {
+        sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        sampler_info.magFilter = VK_FILTER_LINEAR;
+        sampler_info.minFilter = VK_FILTER_LINEAR;
+        sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT; // outside image bounds just use border color
+        sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        sampler_info.minLod = -1000;
+        sampler_info.maxLod = 1000;
+        sampler_info.maxAnisotropy = 1.0f;
+    }
+    VK_CHECK(vkCreateSampler(device, &sampler_info, nullptr, &sampler));
+
+    // Create Descriptor Set using ImGUI's implementation
+    *img_ds = ImGui_ImplVulkan_AddTexture(sampler, sceneRenderImageViews[currentFrame], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 int main()
@@ -610,7 +744,6 @@ int main()
     sceneRenderImagesExtents.resize(MAX_FRAMES_IN_FLIGHT);
     for (auto itr : sceneRenderImagesExtents)
     {
-        itr.depth = 0;
         itr.width = 0;
         itr.height = 0;
     }
@@ -628,20 +761,20 @@ int main()
         sceneRenderAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         sceneRenderAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         sceneRenderAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        sceneRenderAttachment.finalLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        sceneRenderAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     }
 
     // Specify the GUI attachment: We will need to present everything in GUI. So, the finalLayout would be presentable.
     VkAttachmentDescription guiAttachment{};
     {
-        sceneRenderAttachment.format = choisenSurfaceFormat.format;
-        sceneRenderAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-        sceneRenderAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        sceneRenderAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        sceneRenderAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        sceneRenderAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        sceneRenderAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        sceneRenderAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        guiAttachment.format = choisenSurfaceFormat.format;
+        guiAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+        guiAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        guiAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        guiAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        guiAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        guiAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        guiAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     }
 
     // Specify the color reference, which specifies the attachment layout during the subpass
@@ -657,7 +790,13 @@ int main()
         guiAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     }
 
-    // Specity the subpass executed for the scene
+    VkAttachmentReference guiInputAttachmentRef{};
+    {
+        guiInputAttachmentRef.attachment = 0;
+        guiInputAttachmentRef.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    }
+
+    // Specify the subpass executed for the scene
     VkSubpassDescription sceneSubpass{};
     {
         sceneSubpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
@@ -688,33 +827,46 @@ int main()
         guiSubpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
         guiSubpass.colorAttachmentCount = 1;
         guiSubpass.pColorAttachments = &guiAttachmentRef;
+        guiSubpass.inputAttachmentCount = 1;
+        guiSubpass.pInputAttachments = &guiInputAttachmentRef;
     }
 
     // Specify the dependency between the scene subpass (0) and the gui subpass (1).
     // The gui subpass' rendering output should wait for the scene subpass' rendering output.
     VkSubpassDependency guiSubpassesDependency{};
     {
-        guiSubpassesDependency.srcSubpass = 0;
+        guiSubpassesDependency.srcSubpass = VK_SUBPASS_EXTERNAL;
         guiSubpassesDependency.dstSubpass = 1;
         guiSubpassesDependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         guiSubpassesDependency.dstStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        guiSubpassesDependency.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        guiSubpassesDependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
     }
 
-    // Create the render pass
-    VkSubpassDescription subpasses[] = { sceneSubpass, guiSubpass };
-    VkSubpassDependency  dependencies[] = { sceneSubpassesDependency, guiSubpassesDependency };
-    VkAttachmentDescription attachments[] = { sceneRenderAttachment, guiAttachment };
-    VkRenderPassCreateInfo renderPassInfo{};
+    // Create the render passes
+    VkRenderPassCreateInfo sceneRenderPassInfo{};
     {
-        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-        renderPassInfo.attachmentCount = 1;
-        renderPassInfo.pAttachments = attachments;
-        renderPassInfo.subpassCount = 2;
-        renderPassInfo.pSubpasses = subpasses;
-        renderPassInfo.dependencyCount = 2;
-        renderPassInfo.pDependencies = dependencies;
+        sceneRenderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        sceneRenderPassInfo.attachmentCount = 1;
+        sceneRenderPassInfo.pAttachments = &sceneRenderAttachment;
+        sceneRenderPassInfo.subpassCount = 1;
+        sceneRenderPassInfo.pSubpasses = &sceneSubpass;
+        sceneRenderPassInfo.dependencyCount = 1;
+        sceneRenderPassInfo.pDependencies = &sceneSubpassesDependency;
     }
-    VK_CHECK(vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass));
+    VK_CHECK(vkCreateRenderPass(device, &sceneRenderPassInfo, nullptr, &sceneRenderPass));
+
+    VkRenderPassCreateInfo guiRenderPassInfo{};
+    {
+        guiRenderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        guiRenderPassInfo.attachmentCount = 1;
+        guiRenderPassInfo.pAttachments = &guiAttachment;
+        guiRenderPassInfo.subpassCount = 1;
+        guiRenderPassInfo.pSubpasses = &guiSubpass;
+        guiRenderPassInfo.dependencyCount = 1;
+        guiRenderPassInfo.pDependencies = &guiSubpassesDependency;
+    }
+    VK_CHECK(vkCreateRenderPass(device, &guiRenderPassInfo, nullptr, &guiRenderPass));
 
     // Create the graphics pipeline
     // Create Shader Modules.
@@ -776,18 +928,24 @@ int main()
 
     // Create the color blend info.
     VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-    colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-    colorBlendAttachment.blendEnable = VK_FALSE;
+    {
+        colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        colorBlendAttachment.blendEnable = VK_FALSE;
+    }
+    
     VkPipelineColorBlendStateCreateInfo colorBlending{};
-    colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    colorBlending.logicOpEnable = VK_FALSE;
-    colorBlending.logicOp = VK_LOGIC_OP_COPY;
-    colorBlending.attachmentCount = 1;
-    colorBlending.pAttachments = &colorBlendAttachment;
-    colorBlending.blendConstants[0] = 0.0f;
-    colorBlending.blendConstants[1] = 0.0f;
-    colorBlending.blendConstants[2] = 0.0f;
-    colorBlending.blendConstants[3] = 0.0f;
+    {
+        colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+        colorBlending.logicOpEnable = VK_FALSE;
+        colorBlending.logicOp = VK_LOGIC_OP_COPY;
+        colorBlending.attachmentCount = 1;
+        colorBlending.pAttachments = &colorBlendAttachment;
+        colorBlending.blendConstants[0] = 0.0f;
+        colorBlending.blendConstants[1] = 0.0f;
+        colorBlending.blendConstants[2] = 0.0f;
+        colorBlending.blendConstants[3] = 0.0f;
+    }
+    
 
     // Create the dynamic state info for scissor and viewport
     std::vector<VkDynamicState> dynamicStates = {
@@ -809,11 +967,11 @@ int main()
     VkPipelineLayout pipelineLayout;
     VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout));
 
-    // Create the graphics pipeline
+    // Create the graphics pipeline -- The graphics pipeline is used for scene rendering
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     {
         pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-        pipelineInfo.stageCount = 2;
+        pipelineInfo.stageCount = 1;
         pipelineInfo.pStages = shaderStgInfo;
         pipelineInfo.pVertexInputState = &vertexInputInfo;
         pipelineInfo.pInputAssemblyState = &inputAssembly;
@@ -823,13 +981,15 @@ int main()
         pipelineInfo.pColorBlendState = &colorBlending;
         pipelineInfo.pDynamicState = &dynamicState;
         pipelineInfo.layout = pipelineLayout;
-        pipelineInfo.renderPass = renderPass;
+        pipelineInfo.renderPass = sceneRenderPass;
         pipelineInfo.subpass = 0; // The first subpass for scene rendering; the second for gui rendering.
         pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
     }
     VkPipeline graphicsPipeline;
     VK_CHECK(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline));
 
+    // Create dummy swapchain
+    InitSceneRenderObjs();
     CreateSwapchainFramebuffer();
 
     // Create the command pool belongs to the graphics queue
@@ -895,13 +1055,13 @@ int main()
         initInfo.QueueFamily = graphicsQueueFamilyIdx;
         initInfo.Queue = graphicsQueue;
         initInfo.DescriptorPool = descriptorPool;
-        initInfo.Subpass = 1; // GUI render will use the first subpass.
+        initInfo.Subpass = 0; // GUI render will use the first subpass.
         initInfo.MinImageCount = MAX_FRAMES_IN_FLIGHT;
         initInfo.ImageCount = MAX_FRAMES_IN_FLIGHT;
         initInfo.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
         initInfo.CheckVkResultFn = CheckVkResult;
     }
-    ImGui_ImplVulkan_Init(&initInfo, renderPass);
+    ImGui_ImplVulkan_Init(&initInfo, guiRenderPass);
 
     // Upload Fonts
     {
@@ -956,26 +1116,6 @@ int main()
         // Wait for the resources from the possible on flight frame
         vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
 
-        // Get next available image from the swapchain
-        uint32_t imageIndex;
-        VkResult result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
-
-        if (result == VK_ERROR_OUT_OF_DATE_KHR)
-        {
-            // The surface is imcompatiable with the swapchain (resize window).
-            RecreateSwapchain();
-            continue;
-        }
-        else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
-        {
-            // Not success or usable.
-            throw std::runtime_error("failed to acquire swap chain image!");
-        }
-
-        // Reset unused previous frame's resource
-        vkResetFences(device, 1, &inFlightFences[currentFrame]);
-        vkResetCommandBuffer(commandBuffers[currentFrame], 0);
-
         // Prepare the Dear ImGUI frame data
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -994,19 +1134,27 @@ int main()
         VkDescriptorSet my_image_texture = 0;
         ImGui::Begin("Window 1");
         ImVec2 win1Extent = ImGui::GetWindowSize();
+
+        // Recreate scene render imgs, img views if necessary.
+        uint32_t newWidth = static_cast<uint32_t>(win1Extent.x);
+        uint32_t newHeight = static_cast<uint32_t>(win1Extent.y);
+        if ((newWidth != sceneRenderImagesExtents[currentFrame].width) ||
+            (newHeight != sceneRenderImagesExtents[currentFrame].height))
+        {
+            RecreateSceneRenderObjs(newWidth, newHeight);
+        }
+
+        AddTextureToImGUI(&my_image_texture, newWidth, newHeight);
+
+        ImGui::Image((ImTextureID)my_image_texture, win1Extent);
         ImGui::End();
 
         ImGui::Begin("Window 2");
         ImGui::End();
 
-        // Recreate scene render imgs, img views if necessary.
-        uint32_t newWidth = static_cast<uint32_t>(win1Extent.x);
-        uint32_t newHeight = static_cast<uint32_t>(win1Extent.y);
-        if ((newWidth != sceneRenderImagesExtents[currentFrame].width) || 
-            (newHeight != sceneRenderImagesExtents[currentFrame].height))
-        {
-            RecreateSceneRenderObjs(newWidth, newHeight);
-        }
+        // Reset unused previous frame's resource
+        vkResetFences(device, 1, &inFlightFences[currentFrame]);
+        vkResetCommandBuffer(commandBuffers[currentFrame], 0);
 
         // Fill the command buffer
         VkCommandBufferBeginInfo beginInfo{};
@@ -1015,18 +1163,17 @@ int main()
         }
         VK_CHECK(vkBeginCommandBuffer(commandBuffers[currentFrame], &beginInfo));
 
-        // Begin the render pass and record relevant commands
-        // Link framebuffer into the render pass
-        VkRenderPassBeginInfo renderPassInfo{};
+        // Draw the scene
+        VkRenderPassBeginInfo sceneRenderPassBeginInfo{};
         VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
         {
-            renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-            renderPassInfo.renderPass = renderPass;
-            renderPassInfo.framebuffer = swapchainFramebuffers[imageIndex];
-            renderPassInfo.renderArea.offset = { 0, 0 };
-            renderPassInfo.renderArea.extent = swapchainImageExtent;
-            renderPassInfo.clearValueCount = 1;
-            renderPassInfo.pClearValues = &clearColor;
+            sceneRenderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+            sceneRenderPassBeginInfo.renderPass = sceneRenderPass;
+            sceneRenderPassBeginInfo.framebuffer = sceneRenderFramebuffers[currentFrame];
+            sceneRenderPassBeginInfo.renderArea.offset = { 0, 0 };
+            sceneRenderPassBeginInfo.renderArea.extent = sceneRenderImagesExtents[currentFrame];
+            sceneRenderPassBeginInfo.clearValueCount = 1;
+            sceneRenderPassBeginInfo.pClearValues = &clearColor;
         }
         vkCmdBeginRenderPass(commandBuffers[currentFrame], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -1054,6 +1201,40 @@ int main()
         }
 
         vkCmdDraw(commandBuffers[currentFrame], 3, 1, 0, 0);
+
+        vkCmdEndRenderPass(commandBuffers[currentFrame]);
+
+        // Get next available image from the swapchain
+        uint32_t imageIndex;
+        VkResult result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+
+        if (result == VK_ERROR_OUT_OF_DATE_KHR)
+        {
+            // The surface is imcompatiable with the swapchain (resize window).
+            RecreateSwapchain();
+            continue;
+        }
+        else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+        {
+            // Not success or usable.
+            throw std::runtime_error("failed to acquire swap chain image!");
+        }
+
+        // Begin the render pass and record relevant commands
+        // Link framebuffer into the render pass
+        VkRenderPassBeginInfo guiRenderPassBeginInfo{};
+        {
+            renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+            renderPassInfo.renderPass = renderPass;
+            renderPassInfo.framebuffer = swapchainFramebuffers[imageIndex];
+            renderPassInfo.renderArea.offset = { 0, 0 };
+            renderPassInfo.renderArea.extent = swapchainImageExtent;
+            renderPassInfo.clearValueCount = 1;
+            renderPassInfo.pClearValues = &clearCols;
+        }
+        vkCmdBeginRenderPass(commandBuffers[currentFrame], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+        
 
         // Record the gui rendering commands. We draw GUI after scene because we don't have depth test. So, GUI
         // should be drawn later or the scene would overlay on the GUI.
@@ -1120,6 +1301,9 @@ int main()
     // Cleanup
     // Cleanup Swapchain
     CleanupSwapchain();
+
+    // Cleanup scene rendering related objs
+    CleanupSceneRenderObjs();
 
     // Cleanup syn objects
     for (auto itr : imageAvailableSemaphores)
