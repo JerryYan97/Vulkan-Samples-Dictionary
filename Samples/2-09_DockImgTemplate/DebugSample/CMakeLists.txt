@@ -12,6 +12,7 @@ include_directories(../../../ThirdPartyLibs/glfw/include)
 set(DearImGUIPath ../../../ThirdPartyLibs/DearImGUI)
 include_directories(${DearImGUIPath})
 include_directories(${DearImGUIPath}/backends)
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../../ThirdPartyLibs/lodepng")
 
 link_directories("$ENV{VULKAN_SDK}/lib")
 link_directories("../../../ThirdPartyLibs/glfw/build/src/Debug/")
