@@ -978,7 +978,7 @@ int main()
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     {
         pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-        pipelineInfo.stageCount = 1;
+        pipelineInfo.stageCount = 2;
         pipelineInfo.pStages = shaderStgInfo;
         pipelineInfo.pVertexInputState = &vertexInputInfo;
         pipelineInfo.pInputAssemblyState = &inputAssembly;
@@ -1142,8 +1142,8 @@ int main()
         // Copy the render result in first draw to the texture descriptor used by ImGUI and use that
         // as the output image of the first window.
         VkDescriptorSet my_image_texture = 0;
-        ImGui::SetNextWindowSize(ImVec2(500, 500));
-        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        // ImGui::SetNextWindowSize(ImVec2(500, 500));
+        // ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::Begin("Window 1");
         ImVec2 win1Extent = ImGui::GetWindowSize();
 
@@ -1163,8 +1163,8 @@ int main()
         ImGui::Image((ImTextureID)my_image_texture, win1Extent);
         ImGui::End();
 
-        ImGui::SetNextWindowSize(ImVec2(500, 500));
-        ImGui::SetNextWindowPos(ImVec2(502, 0));
+        // ImGui::SetNextWindowSize(ImVec2(500, 500));
+        // ImGui::SetNextWindowPos(ImVec2(502, 0));
         ImGui::Begin("Window 2");
         ImGui::End();
 
