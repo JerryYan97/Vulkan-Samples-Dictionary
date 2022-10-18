@@ -1,3 +1,4 @@
+#define IMGUI_DEFINE_MATH_OPERATORS
 #include "imgui_internal.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
@@ -7,6 +8,7 @@
 
 #include <vulkan/vulkan.h>
 #include <glfw3.h>
+#include "lodepng.h"
 
 #include <vector>
 #include <set>
@@ -92,11 +94,7 @@ static void framebufferResizeCallback(GLFWwindow* window, int width, int height)
 
 static void CheckVkResult(VkResult err)
 {
-    if (err == 0)
-        return;
-    fprintf(stderr, "[vulkan] Error: VkResult = %d\n", err);
-    if (err < 0)
-        abort();
+    VK_CHECK(err);
 }
 
 VkShaderModule createShaderModule(const std::string& spvName, const VkDevice& device)
@@ -130,6 +128,34 @@ unsigned int graphicsQueueFamilyIdx = -1;
 unsigned int presentQueueFamilyIdx = -1;
 VkSurfaceFormatKHR choisenSurfaceFormat;
 VkExtent2D swapchainImageExtent;
+
+const char myLayout[] = 
+"[Window][DockSpaceViewport_11111111]\n\
+Pos=0,0\n\
+Size=1280,640\n\
+Collapsed=0\n\
+\n\
+[Window][Debug##Default]\n\
+Pos=60,60\n\
+Size=400,400\n\
+Collapsed=0\n\
+\n\
+[Window][Window 1]\n\
+Pos=0,0\n\
+Size=637,640\n\
+Collapsed=0\n\
+DockId=0x00000001,0\n\
+\n\
+[Window][Window 2]\n\
+Pos=639,0\n\
+Size=641,640\n\
+Collapsed=0\n\
+DockId=0x00000002,0\n\
+\n\
+DockSpace   ID=0x8B93E3BD Window=0xA787BDB4 Pos=0,0 Size=1280,640 Split=X Selected=0x82C5531C\n\
+  DockNode  ID = 0x00000001 Parent = 0x8B93E3BD SizeRef = 637, 640 Selected = 0xC56529CC\n\
+  DockNode  ID = 0x00000002 Parent = 0x8B93E3BD SizeRef = 641, 640 CentralNode = 1 Selected = 0x82C5531C";
+
 // NOTE: Each render pass' attachments should have same extent for render area when we start the render pass.
 // In our case, the first scene rendering would be smaller than the overall gui rendering. So, we will use two render
 // pass.
@@ -142,7 +168,9 @@ std::vector<VkImage> sceneRenderImages;
 std::vector<VkExtent2D> sceneRenderImagesExtents;
 std::vector<VmaAllocation> sceneRenderImgsAllocs;
 std::vector<VkImageView> sceneRenderImageViews;
-
+std::vector<VkSampler> guiImgRenderSamplers;
+std::vector<VkDescriptorSet> guiImgDescriptors;
+VkDescriptorPool descriptorPool;
 VmaAllocator allocator;
 
 // Create the swapchain frame buffer
@@ -152,12 +180,11 @@ void CreateSwapchainFramebuffer()
     swapchainFramebuffers.resize(swapchainImageViews.size());
     for (int i = 0; i < swapchainImageViews.size(); i++)
     {
-        VkImageView attachments[] = { swapchainImageViews[i] };
         VkFramebufferCreateInfo framebufferInfo{};
         framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
         framebufferInfo.renderPass = guiRenderPass;
         framebufferInfo.attachmentCount = 1;
-        framebufferInfo.pAttachments = attachments;
+        framebufferInfo.pAttachments = &swapchainImageViews[i];
         framebufferInfo.width = swapchainImageExtent.width;
         framebufferInfo.height = swapchainImageExtent.height;
         framebufferInfo.layers = 1;
@@ -359,7 +386,7 @@ void RecreateSceneRenderObjs(uint32_t width, uint32_t height)
         sceneImgsInfo.arrayLayers = 1;
         sceneImgsInfo.samples = VK_SAMPLE_COUNT_1_BIT;
         sceneImgsInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-        sceneImgsInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+        sceneImgsInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
         sceneImgsInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     }
 
@@ -467,6 +494,21 @@ void InitSceneRenderObjs()
             sceneRenderFramebufferInfo.layers = 1;
         }
         VK_CHECK(vkCreateFramebuffer(device, &sceneRenderFramebufferInfo, nullptr, &sceneRenderFramebuffers[i]));
+
+        VkSamplerCreateInfo sampler_info{};
+        {
+            sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+            sampler_info.magFilter = VK_FILTER_LINEAR;
+            sampler_info.minFilter = VK_FILTER_LINEAR;
+            sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+            sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT; // outside image bounds just use border color
+            sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            sampler_info.minLod = -1000;
+            sampler_info.maxLod = 1000;
+            sampler_info.maxAnisotropy = 1.0f;
+        }
+        VK_CHECK(vkCreateSampler(device, &sampler_info, nullptr, &guiImgRenderSamplers[i]));
     }
 }
 
@@ -483,7 +525,7 @@ void CleanupSceneRenderObjs()
 void AddTextureToImGUI(VkDescriptorSet* img_ds, int image_width, int image_height)
 {
     // Create the Sampler
-    VkSampler sampler;
+    vkDestroySampler(device, guiImgRenderSamplers[currentFrame], nullptr);
     VkSamplerCreateInfo sampler_info{};
     {
         sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -497,10 +539,24 @@ void AddTextureToImGUI(VkDescriptorSet* img_ds, int image_width, int image_heigh
         sampler_info.maxLod = 1000;
         sampler_info.maxAnisotropy = 1.0f;
     }
-    VK_CHECK(vkCreateSampler(device, &sampler_info, nullptr, &sampler));
+    VK_CHECK(vkCreateSampler(device, &sampler_info, nullptr, &guiImgRenderSamplers[currentFrame]));
+
+    if (guiImgDescriptors.size() == MAX_FRAMES_IN_FLIGHT)
+    {
+        vkFreeDescriptorSets(device, descriptorPool, 1, &guiImgDescriptors[currentFrame]);
+    }
 
     // Create Descriptor Set using ImGUI's implementation
-    *img_ds = ImGui_ImplVulkan_AddTexture(sampler, sceneRenderImageViews[currentFrame], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    *img_ds = ImGui_ImplVulkan_AddTexture(guiImgRenderSamplers[currentFrame], sceneRenderImageViews[currentFrame], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    if (guiImgDescriptors.size() < MAX_FRAMES_IN_FLIGHT)
+    {
+        guiImgDescriptors.push_back(*img_ds);
+    }
+    else
+    {
+        guiImgDescriptors[currentFrame] = *img_ds;
+    }
 }
 
 int main()
@@ -600,8 +656,8 @@ int main()
 
     // Init glfw window.
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    const uint32_t WIDTH = 800;
-    const uint32_t HEIGHT = 600;
+    const uint32_t WIDTH = 1280;
+    const uint32_t HEIGHT = 640;
     window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
     glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
 
@@ -730,7 +786,6 @@ int main()
         pool_info.poolSizeCount = (uint32_t)(sizeof(poolSizes) / sizeof(VkDescriptorPoolSize));
         pool_info.pPoolSizes = poolSizes;
     }
-    VkDescriptorPool descriptorPool;
     VK_CHECK(vkCreateDescriptorPool(device, &pool_info, nullptr, &descriptorPool));
 
     CreateSwapchain();
@@ -742,16 +797,15 @@ int main()
     sceneRenderImageViews.resize(MAX_FRAMES_IN_FLIGHT);
     sceneRenderFramebuffers.resize(MAX_FRAMES_IN_FLIGHT);
     sceneRenderImagesExtents.resize(MAX_FRAMES_IN_FLIGHT);
+    guiImgRenderSamplers.resize(MAX_FRAMES_IN_FLIGHT);
     for (auto itr : sceneRenderImagesExtents)
     {
         itr.width = 0;
         itr.height = 0;
     }
 
-
     // Create the render pass
-    // Specify the scene render attachment: The attachment would be used by the 2nd subpass but wouldn't be used
-    // for present. So, we set the finalLayout to undefined.
+    // Specify the scene render attachment.
     VkAttachmentDescription sceneRenderAttachment{};
     {
         sceneRenderAttachment.format = choisenSurfaceFormat.format;
@@ -761,20 +815,20 @@ int main()
         sceneRenderAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         sceneRenderAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         sceneRenderAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        sceneRenderAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        sceneRenderAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     }
 
     // Specify the GUI attachment: We will need to present everything in GUI. So, the finalLayout would be presentable.
-    VkAttachmentDescription guiAttachment{};
+    VkAttachmentDescription guiRenderTargetAttachment{};
     {
-        guiAttachment.format = choisenSurfaceFormat.format;
-        guiAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-        guiAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        guiAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        guiAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        guiAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        guiAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        guiAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        guiRenderTargetAttachment.format = choisenSurfaceFormat.format;
+        guiRenderTargetAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+        guiRenderTargetAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        guiRenderTargetAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        guiRenderTargetAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        guiRenderTargetAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        guiRenderTargetAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        guiRenderTargetAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     }
 
     // Specify the color reference, which specifies the attachment layout during the subpass
@@ -786,14 +840,8 @@ int main()
 
     VkAttachmentReference guiAttachmentRef{};
     {
-        guiAttachmentRef.attachment = 1;
+        guiAttachmentRef.attachment = 0;
         guiAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    }
-
-    VkAttachmentReference guiInputAttachmentRef{};
-    {
-        guiInputAttachmentRef.attachment = 0;
-        guiInputAttachmentRef.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     }
 
     // Specify the subpass executed for the scene
@@ -827,8 +875,6 @@ int main()
         guiSubpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
         guiSubpass.colorAttachmentCount = 1;
         guiSubpass.pColorAttachments = &guiAttachmentRef;
-        guiSubpass.inputAttachmentCount = 1;
-        guiSubpass.pInputAttachments = &guiInputAttachmentRef;
     }
 
     // Specify the dependency between the scene subpass (0) and the gui subpass (1).
@@ -836,11 +882,11 @@ int main()
     VkSubpassDependency guiSubpassesDependency{};
     {
         guiSubpassesDependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-        guiSubpassesDependency.dstSubpass = 1;
+        guiSubpassesDependency.dstSubpass = 0;
         guiSubpassesDependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        guiSubpassesDependency.dstStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        guiSubpassesDependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         guiSubpassesDependency.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        guiSubpassesDependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        guiSubpassesDependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
     }
 
     // Create the render passes
@@ -860,7 +906,7 @@ int main()
     {
         guiRenderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
         guiRenderPassInfo.attachmentCount = 1;
-        guiRenderPassInfo.pAttachments = &guiAttachment;
+        guiRenderPassInfo.pAttachments = &guiRenderTargetAttachment;
         guiRenderPassInfo.subpassCount = 1;
         guiRenderPassInfo.pSubpasses = &guiSubpass;
         guiRenderPassInfo.dependencyCount = 1;
@@ -971,7 +1017,7 @@ int main()
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     {
         pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-        pipelineInfo.stageCount = 1;
+        pipelineInfo.stageCount = 2;
         pipelineInfo.pStages = shaderStgInfo;
         pipelineInfo.pVertexInputState = &vertexInputInfo;
         pipelineInfo.pInputAssemblyState = &inputAssembly;
@@ -1105,6 +1151,8 @@ int main()
     // UI State
     bool show_demo_window = true;
 
+    ImGui::LoadIniSettingsFromMemory(myLayout);
+
     // Main Loop
     // Two draws. First draw draws triangle into an image with window 1 window size.
     // Second draw draws GUI. GUI would use the image drawn from the first draw.
@@ -1122,33 +1170,46 @@ int main()
         ImGui::NewFrame();
 
         ImGuiID dockspace_id = ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
+
+        /* TODO: Follow on the pre-dock issue.
         ImGui::DockBuilderRemoveNodeChildNodes(dockspace_id); // clear any previous layout
         ImGuiID dock_id_left, dock_id_right;
         ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.8f, &dock_id_left, &dock_id_right);
         ImGui::DockBuilderDockWindow("Window 1", dock_id_left);
         ImGui::DockBuilderDockWindow("Window 2", dock_id_right);
         ImGui::DockBuilderFinish(dockspace_id);
-
+        */
+        // ImGui::LoadIniSettingsFromMemory
         // Copy the render result in first draw to the texture descriptor used by ImGUI and use that
         // as the output image of the first window.
         VkDescriptorSet my_image_texture = 0;
+        // ImGui::SetNextWindowSize(ImVec2(500, 500));
+        // ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::Begin("Window 1");
-        ImVec2 win1Extent = ImGui::GetWindowSize();
+        // ImVec2 win1Extent = ImGui::GetWindowSize();
+
+        ImVec2 winContentExtentUL = ImGui::GetWindowContentRegionMax();
+        ImVec2 winContentExtentDR = ImGui::GetWindowContentRegionMin();
+        ImVec2 winContentExtent = winContentExtentUL - winContentExtentDR;
 
         // Recreate scene render imgs, img views if necessary.
-        uint32_t newWidth = static_cast<uint32_t>(win1Extent.x);
-        uint32_t newHeight = static_cast<uint32_t>(win1Extent.y);
+        uint32_t newWidth = std::max(static_cast<uint32_t>(winContentExtent.x), static_cast<uint32_t>(64));
+        uint32_t newHeight = std::max(static_cast<uint32_t>(winContentExtent.y), static_cast<uint32_t>(64));
+        /*
         if ((newWidth != sceneRenderImagesExtents[currentFrame].width) ||
             (newHeight != sceneRenderImagesExtents[currentFrame].height))
         {
             RecreateSceneRenderObjs(newWidth, newHeight);
         }
-
+        */
+        RecreateSceneRenderObjs(newWidth, newHeight);
         AddTextureToImGUI(&my_image_texture, newWidth, newHeight);
 
-        ImGui::Image((ImTextureID)my_image_texture, win1Extent);
+        ImGui::Image((ImTextureID)my_image_texture, winContentExtent);
         ImGui::End();
 
+        // ImGui::SetNextWindowSize(ImVec2(500, 500));
+        // ImGui::SetNextWindowPos(ImVec2(502, 0));
         ImGui::Begin("Window 2");
         ImGui::End();
 
@@ -1175,7 +1236,7 @@ int main()
             sceneRenderPassBeginInfo.clearValueCount = 1;
             sceneRenderPassBeginInfo.pClearValues = &clearColor;
         }
-        vkCmdBeginRenderPass(commandBuffers[currentFrame], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBeginRenderPass(commandBuffers[currentFrame], &sceneRenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
         // Bind the graphics pipeline
         vkCmdBindPipeline(commandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
@@ -1185,8 +1246,8 @@ int main()
         {
             viewport.x = 0.f;
             viewport.y = 0.f;
-            viewport.width = (float)swapchainImageExtent.width;
-            viewport.height = (float)swapchainImageExtent.height;
+            viewport.width = (float)sceneRenderImagesExtents[currentFrame].width;
+            viewport.height = (float)sceneRenderImagesExtents[currentFrame].height;
             viewport.minDepth = 0.f;
             viewport.maxDepth = 1.f;
         }
@@ -1196,7 +1257,7 @@ int main()
         VkRect2D scissor{};
         {
             scissor.offset = { 0, 0 };
-            scissor.extent = swapchainImageExtent;
+            scissor.extent = sceneRenderImagesExtents[currentFrame];
             vkCmdSetScissor(commandBuffers[currentFrame], 0, 1, &scissor);
         }
 
@@ -1220,27 +1281,31 @@ int main()
             throw std::runtime_error("failed to acquire swap chain image!");
         }
 
+        // Create a barrier to wait for last draw's result
+        vkCmdPipelineBarrier(commandBuffers[currentFrame],
+                             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                             0,
+                             0, nullptr,
+                             0, nullptr,
+                             0, nullptr);
+
         // Begin the render pass and record relevant commands
         // Link framebuffer into the render pass
         VkRenderPassBeginInfo guiRenderPassBeginInfo{};
         {
-            renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-            renderPassInfo.renderPass = renderPass;
-            renderPassInfo.framebuffer = swapchainFramebuffers[imageIndex];
-            renderPassInfo.renderArea.offset = { 0, 0 };
-            renderPassInfo.renderArea.extent = swapchainImageExtent;
-            renderPassInfo.clearValueCount = 1;
-            renderPassInfo.pClearValues = &clearCols;
+            guiRenderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+            guiRenderPassBeginInfo.renderPass = guiRenderPass;
+            guiRenderPassBeginInfo.framebuffer = swapchainFramebuffers[imageIndex];
+            guiRenderPassBeginInfo.renderArea.offset = { 0, 0 };
+            guiRenderPassBeginInfo.renderArea.extent = swapchainImageExtent;
+            guiRenderPassBeginInfo.clearValueCount = 1;
+            guiRenderPassBeginInfo.pClearValues = &clearColor;
         }
-        vkCmdBeginRenderPass(commandBuffers[currentFrame], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-        
+        vkCmdBeginRenderPass(commandBuffers[currentFrame], &guiRenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
         // Record the gui rendering commands. We draw GUI after scene because we don't have depth test. So, GUI
         // should be drawn later or the scene would overlay on the GUI.
-        // Start next subpass
-        vkCmdNextSubpass(commandBuffers[currentFrame], VK_SUBPASS_CONTENTS_INLINE);
-
         ImGui::Render();
         ImDrawData* draw_data = ImGui::GetDrawData();
 
@@ -1321,6 +1386,11 @@ int main()
         vkDestroyFence(device, itr, nullptr);
     }
 
+    for (auto itr : guiImgRenderSamplers)
+    {
+        vkDestroySampler(device, itr, nullptr);
+    }
+
     // Destroy the command pool
     vkDestroyCommandPool(device, commandPool, nullptr);
 
@@ -1335,7 +1405,8 @@ int main()
     vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 
     // Destroy the render pass
-    vkDestroyRenderPass(device, renderPass, nullptr);
+    vkDestroyRenderPass(device, sceneRenderPass, nullptr);
+    vkDestroyRenderPass(device, guiRenderPass, nullptr);
 
     // Destroy the descriptor pool
     vkDestroyDescriptorPool(device, descriptorPool, nullptr);
