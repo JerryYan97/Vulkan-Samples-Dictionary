@@ -169,7 +169,8 @@ std::vector<VkExtent2D> sceneRenderImagesExtents;
 std::vector<VmaAllocation> sceneRenderImgsAllocs;
 std::vector<VkImageView> sceneRenderImageViews;
 std::vector<VkSampler> guiImgRenderSamplers;
-
+std::vector<VkDescriptorSet> guiImgDescriptors;
+VkDescriptorPool descriptorPool;
 VmaAllocator allocator;
 
 // Create the swapchain frame buffer
@@ -540,8 +541,22 @@ void AddTextureToImGUI(VkDescriptorSet* img_ds, int image_width, int image_heigh
     }
     VK_CHECK(vkCreateSampler(device, &sampler_info, nullptr, &guiImgRenderSamplers[currentFrame]));
 
+    if (guiImgDescriptors.size() == MAX_FRAMES_IN_FLIGHT)
+    {
+        vkFreeDescriptorSets(device, descriptorPool, 1, &guiImgDescriptors[currentFrame]);
+    }
+
     // Create Descriptor Set using ImGUI's implementation
     *img_ds = ImGui_ImplVulkan_AddTexture(guiImgRenderSamplers[currentFrame], sceneRenderImageViews[currentFrame], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    if (guiImgDescriptors.size() < MAX_FRAMES_IN_FLIGHT)
+    {
+        guiImgDescriptors.push_back(*img_ds);
+    }
+    else
+    {
+        guiImgDescriptors[currentFrame] = *img_ds;
+    }
 }
 
 int main()
@@ -771,7 +786,6 @@ int main()
         pool_info.poolSizeCount = (uint32_t)(sizeof(poolSizes) / sizeof(VkDescriptorPoolSize));
         pool_info.pPoolSizes = poolSizes;
     }
-    VkDescriptorPool descriptorPool;
     VK_CHECK(vkCreateDescriptorPool(device, &pool_info, nullptr, &descriptorPool));
 
     CreateSwapchain();
