@@ -1,3 +1,4 @@
+#define IMGUI_DEFINE_MATH_OPERATORS
 #include "imgui_internal.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
@@ -93,11 +94,7 @@ static void framebufferResizeCallback(GLFWwindow* window, int width, int height)
 
 static void CheckVkResult(VkResult err)
 {
-    if (err == 0)
-        return;
-    fprintf(stderr, "[vulkan] Error: VkResult = %d\n", err);
-    if (err < 0)
-        abort();
+    VK_CHECK(err);
 }
 
 VkShaderModule createShaderModule(const std::string& spvName, const VkDevice& device)
@@ -131,6 +128,34 @@ unsigned int graphicsQueueFamilyIdx = -1;
 unsigned int presentQueueFamilyIdx = -1;
 VkSurfaceFormatKHR choisenSurfaceFormat;
 VkExtent2D swapchainImageExtent;
+
+const char myLayout[] = 
+"[Window][DockSpaceViewport_11111111]\n\
+Pos=0,0\n\
+Size=1280,640\n\
+Collapsed=0\n\
+\n\
+[Window][Debug##Default]\n\
+Pos=60,60\n\
+Size=400,400\n\
+Collapsed=0\n\
+\n\
+[Window][Window 1]\n\
+Pos=0,0\n\
+Size=637,640\n\
+Collapsed=0\n\
+DockId=0x00000001,0\n\
+\n\
+[Window][Window 2]\n\
+Pos=639,0\n\
+Size=641,640\n\
+Collapsed=0\n\
+DockId=0x00000002,0\n\
+\n\
+DockSpace   ID=0x8B93E3BD Window=0xA787BDB4 Pos=0,0 Size=1280,640 Split=X Selected=0x82C5531C\n\
+  DockNode  ID = 0x00000001 Parent = 0x8B93E3BD SizeRef = 637, 640 Selected = 0xC56529CC\n\
+  DockNode  ID = 0x00000002 Parent = 0x8B93E3BD SizeRef = 641, 640 CentralNode = 1 Selected = 0x82C5531C";
+
 // NOTE: Each render pass' attachments should have same extent for render area when we start the render pass.
 // In our case, the first scene rendering would be smaller than the overall gui rendering. So, we will use two render
 // pass.
@@ -616,8 +641,8 @@ int main()
 
     // Init glfw window.
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    const uint32_t WIDTH = 800;
-    const uint32_t HEIGHT = 600;
+    const uint32_t WIDTH = 1280;
+    const uint32_t HEIGHT = 640;
     window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
     glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
 
@@ -1112,6 +1137,8 @@ int main()
     // UI State
     bool show_demo_window = true;
 
+    ImGui::LoadIniSettingsFromMemory(myLayout);
+
     // Main Loop
     // Two draws. First draw draws triangle into an image with window 1 window size.
     // Second draw draws GUI. GUI would use the image drawn from the first draw.
@@ -1145,11 +1172,15 @@ int main()
         // ImGui::SetNextWindowSize(ImVec2(500, 500));
         // ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::Begin("Window 1");
-        ImVec2 win1Extent = ImGui::GetWindowSize();
+        // ImVec2 win1Extent = ImGui::GetWindowSize();
+
+        ImVec2 winContentExtentUL = ImGui::GetWindowContentRegionMax();
+        ImVec2 winContentExtentDR = ImGui::GetWindowContentRegionMin();
+        ImVec2 winContentExtent = winContentExtentUL - winContentExtentDR;
 
         // Recreate scene render imgs, img views if necessary.
-        uint32_t newWidth = static_cast<uint32_t>(win1Extent.x);
-        uint32_t newHeight = static_cast<uint32_t>(win1Extent.y);
+        uint32_t newWidth = std::max(static_cast<uint32_t>(winContentExtent.x), static_cast<uint32_t>(64));
+        uint32_t newHeight = std::max(static_cast<uint32_t>(winContentExtent.y), static_cast<uint32_t>(64));
         /*
         if ((newWidth != sceneRenderImagesExtents[currentFrame].width) ||
             (newHeight != sceneRenderImagesExtents[currentFrame].height))
@@ -1160,7 +1191,7 @@ int main()
         RecreateSceneRenderObjs(newWidth, newHeight);
         AddTextureToImGUI(&my_image_texture, newWidth, newHeight);
 
-        ImGui::Image((ImTextureID)my_image_texture, win1Extent);
+        ImGui::Image((ImTextureID)my_image_texture, winContentExtent);
         ImGui::End();
 
         // ImGui::SetNextWindowSize(ImVec2(500, 500));
