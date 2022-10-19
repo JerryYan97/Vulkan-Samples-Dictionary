@@ -1171,22 +1171,10 @@ int main()
 
         ImGuiID dockspace_id = ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
 
-        /* TODO: Follow on the pre-dock issue.
-        ImGui::DockBuilderRemoveNodeChildNodes(dockspace_id); // clear any previous layout
-        ImGuiID dock_id_left, dock_id_right;
-        ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.8f, &dock_id_left, &dock_id_right);
-        ImGui::DockBuilderDockWindow("Window 1", dock_id_left);
-        ImGui::DockBuilderDockWindow("Window 2", dock_id_right);
-        ImGui::DockBuilderFinish(dockspace_id);
-        */
-        // ImGui::LoadIniSettingsFromMemory
         // Copy the render result in first draw to the texture descriptor used by ImGUI and use that
         // as the output image of the first window.
         VkDescriptorSet my_image_texture = 0;
-        // ImGui::SetNextWindowSize(ImVec2(500, 500));
-        // ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::Begin("Window 1");
-        // ImVec2 win1Extent = ImGui::GetWindowSize();
 
         ImVec2 winContentExtentUL = ImGui::GetWindowContentRegionMax();
         ImVec2 winContentExtentDR = ImGui::GetWindowContentRegionMin();
@@ -1195,21 +1183,12 @@ int main()
         // Recreate scene render imgs, img views if necessary.
         uint32_t newWidth = std::max(static_cast<uint32_t>(winContentExtent.x), static_cast<uint32_t>(64));
         uint32_t newHeight = std::max(static_cast<uint32_t>(winContentExtent.y), static_cast<uint32_t>(64));
-        /*
-        if ((newWidth != sceneRenderImagesExtents[currentFrame].width) ||
-            (newHeight != sceneRenderImagesExtents[currentFrame].height))
-        {
-            RecreateSceneRenderObjs(newWidth, newHeight);
-        }
-        */
         RecreateSceneRenderObjs(newWidth, newHeight);
         AddTextureToImGUI(&my_image_texture, newWidth, newHeight);
 
         ImGui::Image((ImTextureID)my_image_texture, winContentExtent);
         ImGui::End();
 
-        // ImGui::SetNextWindowSize(ImVec2(500, 500));
-        // ImGui::SetNextWindowPos(ImVec2(502, 0));
         ImGui::Begin("Window 2");
         ImGui::End();
 
