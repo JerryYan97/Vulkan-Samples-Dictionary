@@ -7,3 +7,6 @@
 [submodule "DearImGui"]
 	path = ThirdPartyLibs/DearImGUI
 	url = https://github.com/ocornut/imgui.git
+[submodule "ThirdPartyLibs/ImGUIExplore"]
+	path = ThirdPartyLibs/ImGUIExplore
+	url = https://github.com/JerryYan97/ImGUIExplore.git
