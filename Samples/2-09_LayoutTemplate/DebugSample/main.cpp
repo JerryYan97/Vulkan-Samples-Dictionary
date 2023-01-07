@@ -1,5 +1,5 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
-#include "imgui_internal.h"
+#include "CustomDearImGuiLayout.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
 
@@ -128,33 +128,6 @@ unsigned int graphicsQueueFamilyIdx = -1;
 unsigned int presentQueueFamilyIdx = -1;
 VkSurfaceFormatKHR choisenSurfaceFormat;
 VkExtent2D swapchainImageExtent;
-
-const char myLayout[] = 
-"[Window][DockSpaceViewport_11111111]\n\
-Pos=0,0\n\
-Size=1280,640\n\
-Collapsed=0\n\
-\n\
-[Window][Debug##Default]\n\
-Pos=60,60\n\
-Size=400,400\n\
-Collapsed=0\n\
-\n\
-[Window][Window 1]\n\
-Pos=0,0\n\
-Size=637,640\n\
-Collapsed=0\n\
-DockId=0x00000001,0\n\
-\n\
-[Window][Window 2]\n\
-Pos=639,0\n\
-Size=641,640\n\
-Collapsed=0\n\
-DockId=0x00000002,0\n\
-\n\
-DockSpace   ID=0x8B93E3BD Window=0xA787BDB4 Pos=0,0 Size=1280,640 Split=X Selected=0x82C5531C\n\
-  DockNode  ID = 0x00000001 Parent = 0x8B93E3BD SizeRef = 637, 640 Selected = 0xC56529CC\n\
-  DockNode  ID = 0x00000002 Parent = 0x8B93E3BD SizeRef = 641, 640 CentralNode = 1 Selected = 0x82C5531C";
 
 // NOTE: Each render pass' attachments should have same extent for render area when we start the render pass.
 // In our case, the first scene rendering would be smaller than the overall gui rendering. So, we will use two render
@@ -557,6 +530,130 @@ void AddTextureToImGUI(VkDescriptorSet* img_ds, int image_width, int image_heigh
     {
         guiImgDescriptors[currentFrame] = *img_ds;
     }
+}
+
+// Custom layout
+constexpr ImGuiWindowFlags TestWindowFlag = ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDecoration;
+
+void LeftUpWindow()
+{
+    // Copy the render result in first draw to the texture descriptor used by ImGUI and use that
+    // as the output image of the first window.
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.f);
+    VkDescriptorSet my_image_texture = 0;
+    ImGui::Begin("Left-Up Window", nullptr, TestWindowFlag);
+
+    ImVec2 winContentExtentUL = ImGui::GetWindowContentRegionMax();
+    ImVec2 winContentExtentDR = ImGui::GetWindowContentRegionMin();
+    ImVec2 winContentExtent = winContentExtentUL - winContentExtentDR;
+
+    // Recreate scene render imgs, img views if necessary.
+    uint32_t newWidth = std::max(static_cast<uint32_t>(winContentExtent.x), static_cast<uint32_t>(64));
+    uint32_t newHeight = std::max(static_cast<uint32_t>(winContentExtent.y), static_cast<uint32_t>(64));
+    RecreateSceneRenderObjs(newWidth, newHeight);
+    AddTextureToImGUI(&my_image_texture, newWidth, newHeight);
+
+    ImGui::Image((ImTextureID)my_image_texture, winContentExtent);
+    ImGui::End();
+    ImGui::PopStyleVar(1);
+}
+
+void LeftDownWindow()
+{
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.f);
+    ImGui::Begin("Left-Down Window", nullptr, TestWindowFlag);
+
+    if (ImGui::TreeNode("Basic trees"))
+    {
+        for (int i = 0; i < 5; i++)
+        {
+            if (ImGui::TreeNode((void*)(intptr_t)i, "Child %d", i))
+            {
+                ImGui::Text("blah blah");
+                ImGui::SameLine();
+                if (ImGui::SmallButton("button")) {}
+                ImGui::TreePop();
+            }
+        }
+        ImGui::TreePop();
+    }
+
+    ImGui::End();
+    ImGui::PopStyleVar(1);
+}
+
+void RightUpWindow()
+{
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.f);
+    ImGui::Begin("Right-Up Window", nullptr, TestWindowFlag);
+
+    ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+    if (ImGui::TreeNode("Basic trees"))
+    {
+        for (int i = 0; i < 5; i++)
+        {
+            if (ImGui::TreeNode((void*)(intptr_t)i, "Child %d", i))
+            {
+                ImGui::Text("blah blah");
+                ImGui::SameLine();
+                if (ImGui::SmallButton("button")) {}
+                ImGui::TreePop();
+            }
+        }
+        ImGui::TreePop();
+    }
+
+    ImGui::End();
+    ImGui::PopStyleVar(1);
+}
+
+void RightDownWindow()
+{
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.f);
+    ImGui::Begin("Right-Down Window", nullptr, TestWindowFlag);
+
+    if (ImGui::TreeNode("Basic trees"))
+    {
+        for (int i = 0; i < 5; i++)
+        {
+            if (ImGui::TreeNode((void*)(intptr_t)i, "Child %d", i))
+            {
+                ImGui::Text("blah blah");
+                ImGui::SameLine();
+                if (ImGui::SmallButton("button")) {}
+                ImGui::TreePop();
+            }
+        }
+        ImGui::TreePop();
+    }
+
+    ImGui::End();
+    ImGui::PopStyleVar(1);
+}
+
+// A vertical splitter in middle. A horizontal splitter at left. A horizontal splitter at right.
+DearImGuiExt::CustomLayoutNode* StartLayout()
+{
+    // Blender default GUI layout
+    DearImGuiExt::CustomLayoutNode* pRoot = new DearImGuiExt::CustomLayoutNode(0.8f);
+
+    // Left and right splitter
+    pRoot->SetLeftChild(new DearImGuiExt::CustomLayoutNode(0.8f));
+    pRoot->SetRightChild(new DearImGuiExt::CustomLayoutNode(0.3f));
+
+    // Left splitter's top and bottom windows
+    DearImGuiExt::CustomLayoutNode* pLeftDomain = pRoot->GetLeftChild();
+
+    pLeftDomain->SetLeftChild(new DearImGuiExt::CustomLayoutNode(LeftUpWindow));
+    pLeftDomain->SetRightChild(new DearImGuiExt::CustomLayoutNode(LeftDownWindow));
+
+    // Right splitter's top and bottom windows
+    DearImGuiExt::CustomLayoutNode* pRightDomain = pRoot->GetRightChild();
+
+    pRightDomain->SetLeftChild(new DearImGuiExt::CustomLayoutNode(RightUpWindow));
+    pRightDomain->SetRightChild(new DearImGuiExt::CustomLayoutNode(RightDownWindow));
+
+    return pRoot;
 }
 
 int main()
@@ -1086,7 +1183,6 @@ int main()
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
-    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
     // Setup Dear ImGui style
     ImGui::StyleColorsDark();
@@ -1151,7 +1247,10 @@ int main()
     // UI State
     bool show_demo_window = true;
 
-    ImGui::LoadIniSettingsFromMemory(myLayout);
+    // Custom Layout
+    DearImGuiExt::CustomLayout myLayout(StartLayout());
+
+
 
     // Main Loop
     // Two draws. First draw draws triangle into an image with window 1 window size.
@@ -1169,28 +1268,7 @@ int main()
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        ImGuiID dockspace_id = ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
-
-        // Copy the render result in first draw to the texture descriptor used by ImGUI and use that
-        // as the output image of the first window.
-        VkDescriptorSet my_image_texture = 0;
-        ImGui::Begin("Window 1");
-
-        ImVec2 winContentExtentUL = ImGui::GetWindowContentRegionMax();
-        ImVec2 winContentExtentDR = ImGui::GetWindowContentRegionMin();
-        ImVec2 winContentExtent = winContentExtentUL - winContentExtentDR;
-
-        // Recreate scene render imgs, img views if necessary.
-        uint32_t newWidth = std::max(static_cast<uint32_t>(winContentExtent.x), static_cast<uint32_t>(64));
-        uint32_t newHeight = std::max(static_cast<uint32_t>(winContentExtent.y), static_cast<uint32_t>(64));
-        RecreateSceneRenderObjs(newWidth, newHeight);
-        AddTextureToImGUI(&my_image_texture, newWidth, newHeight);
-
-        ImGui::Image((ImTextureID)my_image_texture, winContentExtent);
-        ImGui::End();
-
-        ImGui::Begin("Window 2");
-        ImGui::End();
+        myLayout.BeginEndLayout();        
 
         // Reset unused previous frame's resource
         vkResetFences(device, 1, &inFlightFences[currentFrame]);
