@@ -1,0 +1,4 @@
+https://lesleylai.info/en/vk-khr-dynamic-rendering/
+https://github.com/SaschaWillems/Vulkan/blob/313ac10de4a765997ddf5202c599e4a0ca32c8ca/examples/dynamicrendering/dynamicrendering.cpp
+
+currently, the DearImGUI's vulkan dynamic rendering backend is still under review. So, I am thinking I may need to mix the dynamic rendering and the subpass one.

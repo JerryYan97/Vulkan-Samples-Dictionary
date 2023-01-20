@@ -132,11 +132,9 @@ VkExtent2D swapchainImageExtent;
 // NOTE: Each render pass' attachments should have same extent for render area when we start the render pass.
 // In our case, the first scene rendering would be smaller than the overall gui rendering. So, we will use two render
 // pass.
-VkRenderPass sceneRenderPass;
 VkRenderPass guiRenderPass;
 std::vector<VkFramebuffer> swapchainFramebuffers;
 std::vector<VkImageView> swapchainImageViews;
-std::vector<VkFramebuffer> sceneRenderFramebuffers;
 std::vector<VkImage> sceneRenderImages;
 std::vector<VkExtent2D> sceneRenderImagesExtents;
 std::vector<VmaAllocation> sceneRenderImgsAllocs;
@@ -386,20 +384,6 @@ void RecreateSceneRenderObjs(uint32_t width, uint32_t height)
         info.subresourceRange.layerCount = 1;
     }
     VK_CHECK(vkCreateImageView(device, &info, nullptr, &sceneRenderImageViews[currentFrame]));
-
-    vkDestroyFramebuffer(device, sceneRenderFramebuffers[currentFrame], nullptr);
-
-    VkFramebufferCreateInfo sceneRenderFramebufferInfo{};
-    {
-        sceneRenderFramebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        sceneRenderFramebufferInfo.renderPass = sceneRenderPass;
-        sceneRenderFramebufferInfo.attachmentCount = 1;
-        sceneRenderFramebufferInfo.pAttachments = &sceneRenderImageViews[currentFrame];
-        sceneRenderFramebufferInfo.width = extent.width;
-        sceneRenderFramebufferInfo.height = extent.height;
-        sceneRenderFramebufferInfo.layers = 1;
-    }
-    VK_CHECK(vkCreateFramebuffer(device, &sceneRenderFramebufferInfo, nullptr, &sceneRenderFramebuffers[currentFrame]));
 }
 
 void InitSceneRenderObjs()
@@ -456,18 +440,6 @@ void InitSceneRenderObjs()
 
         VK_CHECK(vkCreateImageView(device, &info, nullptr, &sceneRenderImageViews[i]));
 
-        VkFramebufferCreateInfo sceneRenderFramebufferInfo{};
-        {
-            sceneRenderFramebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-            sceneRenderFramebufferInfo.renderPass = sceneRenderPass;
-            sceneRenderFramebufferInfo.attachmentCount = 1;
-            sceneRenderFramebufferInfo.pAttachments = &sceneRenderImageViews[i];
-            sceneRenderFramebufferInfo.width = extent.width;
-            sceneRenderFramebufferInfo.height = extent.height;
-            sceneRenderFramebufferInfo.layers = 1;
-        }
-        VK_CHECK(vkCreateFramebuffer(device, &sceneRenderFramebufferInfo, nullptr, &sceneRenderFramebuffers[i]));
-
         VkSamplerCreateInfo sampler_info{};
         {
             sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -491,7 +463,6 @@ void CleanupSceneRenderObjs()
     {
         vmaDestroyImage(allocator, sceneRenderImages[i], sceneRenderImgsAllocs[i]);
         vkDestroyImageView(device, sceneRenderImageViews[i], nullptr);
-        vkDestroyFramebuffer(device, sceneRenderFramebuffers[i], nullptr);
     }
 }
 
@@ -719,11 +690,11 @@ int main()
     VkApplicationInfo appInfo{};
     {
         appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-        appInfo.pApplicationName = "DumpTri";
+        appInfo.pApplicationName = "DynamicRendering";
         appInfo.applicationVersion = 1;
         appInfo.pEngineName = "VulkanDict";
         appInfo.engineVersion = 1;
-        appInfo.apiVersion = VK_API_VERSION_1_2;
+        appInfo.apiVersion = VK_API_VERSION_1_3;
     }
 
     std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
@@ -822,15 +793,22 @@ int main()
     }
 
     // We need the swap chain device extension
-    const std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+    const std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME };
+
+    VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamic_rendering_feature{};
+    {
+        dynamic_rendering_feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
+        dynamic_rendering_feature.dynamicRendering = VK_TRUE;
+    }
 
     // Assembly the info into the device create info
     VkDeviceCreateInfo deviceInfo{};
     {
         deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        deviceInfo.queueCreateInfoCount = queueCreateInfos.size();
+        deviceInfo.pNext = &dynamic_rendering_feature;
+        deviceInfo.queueCreateInfoCount = uint32_t(queueCreateInfos.size());
         deviceInfo.pQueueCreateInfos = queueCreateInfos.data();
-        deviceInfo.enabledExtensionCount = 1;
+        deviceInfo.enabledExtensionCount = uint32_t(deviceExtensions.size());
         deviceInfo.ppEnabledExtensionNames = deviceExtensions.data();
     }
 
@@ -892,7 +870,6 @@ int main()
     sceneRenderImages.resize(MAX_FRAMES_IN_FLIGHT);
     sceneRenderImgsAllocs.resize(MAX_FRAMES_IN_FLIGHT);
     sceneRenderImageViews.resize(MAX_FRAMES_IN_FLIGHT);
-    sceneRenderFramebuffers.resize(MAX_FRAMES_IN_FLIGHT);
     sceneRenderImagesExtents.resize(MAX_FRAMES_IN_FLIGHT);
     guiImgRenderSamplers.resize(MAX_FRAMES_IN_FLIGHT);
     for (auto itr : sceneRenderImagesExtents)
@@ -901,20 +878,7 @@ int main()
         itr.height = 0;
     }
 
-    // Create the render pass
-    // Specify the scene render attachment.
-    VkAttachmentDescription sceneRenderAttachment{};
-    {
-        sceneRenderAttachment.format = choisenSurfaceFormat.format;
-        sceneRenderAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-        sceneRenderAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        sceneRenderAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        sceneRenderAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        sceneRenderAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        sceneRenderAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        sceneRenderAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    }
-
+    // Create the render pass -- We will use dynamic rendering for the scene rendering
     // Specify the GUI attachment: We will need to present everything in GUI. So, the finalLayout would be presentable.
     VkAttachmentDescription guiRenderTargetAttachment{};
     {
@@ -929,41 +893,10 @@ int main()
     }
 
     // Specify the color reference, which specifies the attachment layout during the subpass
-    VkAttachmentReference sceneRenderAttachmentRef{};
-    {
-        sceneRenderAttachmentRef.attachment = 0;
-        sceneRenderAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    }
-
     VkAttachmentReference guiAttachmentRef{};
     {
         guiAttachmentRef.attachment = 0;
         guiAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    }
-
-    // Specify the subpass executed for the scene
-    VkSubpassDescription sceneSubpass{};
-    {
-        sceneSubpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        sceneSubpass.colorAttachmentCount = 1;
-        sceneSubpass.pColorAttachments = &sceneRenderAttachmentRef;
-    }
-
-    // Specify the dependency between the scene subpass and operations before it.
-    // Here, the subpass 0 depends on the operations set before the render pass.
-    // The VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT operations in the subpass 0 executes after 
-    // VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT operations before the render pass finishes.
-    // The VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT operations in the VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-    // would happen after 0 operations finishes in the VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT.
-    // (So, I believe the memory access dependency is not necessary here.)
-    VkSubpassDependency sceneSubpassesDependency{};
-    {
-        sceneSubpassesDependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-        sceneSubpassesDependency.dstSubpass = 0;
-        sceneSubpassesDependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        sceneSubpassesDependency.srcAccessMask = 0;
-        sceneSubpassesDependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        sceneSubpassesDependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
     }
 
     // Specity the subpass executed for the GUI
@@ -986,19 +919,7 @@ int main()
         guiSubpassesDependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
     }
 
-    // Create the render passes
-    VkRenderPassCreateInfo sceneRenderPassInfo{};
-    {
-        sceneRenderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-        sceneRenderPassInfo.attachmentCount = 1;
-        sceneRenderPassInfo.pAttachments = &sceneRenderAttachment;
-        sceneRenderPassInfo.subpassCount = 1;
-        sceneRenderPassInfo.pSubpasses = &sceneSubpass;
-        sceneRenderPassInfo.dependencyCount = 1;
-        sceneRenderPassInfo.pDependencies = &sceneSubpassesDependency;
-    }
-    VK_CHECK(vkCreateRenderPass(device, &sceneRenderPassInfo, nullptr, &sceneRenderPass));
-
+    // Create the render pass
     VkRenderPassCreateInfo guiRenderPassInfo{};
     {
         guiRenderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -1111,9 +1032,17 @@ int main()
     VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout));
 
     // Create the graphics pipeline -- The graphics pipeline is used for scene rendering
+    VkPipelineRenderingCreateInfoKHR pipelineRenderCreateInfo{};
+    {
+        pipelineRenderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+        pipelineRenderCreateInfo.colorAttachmentCount = 1;
+        pipelineRenderCreateInfo.pColorAttachmentFormats = &choisenSurfaceFormat.format;
+    }
+
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     {
         pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+        pipelineInfo.pNext = &pipelineRenderCreateInfo;
         pipelineInfo.stageCount = 2;
         pipelineInfo.pStages = shaderStgInfo;
         pipelineInfo.pVertexInputState = &vertexInputInfo;
@@ -1124,8 +1053,7 @@ int main()
         pipelineInfo.pColorBlendState = &colorBlending;
         pipelineInfo.pDynamicState = &dynamicState;
         pipelineInfo.layout = pipelineLayout;
-        pipelineInfo.renderPass = sceneRenderPass;
-        pipelineInfo.subpass = 0; // The first subpass for scene rendering; the second for gui rendering.
+        pipelineInfo.renderPass = nullptr;
         pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
     }
     VkPipeline graphicsPipeline;
@@ -1279,19 +1207,56 @@ int main()
         }
         VK_CHECK(vkBeginCommandBuffer(commandBuffers[currentFrame], &beginInfo));
 
-        // Draw the scene
-        VkRenderPassBeginInfo sceneRenderPassBeginInfo{};
-        VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
+        // Transfer the scene rendering image format from undefined or shader read to shader output.
+        VkImageSubresourceRange subResRange{};
         {
-            sceneRenderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-            sceneRenderPassBeginInfo.renderPass = sceneRenderPass;
-            sceneRenderPassBeginInfo.framebuffer = sceneRenderFramebuffers[currentFrame];
-            sceneRenderPassBeginInfo.renderArea.offset = { 0, 0 };
-            sceneRenderPassBeginInfo.renderArea.extent = sceneRenderImagesExtents[currentFrame];
-            sceneRenderPassBeginInfo.clearValueCount = 1;
-            sceneRenderPassBeginInfo.pClearValues = &clearColor;
+            subResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            subResRange.baseMipLevel = 0;
+            subResRange.levelCount = 1;
+            subResRange.baseArrayLayer = 0;
+            subResRange.layerCount = 1;
         }
-        vkCmdBeginRenderPass(commandBuffers[currentFrame], &sceneRenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+        VkImageMemoryBarrier sceneImgAsOutputLayoutTransitionBarrier{};
+        {
+            sceneImgAsOutputLayoutTransitionBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            sceneImgAsOutputLayoutTransitionBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            sceneImgAsOutputLayoutTransitionBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            sceneImgAsOutputLayoutTransitionBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            sceneImgAsOutputLayoutTransitionBarrier.image = sceneRenderImages[currentFrame];
+            sceneImgAsOutputLayoutTransitionBarrier.subresourceRange = subResRange;
+        }
+
+        vkCmdPipelineBarrier(commandBuffers[currentFrame],
+                             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                             0, 0, nullptr, 0, nullptr,
+                             1, &sceneImgAsOutputLayoutTransitionBarrier);
+
+        // Draw the scene
+        VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
+
+        VkRenderingAttachmentInfoKHR renderAttachmentInfo{};
+        {
+            renderAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+            renderAttachmentInfo.imageView = sceneRenderImageViews[currentFrame];
+            renderAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
+            renderAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            renderAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            renderAttachmentInfo.clearValue = clearColor;
+        }
+
+        VkRenderingInfoKHR renderInfo{};
+        {
+            renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+            renderInfo.renderArea.offset = { 0, 0 };
+            renderInfo.renderArea.extent = sceneRenderImagesExtents[currentFrame];
+            renderInfo.layerCount = 1;
+            renderInfo.colorAttachmentCount = 1;
+            renderInfo.pColorAttachments = &renderAttachmentInfo;
+        }
+
+        vkCmdBeginRendering(commandBuffers[currentFrame], &renderInfo);
 
         // Bind the graphics pipeline
         vkCmdBindPipeline(commandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
@@ -1318,8 +1283,28 @@ int main()
 
         vkCmdDraw(commandBuffers[currentFrame], 3, 1, 0, 0);
 
-        vkCmdEndRenderPass(commandBuffers[currentFrame]);
+        vkCmdEndRendering(commandBuffers[currentFrame]);
 
+        // Transform the layout of the scene image from shader output to shader read for GUI rendering consumption.
+        VkImageMemoryBarrier sceneImgLayoutAsInputTransitionBarrier{};
+        {
+            sceneImgLayoutAsInputTransitionBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            sceneImgLayoutAsInputTransitionBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            sceneImgLayoutAsInputTransitionBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            sceneImgLayoutAsInputTransitionBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            sceneImgLayoutAsInputTransitionBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            sceneImgLayoutAsInputTransitionBarrier.image = sceneRenderImages[currentFrame];
+            sceneImgLayoutAsInputTransitionBarrier.subresourceRange = subResRange;
+        }
+
+        vkCmdPipelineBarrier(commandBuffers[currentFrame], 
+                             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 
+                             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                             0, 
+                             0, nullptr,
+                             0, nullptr,
+                             1, &sceneImgLayoutAsInputTransitionBarrier);
+        
         // Get next available image from the swapchain
         uint32_t imageIndex;
         VkResult result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
@@ -1335,15 +1320,6 @@ int main()
             // Not success or usable.
             throw std::runtime_error("failed to acquire swap chain image!");
         }
-
-        // Create a barrier to wait for last draw's result
-        vkCmdPipelineBarrier(commandBuffers[currentFrame],
-                             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                             0,
-                             0, nullptr,
-                             0, nullptr,
-                             0, nullptr);
 
         // Begin the render pass and record relevant commands
         // Link framebuffer into the render pass
@@ -1460,7 +1436,6 @@ int main()
     vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 
     // Destroy the render pass
-    vkDestroyRenderPass(device, sceneRenderPass, nullptr);
     vkDestroyRenderPass(device, guiRenderPass, nullptr);
 
     // Destroy the descriptor pool
