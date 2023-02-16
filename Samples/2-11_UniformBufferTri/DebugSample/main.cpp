@@ -1,14 +1,11 @@
-//
-// Created by Jerry on 11/28/2021.
-//
 #include <iostream>
 #include <vector>
 #include <fstream>
 #include <cassert>
-#define VMA_IMPLEMENTATION
-#include "vk_mem_alloc.h"
 #include "vulkan/vulkan.h"
 #include "lodepng.h"
+#define VMA_IMPLEMENTATION
+#include "vk_mem_alloc.h"
 
 #define STR(r)    \
 	case r:       \
@@ -78,20 +75,6 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_utils_messenger_callback(
 
 #define VK_CHECK(res) if(res){std::cout << "Error at line:" << __LINE__ << ", Error name:" << to_string(res) << ".\n"; exit(1);}
 
-// pos1, pos2, pos3, col1, col2, col3
-float verts[] = {
-        -0.75f, -0.75f, 0.f, 1.f, 0.f, 0.f, // v0 - Top Left
-        0.75f, -0.75f, 0.f, 0.f, 1.f, 0.f, // v1 - Top Right
-        0.75f, 0.75f, 0.f, 0.f, 0.f, 1.f, // v2 - Bottom Right
-        -0.75f, 0.75f, 0.f, 1.f, 1.f, 0.f // v3 - Bottom Left
-};
-
-// CCW
-// v0 - v1 - v2; v2 - v3 - v0;
-uint32_t vertIdx[] = {
-    0, 1, 2, 2, 3, 0
-};
-
 int main()
 {
     // Verify that the debug extension for the callback messenger is supported.
@@ -153,7 +136,7 @@ int main()
         appInfo.applicationVersion = 1;
         appInfo.pEngineName = "VulkanDict";
         appInfo.engineVersion = 1;
-        appInfo.apiVersion = VK_API_VERSION_1_2;
+        appInfo.apiVersion = VK_API_VERSION_1_1;
     }
 
     const char* extensionName = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
@@ -233,66 +216,9 @@ int main()
     VkDevice device;
     VK_CHECK(vkCreateDevice(physicalDevice, &deviceInfo, nullptr, &device));
 
-    // Initialize the VMA allocator
-    VmaAllocator vmaAllocator;
-    VmaVulkanFunctions vkFuncs = {};
-    {
-        vkFuncs.vkGetInstanceProcAddr = &vkGetInstanceProcAddr;
-        vkFuncs.vkGetDeviceProcAddr   = &vkGetDeviceProcAddr;
-    }
-
-    VmaAllocatorCreateInfo allocCreateInfo = {};
-    {
-        allocCreateInfo.vulkanApiVersion = VK_API_VERSION_1_2;
-        allocCreateInfo.physicalDevice   = physicalDevice;
-        allocCreateInfo.device           = device;
-        allocCreateInfo.instance         = instance;
-        allocCreateInfo.pVulkanFunctions = &vkFuncs;
-    }
-
-    VK_CHECK(vmaCreateAllocator(&allocCreateInfo, &vmaAllocator));
-
     // Get a graphics queue
     VkQueue graphicsQueue;
     vkGetDeviceQueue(device, queueFamilyIdx, 0, &graphicsQueue);
-
-    // Create Buffer and allocate memory for vertex buffer, index buffer and render target.
-    VmaAllocationCreateInfo mappableBufCreateInfo = {};
-    {
-        mappableBufCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        mappableBufCreateInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                                      VMA_ALLOCATION_CREATE_MAPPED_BIT;
-    }
-
-    void* mappedData = nullptr;
-
-    // Create Vertex Buffer
-    VkBufferCreateInfo vertBufferInfo = {};
-    {
-        vertBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        vertBufferInfo.size = sizeof(float) * 24;
-        vertBufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-    }
-    VkBuffer vertBuf;
-    VmaAllocation vertAlloc;
-    VK_CHECK(vmaCreateBuffer(vmaAllocator, &vertBufferInfo, &mappableBufCreateInfo, &vertBuf, &vertAlloc, nullptr));
-    VK_CHECK(vmaMapMemory(vmaAllocator, vertAlloc, &mappedData));
-    memcpy(mappedData, verts, sizeof(float) * 24);
-    vmaUnmapMemory(vmaAllocator, vertAlloc);
-
-    // Create Index Buffer
-    VkBufferCreateInfo idxBufferInfo = {};
-    {
-        idxBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        idxBufferInfo.size = sizeof(uint32_t) * 6;
-        idxBufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-    }
-    VkBuffer idxBuf;
-    VmaAllocation idxAlloc;
-    VK_CHECK(vmaCreateBuffer(vmaAllocator, &idxBufferInfo, &mappableBufCreateInfo, &idxBuf, &idxAlloc, nullptr));
-    VK_CHECK(vmaMapMemory(vmaAllocator, idxAlloc, &mappedData));
-    memcpy(mappedData, vertIdx, sizeof(uint32_t) * 6);
-    vmaUnmapMemory(vmaAllocator, idxAlloc);
 
     // Create Image
     VkFormat colorImgFormat = VK_FORMAT_R8G8B8A8_UNORM;
@@ -310,7 +236,6 @@ int main()
             exit(1);
         }
     }
-
     VkImageCreateInfo imageInfo{};
     {
         imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -327,10 +252,42 @@ int main()
         imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
         imageInfo.tiling = colorBufTiling;
     }
-
     VkImage colorImage;
-    VmaAllocation imgAlloc;
-    vmaCreateImage(vmaAllocator, &imageInfo, &mappableBufCreateInfo, &colorImage, &imgAlloc, nullptr);
+    VK_CHECK(vkCreateImage(device, &imageInfo, nullptr, &colorImage));
+
+    // Allocate memory for the image object
+    VkMemoryRequirements imageMemReqs;
+    vkGetImageMemoryRequirements(device, colorImage, &imageMemReqs);
+
+    bool memMatch = false;
+    uint32_t memTypeIdx = 0;
+    for (int i = 0; i < phyDeviceMemProps.memoryTypeCount; ++i)
+    {
+        if(imageMemReqs.memoryTypeBits & (1 << i))
+        {
+            if((phyDeviceMemProps.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0 &&
+               (phyDeviceMemProps.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0 &&
+               (phyDeviceMemProps.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) != 0)
+            {
+                memTypeIdx = i;
+                memMatch = true;
+                break;
+            }
+        }
+    }
+    assert(memMatch);
+
+    VkMemoryAllocateInfo memAlloc{};
+    {
+        memAlloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        memAlloc.allocationSize = imageMemReqs.size;
+        memAlloc.memoryTypeIndex = memTypeIdx;
+    }
+    VkDeviceMemory imageMem;
+    VK_CHECK(vkAllocateMemory(device, &memAlloc, nullptr, &imageMem));
+
+    // Bind the image object and the memory together
+    VK_CHECK(vkBindImageMemory(device, colorImage, imageMem, 0));
 
     // Create the image view
     VkImageViewCreateInfo imageViewInfo{};
@@ -417,7 +374,7 @@ int main()
 
     // Create Vert Shader Module -- SOURCE_PATH is a MACRO definition passed in during compilation, which is specified in
     //                              the CMakeLists.txt file in the same level of repository.
-    std::string shaderVertPath = std::string(SOURCE_PATH) + std::string("/DumpQuad.vert.spv");
+    std::string shaderVertPath = std::string(SOURCE_PATH) + std::string("/DumpTri.vert.spv");
     std::ifstream inputVertShader(shaderVertPath.c_str(), std::ios::binary | std::ios::in);
     std::vector<unsigned char> inputVertShaderStr(std::istreambuf_iterator<char>(inputVertShader), {});
     inputVertShader.close();
@@ -441,7 +398,7 @@ int main()
 
     // Create Frag Shader Module -- SOURCE_PATH is a MACRO definition passed in during compilation, which is specified in
     //                              the CMakeLists.txt file in the same level of repository.
-    std::string shaderFragPath = std::string(SOURCE_PATH) + std::string("/DumpQuad.frag.spv");
+    std::string shaderFragPath = std::string(SOURCE_PATH) + std::string("/DumpTri.frag.spv");
     std::ifstream inputFragShader(shaderFragPath.c_str(), std::ios::binary | std::ios::in);
     std::vector<unsigned char> inputFragShaderStr(std::istreambuf_iterator<char>(inputFragShader), {});
     inputFragShader.close();
@@ -468,34 +425,9 @@ int main()
 
     // Specifying all kinds of pipeline states
     // Vertex input state
-    VkVertexInputBindingDescription vertBindingDesc = {};
-    {
-        vertBindingDesc.binding = 0;
-        vertBindingDesc.stride = 6 * sizeof(float);
-        vertBindingDesc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-    }
-
-    VkVertexInputAttributeDescription vertAttrDesc[2];
-    {
-        // Position
-        vertAttrDesc[0].location = 0;
-        vertAttrDesc[0].binding = 0;
-        vertAttrDesc[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-        vertAttrDesc[0].offset = 0;
-        // Color
-        vertAttrDesc[1].location = 1;
-        vertAttrDesc[1].binding = 0;
-        vertAttrDesc[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-        vertAttrDesc[1].offset = 3 * sizeof(float);
-    }
     VkPipelineVertexInputStateCreateInfo vertInputInfo{};
     {
         vertInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-        vertInputInfo.pNext = nullptr;
-        vertInputInfo.vertexBindingDescriptionCount = 1;
-        vertInputInfo.pVertexBindingDescriptions = &vertBindingDesc;
-        vertInputInfo.vertexAttributeDescriptionCount = 2;
-        vertInputInfo.pVertexAttributeDescriptions = vertAttrDesc;
     }
 
     // Vertex assembly state
@@ -683,10 +615,7 @@ int main()
 
     vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
-    VkDeviceSize vbOffset = 0;
-    vkCmdBindVertexBuffers(cmdBuffer, 0, 1, &vertBuf, &vbOffset);
-    vkCmdBindIndexBuffer(cmdBuffer, idxBuf, 0, VK_INDEX_TYPE_UINT32);
-    vkCmdDrawIndexed(cmdBuffer, 6, 1, 0, 0, 0);
+    vkCmdDraw(cmdBuffer, 3, 1, 0, 0);
 
     vkCmdEndRenderPass(cmdBuffer);
 
@@ -710,12 +639,12 @@ int main()
 
     // Make rendered image visible to the host
     void* mapped = nullptr;
-    vmaMapMemory(vmaAllocator, imgAlloc, &mapped);
+    vkMapMemory(device, imageMem, 0, VK_WHOLE_SIZE, 0, &mapped);
 
     // Copy to RAM
-    std::vector<unsigned char> imageRAM(imgAlloc->GetSize());
-    memcpy(imageRAM.data(), mapped, imgAlloc->GetSize());
-    vmaUnmapMemory(vmaAllocator, imgAlloc);
+    std::vector<unsigned char> imageRAM(imageMemReqs.size);
+    memcpy(imageRAM.data(), mapped, imageMemReqs.size);
+    vkUnmapMemory(device, imageMem);
 
     std::string pathName = std::string(SOURCE_PATH) + std::string("/test.png");
     std::cout << pathName << std::endl;
@@ -751,16 +680,10 @@ int main()
     vkDestroyImageView(device, colorImgView, nullptr);
 
     // Destroy the image
-    vmaDestroyImage(vmaAllocator, colorImage, imgAlloc);
+    vkDestroyImage(device, colorImage, nullptr);
 
-    // Destroy the vertex buffer
-    vmaDestroyBuffer(vmaAllocator, vertBuf, vertAlloc);
-
-    // Destroy the index buffer
-    vmaDestroyBuffer(vmaAllocator, idxBuf, idxAlloc);
-
-    // Destroy the vmaAllocator
-    vmaDestroyAllocator(vmaAllocator);
+    // Free the memory backing the image object
+    vkFreeMemory(device, imageMem, nullptr);
 
     // Destroy the device
     vkDestroyDevice(device, nullptr);

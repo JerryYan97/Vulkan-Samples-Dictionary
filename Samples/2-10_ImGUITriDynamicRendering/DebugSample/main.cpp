@@ -1194,7 +1194,7 @@ int main()
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        myLayout.BeginEndLayout();        
+        myLayout.BeginEndLayout();
 
         // Reset unused previous frame's resource
         vkResetFences(device, 1, &inFlightFences[currentFrame]);
