@@ -136,7 +136,7 @@ int main()
         appInfo.applicationVersion = 1;
         appInfo.pEngineName = "VulkanDict";
         appInfo.engineVersion = 1;
-        appInfo.apiVersion = VK_API_VERSION_1_1;
+        appInfo.apiVersion = VK_API_VERSION_1_3;
     }
 
     const char* extensionName = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
@@ -207,20 +207,51 @@ int main()
         queueInfo.pQueuePriorities = queue_priorities;
     }
 
+    // Extension for dynamic rendering
+    const std::vector<const char*> deviceExtensions = { VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME };
+
+    VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamic_rendering_feature{};
+    {
+        dynamic_rendering_feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
+        dynamic_rendering_feature.dynamicRendering = VK_TRUE;
+    }
+
     VkDeviceCreateInfo deviceInfo{};
     {
         deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        deviceInfo.pNext = &dynamic_rendering_feature;
         deviceInfo.queueCreateInfoCount = 1;
         deviceInfo.pQueueCreateInfos = &queueInfo;
+        deviceInfo.enabledExtensionCount = uint32_t(deviceExtensions.size());
+        deviceInfo.ppEnabledExtensionNames = deviceExtensions.data();
     }
     VkDevice device;
     VK_CHECK(vkCreateDevice(physicalDevice, &deviceInfo, nullptr, &device));
+
+    VmaVulkanFunctions vkFuncs = {};
+    {
+        vkFuncs.vkGetInstanceProcAddr = &vkGetInstanceProcAddr;
+        vkFuncs.vkGetDeviceProcAddr = &vkGetDeviceProcAddr;
+    }
+
+    VmaAllocatorCreateInfo allocCreateInfo = {};
+    {
+        allocCreateInfo.vulkanApiVersion = VK_API_VERSION_1_3;
+        allocCreateInfo.physicalDevice = physicalDevice;
+        allocCreateInfo.device = device;
+        allocCreateInfo.instance = instance;
+        allocCreateInfo.pVulkanFunctions = &vkFuncs;
+    }
+
+    VmaAllocator allocator;
+    vmaCreateAllocator(&allocCreateInfo, &allocator);
 
     // Get a graphics queue
     VkQueue graphicsQueue;
     vkGetDeviceQueue(device, queueFamilyIdx, 0, &graphicsQueue);
 
     // Create Image
+    /*
     VkFormat colorImgFormat = VK_FORMAT_R8G8B8A8_UNORM;
     VkImageTiling colorBufTiling;
     {
@@ -288,6 +319,37 @@ int main()
 
     // Bind the image object and the memory together
     VK_CHECK(vkBindImageMemory(device, colorImage, imageMem, 0));
+    */
+
+    // Create the image
+    VkImage colorImage;
+    VmaAllocation imgAllocation;
+    VkFormat colorImgFormat = VK_FORMAT_R8G8B8A8_UNORM;
+
+    VmaAllocationCreateInfo imgAllocInfo{};
+    {
+        imgAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        imgAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+    }
+
+    VkImageCreateInfo imageInfo{};
+    {
+        imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        imageInfo.imageType = VK_IMAGE_TYPE_2D;
+        imageInfo.format = colorImgFormat;
+        imageInfo.extent.width = 960;
+        imageInfo.extent.height = 680;
+        imageInfo.extent.depth = 1;
+        imageInfo.mipLevels = 1;
+        imageInfo.arrayLayers = 1;
+        imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+        imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        imageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        imageInfo.tiling = VK_IMAGE_TILING_LINEAR;
+    }
+
+    vmaCreateImage(allocator, &imageInfo, &imgAllocInfo, &colorImage, &imgAllocation, nullptr);
 
     // Create the image view
     VkImageViewCreateInfo imageViewInfo{};
@@ -309,9 +371,58 @@ int main()
     VkImageView colorImgView;
     VK_CHECK(vkCreateImageView(device, &imageViewInfo, nullptr, &colorImgView));
 
+    // Create the buffer and transfer data to it
+    VkBuffer uboBuffer;
+    VmaAllocation uboBufferAllocation;
+
+    VkBufferCreateInfo bufferInfo{};
+    {
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = 9 * sizeof(float);
+        bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    }
+
+    VmaAllocationCreateInfo bufferAllocInfo{};
+    {
+        bufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        bufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT | 
+                                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    }
+
+    vmaCreateBuffer(allocator, &bufferInfo, &bufferAllocInfo, &uboBuffer, &uboBufferAllocation, nullptr);
+
+    // Create the ubo buffer and copy data to it.
+    void* mapped = nullptr;
+    vkMapMemory(device, uboBufferAllocation->GetMemory(), 0, VK_WHOLE_SIZE, 0, &mapped);
+
+    // Copy from RAM
+    float uboData[9] = {
+        1.f, 0.f, 0.f,
+        0.f, 1.f, 0.f,
+        0.f, 0.f, 1.f
+    };
+
+    memcpy(mapped, uboData, 9 * sizeof(float));
+
+    vkUnmapMemory(device, uboBufferAllocation->GetMemory());
+
+    // Create the descriptor set of ubo buffer for pipeline binding.
+    VkDescriptorPoolSize poolSize{};
+    poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    poolSize.descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+
+    VkDescriptorPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.poolSizeCount = 1;
+    poolInfo.pPoolSizes = &poolSize;
+    poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+
+    if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS)
+
     // Create attachment descriptions for the color image and the depth image
     // 0: color image attachment;
-    VkAttachmentDescription attachments[1];
+    /*VkAttachmentDescription attachments[1];
     {
         attachments[0].format = colorImgFormat;
         attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
@@ -324,6 +435,7 @@ int main()
         attachments[0].flags = 0;
     }
 
+    
     // Create color reference
     VkAttachmentReference colorReference{};
     {
@@ -371,10 +483,11 @@ int main()
     }
     VkFramebuffer frameBuffer;
     VK_CHECK(vkCreateFramebuffer(device, &framebufferCreateInfo, nullptr, &frameBuffer));
+    */
 
     // Create Vert Shader Module -- SOURCE_PATH is a MACRO definition passed in during compilation, which is specified in
     //                              the CMakeLists.txt file in the same level of repository.
-    std::string shaderVertPath = std::string(SOURCE_PATH) + std::string("/DumpTri.vert.spv");
+    std::string shaderVertPath = std::string(SOURCE_PATH) + std::string("/UniformBufTri.vert.spv");
     std::ifstream inputVertShader(shaderVertPath.c_str(), std::ios::binary | std::ios::in);
     std::vector<unsigned char> inputVertShaderStr(std::istreambuf_iterator<char>(inputVertShader), {});
     inputVertShader.close();
@@ -398,7 +511,7 @@ int main()
 
     // Create Frag Shader Module -- SOURCE_PATH is a MACRO definition passed in during compilation, which is specified in
     //                              the CMakeLists.txt file in the same level of repository.
-    std::string shaderFragPath = std::string(SOURCE_PATH) + std::string("/DumpTri.frag.spv");
+    std::string shaderFragPath = std::string(SOURCE_PATH) + std::string("/UniformBufTri.frag.spv");
     std::ifstream inputFragShader(shaderFragPath.c_str(), std::ios::binary | std::ios::in);
     std::vector<unsigned char> inputFragShaderStr(std::istreambuf_iterator<char>(inputFragShader), {});
     inputFragShader.close();
@@ -523,19 +636,50 @@ int main()
         multiSampleInfo.alphaToOneEnable = VK_FALSE;
     }
 
+    // Create a descriptor set layout
+    VkDescriptorSetLayout descriptorSetLayout;
+
+    VkDescriptorSetLayoutBinding uboLayoutBinding{};
+    {
+        uboLayoutBinding.binding = 0;
+        uboLayoutBinding.descriptorCount = 1;
+        uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        uboLayoutBinding.pImmutableSamplers = nullptr;
+        uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    }
+
+    VkDescriptorSetLayoutCreateInfo layoutInfo{};
+    {
+        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layoutInfo.bindingCount = 1;
+        layoutInfo.pBindings = &uboLayoutBinding;
+    }
+    
+    VK_CHECK(vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout));
+
     // Create a pipeline layout
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     {
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pipelineLayoutInfo.setLayoutCount = 0;
+        pipelineLayoutInfo.setLayoutCount = 1;
+        pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
     }
     VkPipelineLayout pipelineLayout{};
     VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout));
+
+    // Create the graphics pipeline -- The graphics pipeline is used for scene rendering
+    VkPipelineRenderingCreateInfoKHR pipelineRenderCreateInfo{};
+    {
+        pipelineRenderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+        pipelineRenderCreateInfo.colorAttachmentCount = 1;
+        pipelineRenderCreateInfo.pColorAttachmentFormats = &colorImgFormat;
+    }
 
     // Create the graphics pipeline
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     {
         pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+        pipelineInfo.pNext = &pipelineRenderCreateInfo;
         pipelineInfo.layout = pipelineLayout;
         pipelineInfo.pVertexInputState = &vertInputInfo;
         pipelineInfo.pInputAssemblyState = &inputAssemblyInfo;
@@ -547,8 +691,8 @@ int main()
         pipelineInfo.pDepthStencilState = &depthStencilInfo;
         pipelineInfo.pStages = stgArray;
         pipelineInfo.stageCount = 2;
-        pipelineInfo.renderPass = renderPass;
-        pipelineInfo.subpass = 0;
+        pipelineInfo.renderPass = nullptr;
+        pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
     }
     VkPipeline pipeline;
     VK_CHECK(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline));
@@ -595,6 +739,28 @@ int main()
     {
         clearVal.color = {{0.f, 0.f, 0.f, 1.f}};
     }
+
+    VkRenderingAttachmentInfoKHR renderAttachmentInfo{};
+    {
+        renderAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+        renderAttachmentInfo.imageView = colorImgView;
+        renderAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
+        renderAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        renderAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        renderAttachmentInfo.clearValue = clearVal;
+    }
+
+    VkRenderingInfoKHR renderInfo{};
+    {
+        renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+        renderInfo.renderArea.offset = { 0, 0 };
+        renderInfo.renderArea.extent = { 960, 680 };
+        renderInfo.layerCount = 1;
+        renderInfo.colorAttachmentCount = 1;
+        renderInfo.pColorAttachments = &renderAttachmentInfo;
+    }
+
+    /*
     VkRenderPassBeginInfo renderPassBeginInfo{};
     {
         renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -608,6 +774,9 @@ int main()
         renderPassBeginInfo.pClearValues = &clearVal;
     }
     vkCmdBeginRenderPass(cmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+    */
+
+    vkCmdBeginRendering(cmdBuffer, &renderInfo);
 
     vkCmdSetViewport(cmdBuffer, 0, 1, &vp);
 
@@ -617,8 +786,9 @@ int main()
 
     vkCmdDraw(cmdBuffer, 3, 1, 0, 0);
 
+    /*
     vkCmdEndRenderPass(cmdBuffer);
-
+    */
     VK_CHECK(vkEndCommandBuffer(cmdBuffer));
 
     // Command buffer submit info
@@ -660,6 +830,9 @@ int main()
     // Destroy the Command Pool
     vkDestroyCommandPool(device, cmdPool, nullptr);
 
+    // Destroy the descriptor set layout
+    vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
+
     // Destroy Pipeline
     vkDestroyPipeline(device, pipeline, nullptr);
 
@@ -680,10 +853,13 @@ int main()
     vkDestroyImageView(device, colorImgView, nullptr);
 
     // Destroy the image
-    vkDestroyImage(device, colorImage, nullptr);
+    vmaDestroyImage(allocator, colorImage, imgAllocation);
 
     // Free the memory backing the image object
     vkFreeMemory(device, imageMem, nullptr);
+
+    // Destroy the allocator
+    vmaDestroyAllocator(allocator);
 
     // Destroy the device
     vkDestroyDevice(device, nullptr);
