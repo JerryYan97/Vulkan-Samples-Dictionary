@@ -250,77 +250,6 @@ int main()
     VkQueue graphicsQueue;
     vkGetDeviceQueue(device, queueFamilyIdx, 0, &graphicsQueue);
 
-    // Create Image
-    /*
-    VkFormat colorImgFormat = VK_FORMAT_R8G8B8A8_UNORM;
-    VkImageTiling colorBufTiling;
-    {
-        VkFormatProperties fProps;
-        vkGetPhysicalDeviceFormatProperties(physicalDevice, colorImgFormat, &fProps);
-        if(fProps.linearTilingFeatures & VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT )
-        {
-            colorBufTiling = VK_IMAGE_TILING_LINEAR;
-        }
-        else
-        {
-            std::cout << "VK_FORMAT_R8G8B8A8_UNORM Unsupported." << std::endl;
-            exit(1);
-        }
-    }
-    VkImageCreateInfo imageInfo{};
-    {
-        imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-        imageInfo.imageType = VK_IMAGE_TYPE_2D;
-        imageInfo.format = colorImgFormat;
-        imageInfo.extent.width = 960;
-        imageInfo.extent.height = 680;
-        imageInfo.extent.depth = 1;
-        imageInfo.mipLevels = 1;
-        imageInfo.arrayLayers = 1;
-        imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-        imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        imageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-        imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        imageInfo.tiling = colorBufTiling;
-    }
-    VkImage colorImage;
-    VK_CHECK(vkCreateImage(device, &imageInfo, nullptr, &colorImage));
-
-    // Allocate memory for the image object
-    VkMemoryRequirements imageMemReqs;
-    vkGetImageMemoryRequirements(device, colorImage, &imageMemReqs);
-
-    bool memMatch = false;
-    uint32_t memTypeIdx = 0;
-    for (int i = 0; i < phyDeviceMemProps.memoryTypeCount; ++i)
-    {
-        if(imageMemReqs.memoryTypeBits & (1 << i))
-        {
-            if((phyDeviceMemProps.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0 &&
-               (phyDeviceMemProps.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0 &&
-               (phyDeviceMemProps.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) != 0)
-            {
-                memTypeIdx = i;
-                memMatch = true;
-                break;
-            }
-        }
-    }
-    assert(memMatch);
-
-    VkMemoryAllocateInfo memAlloc{};
-    {
-        memAlloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        memAlloc.allocationSize = imageMemReqs.size;
-        memAlloc.memoryTypeIndex = memTypeIdx;
-    }
-    VkDeviceMemory imageMem;
-    VK_CHECK(vkAllocateMemory(device, &memAlloc, nullptr, &imageMem));
-
-    // Bind the image object and the memory together
-    VK_CHECK(vkBindImageMemory(device, colorImage, imageMem, 0));
-    */
-
     // Create the image
     VkImage colorImage;
     VmaAllocation imgAllocation;
@@ -329,7 +258,8 @@ int main()
     VmaAllocationCreateInfo imgAllocInfo{};
     {
         imgAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        imgAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+        imgAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
+                             VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
     }
 
     VkImageCreateInfo imageInfo{};
@@ -371,14 +301,15 @@ int main()
     VkImageView colorImgView;
     VK_CHECK(vkCreateImageView(device, &imageViewInfo, nullptr, &colorImgView));
 
-    // Create the buffer and transfer data to it
+    // Create the buffer and transfer data to it -- vec3 alignment needs to be 4 floats. So, we use 12 floats buffer
+    // for 9 floats ubo input.
     VkBuffer uboBuffer;
     VmaAllocation uboBufferAllocation;
 
     VkBufferCreateInfo bufferInfo{};
     {
         bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = 9 * sizeof(float);
+        bufferInfo.size = 12 * sizeof(float);
         bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
         bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     }
@@ -397,93 +328,87 @@ int main()
     vkMapMemory(device, uboBufferAllocation->GetMemory(), 0, VK_WHOLE_SIZE, 0, &mapped);
 
     // Copy from RAM
-    float uboData[9] = {
-        1.f, 0.f, 0.f,
-        0.f, 1.f, 0.f,
-        0.f, 0.f, 1.f
+    float uboData[12] = {
+        1.f, 0.f, 0.f, 0.f,
+        0.f, 1.f, 0.f, 0.f,
+        0.f, 0.f, 1.f, 0.f,
     };
 
-    memcpy(mapped, uboData, 9 * sizeof(float));
+    memcpy(mapped, uboData, 12 * sizeof(float));
 
     vkUnmapMemory(device, uboBufferAllocation->GetMemory());
 
     // Create the descriptor set of ubo buffer for pipeline binding.
+    VkDescriptorPool descriptorPool;
+    VkDescriptorSet uboDescriptorSet;
+
     VkDescriptorPoolSize poolSize{};
-    poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSize.descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+    {
+        poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        poolSize.descriptorCount = 1;
+    }
 
     VkDescriptorPoolCreateInfo poolInfo{};
-    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.poolSizeCount = 1;
-    poolInfo.pPoolSizes = &poolSize;
-    poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-
-    if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS)
-
-    // Create attachment descriptions for the color image and the depth image
-    // 0: color image attachment;
-    /*VkAttachmentDescription attachments[1];
     {
-        attachments[0].format = colorImgFormat;
-        attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
-        attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        attachments[0].finalLayout = VK_IMAGE_LAYOUT_GENERAL;
-        attachments[0].flags = 0;
+        poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        poolInfo.poolSizeCount = 1;
+        poolInfo.pPoolSizes = &poolSize;
+        poolInfo.maxSets = 1;
     }
-
     
-    // Create color reference
-    VkAttachmentReference colorReference{};
+    VK_CHECK(vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool));
+
+    // Create a descriptor set layout
+    VkDescriptorSetLayout descriptorSetLayout;
+
+    VkDescriptorSetLayoutBinding uboLayoutBinding{};
     {
-        colorReference.attachment = 0;
-        colorReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        uboLayoutBinding.binding = 0;
+        uboLayoutBinding.descriptorCount = 1;
+        uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        uboLayoutBinding.pImmutableSamplers = nullptr;
+        uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     }
 
-    // Create a subpass for color and depth rendering
-    VkSubpassDescription subpass{};
+    VkDescriptorSetLayoutCreateInfo layoutInfo{};
     {
-        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        subpass.flags = 0;
-        subpass.inputAttachmentCount = 0;
-        subpass.pInputAttachments = nullptr;
-        subpass.colorAttachmentCount = 1;
-        subpass.pColorAttachments = &colorReference;
-        subpass.pResolveAttachments = nullptr;
-        subpass.preserveAttachmentCount = 0;
-        subpass.pPreserveAttachments = nullptr;
+        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layoutInfo.bindingCount = 1;
+        layoutInfo.pBindings = &uboLayoutBinding;
     }
 
-    // Create the render pass
-    VkRenderPassCreateInfo renderPassCreateInfo{};
-    {
-        renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-        renderPassCreateInfo.attachmentCount = 1;
-        renderPassCreateInfo.pAttachments = attachments;
-        renderPassCreateInfo.subpassCount = 1;
-        renderPassCreateInfo.pSubpasses = &subpass;
-    }
-    VkRenderPass renderPass;
-    VK_CHECK(vkCreateRenderPass(device, &renderPassCreateInfo, nullptr, &renderPass));
+    VK_CHECK(vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout));
 
-    // Create the frame buffer
-    VkImageView attachmentsViews[1] = {colorImgView};
-    VkFramebufferCreateInfo framebufferCreateInfo{};
+    VkDescriptorSetAllocateInfo descriptorSetAllocInfo{};
     {
-        framebufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        framebufferCreateInfo.renderPass = renderPass;
-        framebufferCreateInfo.attachmentCount = 1;
-        framebufferCreateInfo.pAttachments = attachmentsViews;
-        framebufferCreateInfo.width = 960;
-        framebufferCreateInfo.height = 680;
-        framebufferCreateInfo.layers = 1;
+        descriptorSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        descriptorSetAllocInfo.descriptorPool = descriptorPool;
+        descriptorSetAllocInfo.descriptorSetCount = 1;
+        descriptorSetAllocInfo.pSetLayouts = &descriptorSetLayout;
     }
-    VkFramebuffer frameBuffer;
-    VK_CHECK(vkCreateFramebuffer(device, &framebufferCreateInfo, nullptr, &frameBuffer));
-    */
+    
+    vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &uboDescriptorSet);
+
+    // Update the descriptor set to let it point to the ubo buffer
+    VkDescriptorBufferInfo descriptorBufferInfo{};
+    {
+        descriptorBufferInfo.buffer = uboBuffer;
+        descriptorBufferInfo.offset = 0;
+        descriptorBufferInfo.range = sizeof(uboData);
+    }
+
+    VkWriteDescriptorSet descriptorWrite{};
+    {
+        descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrite.dstSet = uboDescriptorSet;
+        descriptorWrite.dstBinding = 0;
+        descriptorWrite.dstArrayElement = 0;
+        descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorWrite.descriptorCount = 1;
+        descriptorWrite.pBufferInfo = &descriptorBufferInfo;
+    }
+
+    vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
 
     // Create Vert Shader Module -- SOURCE_PATH is a MACRO definition passed in during compilation, which is specified in
     //                              the CMakeLists.txt file in the same level of repository.
@@ -636,27 +561,6 @@ int main()
         multiSampleInfo.alphaToOneEnable = VK_FALSE;
     }
 
-    // Create a descriptor set layout
-    VkDescriptorSetLayout descriptorSetLayout;
-
-    VkDescriptorSetLayoutBinding uboLayoutBinding{};
-    {
-        uboLayoutBinding.binding = 0;
-        uboLayoutBinding.descriptorCount = 1;
-        uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        uboLayoutBinding.pImmutableSamplers = nullptr;
-        uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-    }
-
-    VkDescriptorSetLayoutCreateInfo layoutInfo{};
-    {
-        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        layoutInfo.bindingCount = 1;
-        layoutInfo.pBindings = &uboLayoutBinding;
-    }
-    
-    VK_CHECK(vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout));
-
     // Create a pipeline layout
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     {
@@ -735,6 +639,23 @@ int main()
 
     VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &cmdBufInfo));
 
+    // Wait for the ubo data transfer compeletion.
+    VkMemoryBarrier uboDataTransBarrier{};
+    {
+        uboDataTransBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+        uboDataTransBarrier.pNext = nullptr;
+        uboDataTransBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
+        uboDataTransBarrier.dstAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
+    }
+
+    vkCmdPipelineBarrier(cmdBuffer, 
+                         VK_PIPELINE_STAGE_HOST_BIT,
+                         VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, 
+                         0,
+                         1, &uboDataTransBarrier,
+                         0, nullptr,
+                         0, nullptr);
+
     VkClearValue clearVal{};
     {
         clearVal.color = {{0.f, 0.f, 0.f, 1.f}};
@@ -760,22 +681,6 @@ int main()
         renderInfo.pColorAttachments = &renderAttachmentInfo;
     }
 
-    /*
-    VkRenderPassBeginInfo renderPassBeginInfo{};
-    {
-        renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        renderPassBeginInfo.renderPass = renderPass;
-        renderPassBeginInfo.framebuffer = frameBuffer;
-        renderPassBeginInfo.renderArea.offset.x = 0;
-        renderPassBeginInfo.renderArea.offset.y = 0;
-        renderPassBeginInfo.renderArea.extent.width = 960;
-        renderPassBeginInfo.renderArea.extent.height = 680;
-        renderPassBeginInfo.clearValueCount = 1;
-        renderPassBeginInfo.pClearValues = &clearVal;
-    }
-    vkCmdBeginRenderPass(cmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-    */
-
     vkCmdBeginRendering(cmdBuffer, &renderInfo);
 
     vkCmdSetViewport(cmdBuffer, 0, 1, &vp);
@@ -784,11 +689,19 @@ int main()
 
     vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
+    vkCmdBindDescriptorSets(cmdBuffer, 
+                            VK_PIPELINE_BIND_POINT_GRAPHICS, 
+                            pipelineLayout, 
+                            0, 
+                            1, 
+                            &uboDescriptorSet, 
+                            0, 
+                            nullptr);
+
     vkCmdDraw(cmdBuffer, 3, 1, 0, 0);
 
-    /*
-    vkCmdEndRenderPass(cmdBuffer);
-    */
+    vkCmdEndRendering(cmdBuffer);
+
     VK_CHECK(vkEndCommandBuffer(cmdBuffer));
 
     // Command buffer submit info
@@ -808,13 +721,12 @@ int main()
     VK_CHECK(vkQueueWaitIdle(graphicsQueue));
 
     // Make rendered image visible to the host
-    void* mapped = nullptr;
-    vkMapMemory(device, imageMem, 0, VK_WHOLE_SIZE, 0, &mapped);
+    vkMapMemory(device, imgAllocation->GetMemory(), 0, VK_WHOLE_SIZE, 0, &mapped);
 
     // Copy to RAM
-    std::vector<unsigned char> imageRAM(imageMemReqs.size);
-    memcpy(imageRAM.data(), mapped, imageMemReqs.size);
-    vkUnmapMemory(device, imageMem);
+    std::vector<unsigned char> imageRAM(imgAllocation->GetSize());
+    memcpy(imageRAM.data(), mapped, imgAllocation->GetSize());
+    vkUnmapMemory(device, imgAllocation->GetMemory());
 
     std::string pathName = std::string(SOURCE_PATH) + std::string("/test.png");
     std::cout << pathName << std::endl;
@@ -833,6 +745,9 @@ int main()
     // Destroy the descriptor set layout
     vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 
+    // Destroy the descriptor pool
+    vkDestroyDescriptorPool(device, descriptorPool, nullptr);
+
     // Destroy Pipeline
     vkDestroyPipeline(device, pipeline, nullptr);
 
@@ -843,20 +758,14 @@ int main()
     vkDestroyShaderModule(device, shaderVertModule, nullptr);
     vkDestroyShaderModule(device, shaderFragModule, nullptr);
 
-    // Destroy the frame buffer
-    vkDestroyFramebuffer(device, frameBuffer, nullptr);
-
-    // Destroy the render pass
-    vkDestroyRenderPass(device, renderPass, nullptr);
+    // Destroy buffer
+    vmaDestroyBuffer(allocator, uboBuffer, uboBufferAllocation);
 
     // Destroy the image view
     vkDestroyImageView(device, colorImgView, nullptr);
 
     // Destroy the image
     vmaDestroyImage(allocator, colorImage, imgAllocation);
-
-    // Free the memory backing the image object
-    vkFreeMemory(device, imageMem, nullptr);
 
     // Destroy the allocator
     vmaDestroyAllocator(allocator);
