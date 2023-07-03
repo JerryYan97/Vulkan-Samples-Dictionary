@@ -1,0 +1,9 @@
+How to map the HDRI image to the UV sphere?
+
+Loaders:
+https://www.flipcode.com/archives/HDR_Image_Reader.shtml
+
+Plans:
+- Make a camera that can be controlled by the mouse to look around. (Use the Game Editor's Camera model.)
+- Map the HDRI into the background so the camera can sample the background HDRI image.
+- Still use the DearImgui for mouse event management. --> So, I should use the DearImgui Triangle as the base to change.

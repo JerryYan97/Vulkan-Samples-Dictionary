@@ -1,0 +1,8 @@
+Environment map;
+Reflectance + Diffuse;
+An array of spheres with different roughness;
+
+
+HDRI:
+Explain: https://www.lightmap.co.uk/blog/whatisanhdrimap/
+Materials: https://polyhaven.com/

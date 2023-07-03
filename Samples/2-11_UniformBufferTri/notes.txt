@@ -1,7 +1,31 @@
+Uniform buffer alignment problems:
 https://vulkan-tutorial.com/Uniform_buffers/Descriptor_layout_and_buffer
+https://vulkan-tutorial.com/Uniform_buffers/Descriptor_pool_and_sets
 
 Dynamic Uniform Buffer:
 https://vkguide.dev/docs/chapter-4/descriptors_code_more/
 
 NOTE alignment caveat for vec3:
 https://www.khronos.org/registry/vulkan/specs/1.3-extensions/html/chap15.html#interfaces-resources-layout
+
+Descriptor set ref:
+https://vkguide.dev/docs/chapter-4/descriptors/
+
+https://developer.nvidia.com/vulkan-shader-resource-binding
+
+VkDescriptorSetLayoutBinding:
+descriptorCount is the number of descriptors contained in the binding, accessed in a shader as an array,
+descriptorCount is majorly used to solve an array binded onto a binding number.
+
+https://registry.khronos.org/vulkan/specs/1.3-extensions/html/chap15.html#interfaces-resources-setandbinding
+
+Why use different set number but same binding number:
+https://www.reddit.com/r/vulkan/comments/octc9u/comment/h3wsbuk/?utm_source=share&utm_medium=web2x&context=3
+
+Vulkan GLSL descriptor set and binding (12.2.3):
+https://registry.khronos.org/OpenGL/specs/gl/GLSLangSpec.4.60.pdf
+
+A binding can have multiple descriptor
+But a descriptor can only have one binding? -- NO!
+
+A descriptor set can be bound to several bindings. Needs to specify the two bindings when creating the descriptor set layout and update the descriptors to specified bindings when updaing the descriptor set.

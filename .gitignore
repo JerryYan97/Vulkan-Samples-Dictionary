@@ -57,6 +57,7 @@ docs/build
 # VS folder
 vs/
 build/
+data/
 
 # Ninja folder
 ninja/
