@@ -10,3 +10,6 @@
 [submodule "ThirdPartyLibs/ImGUIExplore"]
 	path = ThirdPartyLibs/ImGUIExplore
 	url = https://github.com/JerryYan97/ImGUIExplore.git
+[submodule "ThirdPartyLibs/TinyObj"]
+	path = ThirdPartyLibs/TinyObj
+	url = https://github.com/tinyobjloader/tinyobjloader.git

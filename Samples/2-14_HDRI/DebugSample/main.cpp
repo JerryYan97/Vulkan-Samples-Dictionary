@@ -128,13 +128,91 @@ unsigned int presentQueueFamilyIdx = -1;
 VkSurfaceFormatKHR choisenSurfaceFormat;
 VkExtent2D swapchainImageExtent;
 
-// NOTE: Each render pass' attachments should have same extent for render area when we start the render pass.
-// In our case, the first scene rendering would be smaller than the overall gui rendering. So, we will use two render
-// pass.
+// Resources need to be preserved and used for the entire rendering.
 std::vector<VkImageView> swapchainImageViews;
 std::vector<VkImage> swapchainImages;
+
+VkImage hdrImage;
+VkImageView hdrImageView;
+VkSampler hdrSampler;
+VkDescriptorSet hdrDescriptorSet;
+VmaAllocation hdrAlloc;
+
 VkDescriptorPool descriptorPool;
 VmaAllocator allocator;
+
+// Create HDR releted objects
+void CreateHdrRenderObjects(
+    const HDRLoaderResult& hdrLoadRes)
+{
+    VmaAllocationCreateInfo hdrAllocInfo{};
+    {
+        hdrAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        hdrAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+    }
+
+    VkExtent3D extent{};
+    {
+        extent.width = hdrLoadRes.width;
+        extent.height = hdrLoadRes.height;
+        extent.depth = 1;
+    }
+
+    VkImageCreateInfo hdrImgInfo{};
+    {
+        hdrImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        hdrImgInfo.imageType = VK_IMAGE_TYPE_2D;
+        hdrImgInfo.format = choisenSurfaceFormat.format;
+        hdrImgInfo.extent = extent;
+        hdrImgInfo.mipLevels = 1;
+        hdrImgInfo.arrayLayers = 1;
+        hdrImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+        hdrImgInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+        hdrImgInfo.usage = VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+        hdrImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    }
+
+    vmaCreateImage(allocator,
+                   &hdrImgInfo,
+                   &hdrAllocInfo,
+                   &hdrImage,
+                   &hdrAlloc,
+                   nullptr);
+
+    VkImageViewCreateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    info.image = hdrImage;
+    info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    info.format = choisenSurfaceFormat.format;
+    info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    info.subresourceRange.levelCount = 1;
+    info.subresourceRange.layerCount = 1;
+
+    VK_CHECK(vkCreateImageView(device, &info, nullptr, &hdrImageView));
+
+    VkSamplerCreateInfo sampler_info{};
+    {
+        sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        sampler_info.magFilter = VK_FILTER_LINEAR;
+        sampler_info.minFilter = VK_FILTER_LINEAR;
+        sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT; // outside image bounds just use border color
+        sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        sampler_info.minLod = -1000;
+        sampler_info.maxLod = 1000;
+        sampler_info.maxAnisotropy = 1.0f;
+    }
+    VK_CHECK(vkCreateSampler(device, &sampler_info, nullptr, &hdrSampler));
+}
+
+// Destroy HDR related objects
+void DestroyHdrRenderObjs()
+{
+    vmaDestroyImage(allocator, hdrImage, hdrAlloc);
+    vkDestroyImageView(device, hdrImageView, nullptr);
+    vkDestroySampler(device, hdrSampler, nullptr);
+}
 
 // Create the image views
 void CreateSwapchainImageViews()
@@ -521,6 +599,7 @@ int main()
         { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
         { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
     };
+
     VkDescriptorPoolCreateInfo pool_info{};
     {
         pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -534,47 +613,8 @@ int main()
     CreateSwapchain();
     CreateSwapchainImageViews();
 
-    // Create the render pass -- We will use dynamic rendering for the scene rendering
-    // Specify the GUI attachment: We will need to present everything in GUI. So, the finalLayout would be presentable.
-    VkAttachmentDescription guiRenderTargetAttachment{};
-    {
-        guiRenderTargetAttachment.format = choisenSurfaceFormat.format;
-        guiRenderTargetAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-        guiRenderTargetAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        guiRenderTargetAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        guiRenderTargetAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        guiRenderTargetAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        guiRenderTargetAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        guiRenderTargetAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    }
-
-    // Specify the color reference, which specifies the attachment layout during the subpass
-    VkAttachmentReference guiAttachmentRef{};
-    {
-        guiAttachmentRef.attachment = 0;
-        guiAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    }
-
-    // Specity the subpass executed for the GUI
-    VkSubpassDescription guiSubpass{};
-    {
-        guiSubpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        guiSubpass.colorAttachmentCount = 1;
-        guiSubpass.pColorAttachments = &guiAttachmentRef;
-    }
-
-    // Specify the dependency between the scene subpass (0) and the gui subpass (1).
-    // The gui subpass' rendering output should wait for the scene subpass' rendering output.
-    VkSubpassDependency guiSubpassesDependency{};
-    {
-        guiSubpassesDependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-        guiSubpassesDependency.dstSubpass = 0;
-        guiSubpassesDependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        guiSubpassesDependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        guiSubpassesDependency.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        guiSubpassesDependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    }
-
+    // We will use dynamic rendering for the scene rendering
+    
     // Create the graphics pipeline
     // Create Shader Modules.
     VkShaderModule vsShaderModule = createShaderModule("./vert.spv", device);
@@ -662,6 +702,18 @@ int main()
     dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
     dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
     dynamicState.pDynamicStates = dynamicStates.data();
+
+    // Load the HDRI image into RAM
+    std::string hdriFilePath = SOURCE_PATH;
+    hdriFilePath += "/../data/little_paris_eiffel_tower_4k.hdr";
+    HDRLoaderResult hdrLdRes;
+    bool ret = HDRLoader::load(hdriFilePath.c_str(), hdrLdRes);
+
+    // Create GPU resources for the HDRI image
+    CreateHdrRenderObjects(hdrLdRes);
+
+    // Load the sphere for the HDRI mapping
+
 
     // Create pipeline layout
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
@@ -870,7 +922,7 @@ int main()
             vkCmdSetScissor(commandBuffers[currentFrame], 0, 1, &scissor);
         }
 
-        vkCmdDraw(commandBuffers[currentFrame], 3, 1, 0, 0);
+        vkCmdDraw(commandBuffers[currentFrame], 6, 1, 0, 0);
 
         vkCmdEndRendering(commandBuffers[currentFrame]);
 
@@ -962,6 +1014,8 @@ int main()
     {
         vkDestroyFence(device, itr, nullptr);
     }
+
+    DestroyHdrRenderObjs();
 
     // Destroy the command pool
     vkDestroyCommandPool(device, commandPool, nullptr);

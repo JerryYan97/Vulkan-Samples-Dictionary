@@ -9,6 +9,18 @@
 
 class HDRLoaderResult {
 public:
+	HDRLoaderResult()
+		: width(0), height(0), cols(nullptr)
+	{}
+
+	~HDRLoaderResult() 
+	{ 
+		if (cols != nullptr)
+		{
+			delete cols;
+		}
+	}
+
 	int width, height;
 	// each pixel takes 3 float32, each component can be of any value...
 	float *cols;
