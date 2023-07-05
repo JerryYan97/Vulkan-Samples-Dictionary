@@ -1047,7 +1047,7 @@ int main()
         VkRenderingAttachmentInfoKHR renderAttachmentInfo{};
         {
             renderAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-            renderAttachmentInfo.imageView = swapchainImageViews[currentFrame];
+            renderAttachmentInfo.imageView = swapchainImageViews[imageIndex];
             renderAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
             renderAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             renderAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
