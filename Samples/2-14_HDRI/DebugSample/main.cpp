@@ -162,28 +162,23 @@ void CreateHdrRenderObjects(
     {
         hdrImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         hdrImgInfo.imageType = VK_IMAGE_TYPE_2D;
-        hdrImgInfo.format = choisenSurfaceFormat.format;
+        hdrImgInfo.format = VK_FORMAT_R32G32B32_SFLOAT;
         hdrImgInfo.extent = extent;
         hdrImgInfo.mipLevels = 1;
         hdrImgInfo.arrayLayers = 1;
         hdrImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-        hdrImgInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-        hdrImgInfo.usage = VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+        hdrImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
+        hdrImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
         hdrImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     }
 
-    vmaCreateImage(allocator,
-                   &hdrImgInfo,
-                   &hdrAllocInfo,
-                   &hdrImage,
-                   &hdrAlloc,
-                   nullptr);
-
+    VK_CHECK(vmaCreateImage(allocator, &hdrImgInfo, &hdrAllocInfo, &hdrImage, &hdrAlloc, nullptr));
+    
     VkImageViewCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     info.image = hdrImage;
     info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    info.format = choisenSurfaceFormat.format;
+    info.format = VK_FORMAT_R32G32B32_SFLOAT;
     info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     info.subresourceRange.levelCount = 1;
     info.subresourceRange.layerCount = 1;
@@ -204,6 +199,11 @@ void CreateHdrRenderObjects(
         sampler_info.maxAnisotropy = 1.0f;
     }
     VK_CHECK(vkCreateSampler(device, &sampler_info, nullptr, &hdrSampler));
+
+    // Experiments
+    // VkFormatProperties formatProps;
+    // vkGetPhysicalDeviceFormatProperties(physicalDevice, VK_FORMAT_R32G32B32_SFLOAT, &formatProps);
+    // std::cout << "Check Format Properties" << std::endl;
 }
 
 // Destroy HDR related objects
@@ -712,14 +712,56 @@ int main()
     // Create GPU resources for the HDRI image
     CreateHdrRenderObjects(hdrLdRes);
 
-    // Load the sphere for the HDRI mapping
+    // Create pipeline binding objects for the HDRI image
+    VkDescriptorSetLayoutBinding hdriSamplerBinding{};
+    hdriSamplerBinding.binding = 0;
+    hdriSamplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    hdriSamplerBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    hdriSamplerBinding.descriptorCount = 1;
 
+    VkDescriptorSetLayoutCreateInfo hdriDesSetLayoutInfo{};
+    hdriDesSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    hdriDesSetLayoutInfo.bindingCount = 1;
+    hdriDesSetLayoutInfo.pBindings = &hdriSamplerBinding;
+
+    VkDescriptorSetLayout hdriDesSetLayout{};
+    VK_CHECK(vkCreateDescriptorSetLayout(device, &hdriDesSetLayoutInfo, nullptr, &hdriDesSetLayout));
+
+    // Allocate the memory for the hdri descriptor. 
+    VkDescriptorSetAllocateInfo hdriDesSetAllocInfo{};
+    hdriDesSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    hdriDesSetAllocInfo.descriptorPool = descriptorPool;
+    hdriDesSetAllocInfo.pSetLayouts = &hdriDesSetLayout;
+    hdriDesSetAllocInfo.descriptorSetCount = 1;
+
+    VK_CHECK(vkAllocateDescriptorSets(device, &hdriDesSetAllocInfo, &hdrDescriptorSet));
+
+    // Link the image view and image info to the descriptor set.
+    VkDescriptorImageInfo hdriDesImgInfo{};
+    {
+        hdriDesImgInfo.imageView = hdrImageView;
+        hdriDesImgInfo.sampler = hdrSampler;
+        hdriDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    }
+
+    VkWriteDescriptorSet writeHdrDesSet{};
+    {
+        writeHdrDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeHdrDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writeHdrDesSet.dstSet = hdrDescriptorSet;
+        writeHdrDesSet.dstBinding = 0;
+        writeHdrDesSet.pImageInfo = &hdriDesImgInfo;
+        writeHdrDesSet.descriptorCount = 1;
+    }
+
+    vkUpdateDescriptorSets(device, 1, &writeHdrDesSet, 0, NULL);
 
     // Create pipeline layout
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     {
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pipelineLayoutInfo.setLayoutCount = 0;
+        pipelineLayoutInfo.setLayoutCount = 1;
+        pipelineLayoutInfo.pSetLayouts = &hdriDesSetLayout;
         pipelineLayoutInfo.pushConstantRangeCount = 0;
     }
     VkPipelineLayout pipelineLayout;
@@ -813,6 +855,131 @@ int main()
 
     ImGui_ImplGlfw_InitForVulkan(window, true);
 
+    // Send the HDR image to GPU:
+    // - Copy RAM to GPU staging buffer;
+    // - Copy buffer to image;
+    {
+        // Create the staging buffer
+        VkBuffer stagingBuffer;
+        VmaAllocation stagingBufAlloc;
+
+        VmaAllocationCreateInfo stagingBufAllocInfo{};
+        {
+            stagingBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+            stagingBufAllocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        }
+
+        VkBufferCreateInfo stgBufInfo{};
+        {
+            stgBufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+            stgBufInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+            stgBufInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+            stgBufInfo.size = 3 * sizeof(float) * hdrLdRes.width * hdrLdRes.height;
+        }
+
+        VK_CHECK(vmaCreateBuffer(allocator, &stgBufInfo, &stagingBufAllocInfo, &stagingBuffer, &stagingBufAlloc, nullptr));
+
+        // Copy the RAM data to the staging buffer
+        void* pStgBufMem;
+        VK_CHECK(vmaMapMemory(allocator, stagingBufAlloc, &pStgBufMem));
+        memcpy(pStgBufMem, hdrLdRes.cols, 3 * sizeof(float) * hdrLdRes.width * hdrLdRes.height);
+        vmaUnmapMemory(allocator, stagingBufAlloc);
+
+        /* Send staging buffer data to the GPU image. */ 
+        VkCommandBufferBeginInfo beginInfo{};
+        {
+            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        }
+        VK_CHECK(vkBeginCommandBuffer(commandBuffers[0], &beginInfo));
+
+        // Transform the layout of the image to copy source
+        VkImageMemoryBarrier hdrUndefToDstBarrier{};
+        {
+            hdrUndefToDstBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            hdrUndefToDstBarrier.image = hdrImage;
+            hdrUndefToDstBarrier.subresourceRange = subResRange;
+            hdrUndefToDstBarrier.srcAccessMask = 0;
+            hdrUndefToDstBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            hdrUndefToDstBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            hdrUndefToDstBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        }
+        
+        vkCmdPipelineBarrier(
+            commandBuffers[0], 
+            VK_PIPELINE_STAGE_HOST_BIT, 
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &hdrUndefToDstBarrier);
+
+        // Copy the data from buffer to the image
+        VkBufferImageCopy hdrBufToImgCopy{};
+        {
+            VkExtent3D extent{};
+            {
+                extent.width = hdrLdRes.width;
+                extent.height = hdrLdRes.height;
+                extent.depth = 1;
+            }
+
+            hdrBufToImgCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            hdrBufToImgCopy.imageSubresource.mipLevel = 0;
+            hdrBufToImgCopy.imageSubresource.baseArrayLayer = 0;
+            hdrBufToImgCopy.imageSubresource.layerCount = 1;
+
+            hdrBufToImgCopy.imageExtent = extent;
+        }
+
+        vkCmdCopyBufferToImage(
+            commandBuffers[0],
+            stagingBuffer,
+            hdrImage,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1, &hdrBufToImgCopy);
+
+        // Transform the layout of the image to shader access resource
+        VkImageMemoryBarrier hdrDstToShaderBarrier{};
+        {
+            hdrDstToShaderBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            hdrDstToShaderBarrier.image = hdrImage;
+            hdrDstToShaderBarrier.subresourceRange = subResRange;
+            hdrDstToShaderBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            hdrDstToShaderBarrier.dstAccessMask = VK_ACCESS_NONE;
+            hdrDstToShaderBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            hdrDstToShaderBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        }
+
+        vkCmdPipelineBarrier(
+            commandBuffers[0],
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &hdrDstToShaderBarrier);
+
+        // End the command buffer and submit the packets
+        vkEndCommandBuffer(commandBuffers[0]);
+
+        // Submit the filled command buffer to the graphics queue to draw the image
+        VkSubmitInfo submitInfo{};
+        {
+            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            submitInfo.commandBufferCount = 1;
+            submitInfo.pCommandBuffers = &commandBuffers[0];
+        }
+        vkResetFences(device, 1, &inFlightFences[0]);
+        VK_CHECK(vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFences[0]));
+
+        // Wait for the end of all transformation and reset the command buffer. The fence would be waited in the first loop.
+        vkWaitForFences(device, 1, &inFlightFences[0], VK_TRUE, UINT64_MAX);
+        vkResetCommandBuffer(commandBuffers[0], 0);
+
+        // Destroy temp resources
+        vmaDestroyBuffer(allocator, stagingBuffer, stagingBufAlloc);
+    }
+
     // Main Loop
     // Two draws. First draw draws triangle into an image with window 1 window size.
     // Second draw draws GUI. GUI would use the image drawn from the first draw.
@@ -898,6 +1065,9 @@ int main()
         }
 
         vkCmdBeginRendering(commandBuffers[currentFrame], &renderInfo);
+
+        // Bind the hdri descriptor set
+        vkCmdBindDescriptorSets(commandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &hdrDescriptorSet, 0, NULL);
 
         // Bind the graphics pipeline
         vkCmdBindPipeline(commandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
@@ -1029,6 +1199,9 @@ int main()
 
     // Destroy the pipeline layout
     vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+
+    // Destroy the descriptor set layout
+    vkDestroyDescriptorSetLayout(device, hdriDesSetLayout, nullptr);
 
     // Destroy the descriptor pool
     vkDestroyDescriptorPool(device, descriptorPool, nullptr);
