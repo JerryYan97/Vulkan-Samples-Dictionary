@@ -6,6 +6,7 @@ https://www.flipcode.com/archives/HDR_Image_Reader.shtml
 TinyObj Docs:
 https://github.com/tinyobjloader/tinyobjloader#example-code-new-object-oriented-api
 
+https://en.wikipedia.org/wiki/UV_mapping
 
 Plans:
 - Make a camera that can be controlled by the mouse to look around. (Use the Game Editor's Camera model.)
