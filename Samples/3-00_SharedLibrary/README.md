@@ -1,0 +1,2 @@
+The thrid level of the code base is meant to be hard and complicated, which means the readers are expected to be able to understand various Computer Graphics concepts and read a relatively large code base.
+At this level, a file contains more than 2K lines and the upper bound is not guaranteed, so we will use abstractions to reduce the size of the main.cpp file.

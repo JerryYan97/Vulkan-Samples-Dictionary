@@ -1,19 +1,23 @@
 # Debug version
 include(../../../CMakeFuncSupport/CMakeUtil.cmake)
-set(MY_APP_NAME "DynamicRender")
+set(MY_APP_NAME "PBREnvBasic")
 CheckVulkanSDK()
 cmake_minimum_required(VERSION 3.5)
-project(DynamicRender VERSION 0.1 LANGUAGES CXX)
+project(PBREnvBasic VERSION 0.1 LANGUAGES CXX)
 
 include_directories("$ENV{VULKAN_SDK}/Include" "../../../ThirdPartyLibs/VMA")
 include_directories(../../../ThirdPartyLibs/glfw/include/GLFW)
 include_directories(../../../ThirdPartyLibs/glfw/include)
-include_directories(../../../ThirdPartyLibs/ImGUIExplore)
 
 set(DearImGUIPath ../../../ThirdPartyLibs/ImGUIExplore/import/imgui)
 include_directories(${DearImGUIPath})
 include_directories(${DearImGUIPath}/backends)
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../../ThirdPartyLibs/lodepng")
+
+set(HDRILoaderPath ../../../ThirdPartyLibs/hdrloader)
+include_directories(${HDRILoaderPath})
+
+set(TinyObjPath ../../../ThirdPartyLibs/TinyObj)
+include_directories(${TinyObjPath})
 
 link_directories("$ENV{VULKAN_SDK}/lib")
 link_directories("../../../ThirdPartyLibs/glfw/build/src/Debug/")
@@ -26,7 +30,8 @@ add_executable(${MY_APP_NAME} "main.cpp"
                               ${DearImGUIPath}/imgui_tables.cpp
                               ${DearImGUIPath}/imgui_widgets.cpp
                               ${DearImGUIPath}/backends/imgui_impl_vulkan.cpp
-                              ${DearImGUIPath}/backends/imgui_impl_glfw.cpp)
+                              ${DearImGUIPath}/backends/imgui_impl_glfw.cpp
+                              ${HDRILoaderPath}/hdrloader.cpp)
 
 target_compile_features(${MY_APP_NAME} PRIVATE cxx_std_17)
 

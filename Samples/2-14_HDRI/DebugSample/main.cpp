@@ -131,14 +131,6 @@ unsigned int presentQueueFamilyIdx = -1;
 VkSurfaceFormatKHR choisenSurfaceFormat;
 VkExtent2D swapchainImageExtent;
 
-// Camera management
-float view[3] = {0.f, 0.f, 1.f};
-float up[3] = {0.f, 1.f, 0.f};
-constexpr float fov = 47.f * M_PI / 180.f; // vertical field of view.
-float aspect = 1280.f / 640.f;
-float near = 0.1f;
-bool isHold = false;
-
 // Resources need to be preserved and used for the entire rendering.
 std::vector<VkImageView> swapchainImageViews;
 std::vector<VkImage> swapchainImages;
@@ -151,12 +143,6 @@ VmaAllocation hdrAlloc;
 
 VkDescriptorPool descriptorPool;
 VmaAllocator allocator;
-
-// Mouse hold events
-void OnMouseHoldEvents()
-{
-
-}
 
 // Create HDR releted objects
 void CreateHdrRenderObjects(
