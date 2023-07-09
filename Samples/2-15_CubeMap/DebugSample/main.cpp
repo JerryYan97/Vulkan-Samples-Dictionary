@@ -924,9 +924,11 @@ int main()
 
         // Copy the data from buffer to the image
         // - The buffer data of the image cannot be interleaved (The data of a separate image should be continues in the buffer address space.)
-        // - However, our cubemap data is interleaved. 
+        // - However, our cubemap data (hStrip) is interleaved. 
         // - So, we have multiple choices to put them into the cubemap image. Here, I choose to offset the buffer starting point, specify the
         // -     long row length and copy that for 6 times.
+        // - We are using the hStrip skybox here. In the `cmftStudio`, we can also choose the vStrip here, which is more convenient, but we just
+        // -     use the hStrip here since it's more educational.
         VkBufferImageCopy hdrBufToImgCopies[6];
         memset(hdrBufToImgCopies, 0, sizeof(hdrBufToImgCopies));
         for (uint32_t i = 0; i < 6; i++)
@@ -956,34 +958,7 @@ int main()
             hdrCubeMapImage,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             6, hdrBufToImgCopies);
-        /*
-        VkBufferImageCopy hdrBufToImgCopy{};
-        {
-            VkExtent3D extent{};
-            {
-                extent.width = hdrLdRes.width / 6;
-                extent.height = hdrLdRes.height;
-                extent.depth = 1;
-            }
-
-            hdrBufToImgCopy.bufferRowLength = hdrLdRes.width / 6;
-            hdrBufToImgCopy.bufferImageHeight = hdrLdRes.height;
-            hdrBufToImgCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            hdrBufToImgCopy.imageSubresource.mipLevel = 0;
-            hdrBufToImgCopy.imageSubresource.baseArrayLayer = 0;
-            hdrBufToImgCopy.imageSubresource.layerCount = 6;
-
-            hdrBufToImgCopy.imageExtent = extent;
-        }
         
-
-        vkCmdCopyBufferToImage(
-            commandBuffers[0],
-            stagingBuffer,
-            hdrCubeMapImage,
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            1, &hdrBufToImgCopy);
-        */
         // Transform the layout of the image to shader access resource
         VkImageMemoryBarrier hdrDstToShaderBarrier{};
         {
