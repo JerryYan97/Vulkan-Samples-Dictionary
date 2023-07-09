@@ -1,0 +1,17 @@
+Converting algorithm:
+http://paulbourke.net/panorama/cubemaps/#3
+
+Vulkan Cubemap:
+https://satellitnorden.wordpress.com/2018/01/23/vulkan-adventures-cube-map-tutorial/
+
+Tool and source code to convert a spherical map to a cubic map:
+https://jaxry.github.io/panorama-to-cubemap/
+https://github.com/SaschaWillems/Vulkan/blob/master/examples/texturecubemap/texturecubemap.cpp
+https://www.turais.de/how-to-load-hdri-as-a-cubemap-in-opengl/
+https://matheowis.github.io/HDRI-to-CubeMap/
+https://en.wikipedia.org/wiki/Cube_mapping
+https://github.com/dariomanesku/cmftStudio
+
+Other blogs:
+https://ourcodeworld.com/articles/read/1477/how-to-convert-a-panoramic-picture-to-cubemap-tiles-with-javascript
+
