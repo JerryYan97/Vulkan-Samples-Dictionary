@@ -143,10 +143,20 @@ VkSampler hdrSampler;
 VkDescriptorSet hdrCubeMapDescriptorSet;
 VmaAllocation hdrCubeMapAlloc;
 
+SharedLib::Camera camera;
+VkBuffer cameraParaBuffer;
+VkDescriptorSet cameraParaUboDescriptorSet;
+VmaAllocation cameraParaBufferAlloc;
+
 VkDescriptorPool descriptorPool;
 VmaAllocator allocator;
 
-SharedLib::Camera camera;
+
+// Create Camera related buffer, UBO objects
+void CreateCameraUboObjects()
+{
+
+}
 
 // Create HDR releted objects
 void CreateHdrRenderObjects(
@@ -721,6 +731,13 @@ int main()
     hdriSamplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
     hdriSamplerBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     hdriSamplerBinding.descriptorCount = 1;
+
+    // Create pipeline binding objects for the camera parameters
+    VkDescriptorSetLayoutBinding cameraUBOBinding{};
+    cameraUBOBinding.binding = 1;
+    cameraUBOBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    cameraUBOBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    cameraUBOBinding.descriptorCount = 1;
 
     VkDescriptorSetLayoutCreateInfo hdriDesSetLayoutInfo{};
     hdriDesSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;

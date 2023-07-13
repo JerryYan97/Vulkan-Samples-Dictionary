@@ -24,6 +24,8 @@ namespace SharedLib
         m_up[1] = 1.f;
         m_up[2] = 0.f;
 
+        CrossProductVec3(m_view, m_up, m_holdRight);
+
         m_fov = 47.f * M_PI / 180.f; // vertical field of view.
         m_aspect = 960.f / 680.f;
 
