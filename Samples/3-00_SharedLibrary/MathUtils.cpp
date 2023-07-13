@@ -4,7 +4,7 @@
 
 namespace SharedLib
 {
-    // TODO: The calculation is incorrect. The pView is not equivalent to camera space's z.
+    // The pView is not equivalent to camera space's z.
     // pView should be the -z direction of a camera space.
     void GenViewMat(
         float* const pView,

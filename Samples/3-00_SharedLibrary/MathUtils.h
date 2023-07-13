@@ -80,6 +80,11 @@ constexpr auto crc32(const char* in) {
 // TODO: Dim can be put into template for optimization.
 namespace SharedLib
 {
+    struct HFVec2
+    {
+        float ele[2];
+    };
+
     template<typename T>
     inline void MatrixMul4x4(const T mat1[16], const T mat2[16], T* resMat)
     {

@@ -5,6 +5,8 @@
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
 
+#include "../../3-00_SharedLibrary/Camera.h"
+
 #include <vulkan/vulkan.h>
 #include <glfw3.h>
 #include "hdrloader.h"
@@ -135,14 +137,16 @@ VkExtent2D swapchainImageExtent;
 std::vector<VkImageView> swapchainImageViews;
 std::vector<VkImage> swapchainImages;
 
-VkImage hdrImage;
-VkImageView hdrImageView;
+VkImage hdrCubeMapImage;
+VkImageView hdrCubeMapView;
 VkSampler hdrSampler;
-VkDescriptorSet hdrDescriptorSet;
-VmaAllocation hdrAlloc;
+VkDescriptorSet hdrCubeMapDescriptorSet;
+VmaAllocation hdrCubeMapAlloc;
 
 VkDescriptorPool descriptorPool;
 VmaAllocator allocator;
+
+SharedLib::Camera camera;
 
 // Create HDR releted objects
 void CreateHdrRenderObjects(
@@ -156,37 +160,38 @@ void CreateHdrRenderObjects(
 
     VkExtent3D extent{};
     {
-        extent.width = hdrLoadRes.width;
+        extent.width = hdrLoadRes.width / 6;
         extent.height = hdrLoadRes.height;
         extent.depth = 1;
     }
 
-    VkImageCreateInfo hdrImgInfo{};
+    VkImageCreateInfo cubeMapImgInfo{};
     {
-        hdrImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-        hdrImgInfo.imageType = VK_IMAGE_TYPE_2D;
-        hdrImgInfo.format = VK_FORMAT_R32G32B32_SFLOAT;
-        hdrImgInfo.extent = extent;
-        hdrImgInfo.mipLevels = 1;
-        hdrImgInfo.arrayLayers = 1;
-        hdrImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-        hdrImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
-        hdrImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-        hdrImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        cubeMapImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        cubeMapImgInfo.imageType = VK_IMAGE_TYPE_2D;
+        cubeMapImgInfo.format = VK_FORMAT_R32G32B32_SFLOAT;
+        cubeMapImgInfo.extent = extent;
+        cubeMapImgInfo.mipLevels = 1;
+        cubeMapImgInfo.arrayLayers = 6;
+        cubeMapImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+        cubeMapImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
+        cubeMapImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        cubeMapImgInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+        cubeMapImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     }
 
-    VK_CHECK(vmaCreateImage(allocator, &hdrImgInfo, &hdrAllocInfo, &hdrImage, &hdrAlloc, nullptr));
+    VK_CHECK(vmaCreateImage(allocator, &cubeMapImgInfo, &hdrAllocInfo, &hdrCubeMapImage, &hdrCubeMapAlloc, nullptr));
     
     VkImageViewCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    info.image = hdrImage;
-    info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    info.image = hdrCubeMapImage;
+    info.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
     info.format = VK_FORMAT_R32G32B32_SFLOAT;
     info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     info.subresourceRange.levelCount = 1;
-    info.subresourceRange.layerCount = 1;
+    info.subresourceRange.layerCount = 6;
 
-    VK_CHECK(vkCreateImageView(device, &info, nullptr, &hdrImageView));
+    VK_CHECK(vkCreateImageView(device, &info, nullptr, &hdrCubeMapView));
 
     VkSamplerCreateInfo sampler_info{};
     {
@@ -202,18 +207,13 @@ void CreateHdrRenderObjects(
         sampler_info.maxAnisotropy = 1.0f;
     }
     VK_CHECK(vkCreateSampler(device, &sampler_info, nullptr, &hdrSampler));
-
-    // Experiments
-    // VkFormatProperties formatProps;
-    // vkGetPhysicalDeviceFormatProperties(physicalDevice, VK_FORMAT_R32G32B32_SFLOAT, &formatProps);
-    // std::cout << "Check Format Properties" << std::endl;
 }
 
 // Destroy HDR related objects
 void DestroyHdrRenderObjs()
 {
-    vmaDestroyImage(allocator, hdrImage, hdrAlloc);
-    vkDestroyImageView(device, hdrImageView, nullptr);
+    vmaDestroyImage(allocator, hdrCubeMapImage, hdrCubeMapAlloc);
+    vkDestroyImageView(device, hdrCubeMapView, nullptr);
     vkDestroySampler(device, hdrSampler, nullptr);
 }
 
@@ -620,8 +620,8 @@ int main()
     
     // Create the graphics pipeline
     // Create Shader Modules.
-    VkShaderModule vsShaderModule = createShaderModule("./vert.spv", device);
-    VkShaderModule psShaderModule = createShaderModule("./frag.spv", device);
+    VkShaderModule vsShaderModule = createShaderModule("./skybox_vert.spv", device);
+    VkShaderModule psShaderModule = createShaderModule("./skybox_frag.spv", device);
     VkPipelineShaderStageCreateInfo shaderStgInfo[2];
     {
         shaderStgInfo[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -708,7 +708,7 @@ int main()
 
     // Load the HDRI image into RAM
     std::string hdriFilePath = SOURCE_PATH;
-    hdriFilePath += "/../data/little_paris_eiffel_tower_4k.hdr";
+    hdriFilePath += "/../data/output_skybox.hdr";
     HDRLoaderResult hdrLdRes;
     bool ret = HDRLoader::load(hdriFilePath.c_str(), hdrLdRes);
 
@@ -737,12 +737,12 @@ int main()
     hdriDesSetAllocInfo.pSetLayouts = &hdriDesSetLayout;
     hdriDesSetAllocInfo.descriptorSetCount = 1;
 
-    VK_CHECK(vkAllocateDescriptorSets(device, &hdriDesSetAllocInfo, &hdrDescriptorSet));
+    VK_CHECK(vkAllocateDescriptorSets(device, &hdriDesSetAllocInfo, &hdrCubeMapDescriptorSet));
 
     // Link the image view and image info to the descriptor set.
     VkDescriptorImageInfo hdriDesImgInfo{};
     {
-        hdriDesImgInfo.imageView = hdrImageView;
+        hdriDesImgInfo.imageView = hdrCubeMapView;
         hdriDesImgInfo.sampler = hdrSampler;
         hdriDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     }
@@ -751,7 +751,7 @@ int main()
     {
         writeHdrDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         writeHdrDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        writeHdrDesSet.dstSet = hdrDescriptorSet;
+        writeHdrDesSet.dstSet = hdrCubeMapDescriptorSet;
         writeHdrDesSet.dstBinding = 0;
         writeHdrDesSet.pImageInfo = &hdriDesImgInfo;
         writeHdrDesSet.descriptorCount = 1;
@@ -842,13 +842,13 @@ int main()
         VK_CHECK(vkCreateFence(device, &fenceInfo, nullptr, &inFlightFences[i]))
     }
 
-    VkImageSubresourceRange subResRange{};
+    VkImageSubresourceRange swapchainPresentSubResRange{};
     {
-        subResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        subResRange.baseMipLevel = 0;
-        subResRange.levelCount = 1;
-        subResRange.baseArrayLayer = 0;
-        subResRange.layerCount = 1;
+        swapchainPresentSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        swapchainPresentSubResRange.baseMipLevel = 0;
+        swapchainPresentSubResRange.levelCount = 1;
+        swapchainPresentSubResRange.baseArrayLayer = 0;
+        swapchainPresentSubResRange.layerCount = 1;
     }
 
     // Setup Dear ImGui context
@@ -858,7 +858,7 @@ int main()
 
     ImGui_ImplGlfw_InitForVulkan(window, true);
 
-    // Send the HDR image to GPU:
+    // Send the HDR cubemap image to GPU:
     // - Copy RAM to GPU staging buffer;
     // - Copy buffer to image;
     {
@@ -895,12 +895,22 @@ int main()
         }
         VK_CHECK(vkBeginCommandBuffer(commandBuffers[0], &beginInfo));
 
-        // Transform the layout of the image to copy source
+        // Cubemap's 6 layers SubresourceRange
+        VkImageSubresourceRange cubemapSubResRange{};
+        {
+            cubemapSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            cubemapSubResRange.baseMipLevel = 0;
+            cubemapSubResRange.levelCount = 1;
+            cubemapSubResRange.baseArrayLayer = 0;
+            cubemapSubResRange.layerCount = 6;
+        }
+
+        // Transform the layout of the image to copy destination
         VkImageMemoryBarrier hdrUndefToDstBarrier{};
         {
             hdrUndefToDstBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            hdrUndefToDstBarrier.image = hdrImage;
-            hdrUndefToDstBarrier.subresourceRange = subResRange;
+            hdrUndefToDstBarrier.image = hdrCubeMapImage;
+            hdrUndefToDstBarrier.subresourceRange = cubemapSubResRange;
             hdrUndefToDstBarrier.srcAccessMask = 0;
             hdrUndefToDstBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
             hdrUndefToDstBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -917,36 +927,48 @@ int main()
             1, &hdrUndefToDstBarrier);
 
         // Copy the data from buffer to the image
-        VkBufferImageCopy hdrBufToImgCopy{};
+        // - The buffer data of the image cannot be interleaved (The data of a separate image should be continues in the buffer address space.)
+        // - However, our cubemap data (hStrip) is interleaved. 
+        // - So, we have multiple choices to put them into the cubemap image. Here, I choose to offset the buffer starting point, specify the
+        // -     long row length and copy that for 6 times.
+        // - We are using the hStrip skybox here. In the `cmftStudio`, we can also choose the vStrip here, which is more convenient, but we just
+        // -     use the hStrip here since it's more educational.
+        VkBufferImageCopy hdrBufToImgCopies[6];
+        memset(hdrBufToImgCopies, 0, sizeof(hdrBufToImgCopies));
+        for (uint32_t i = 0; i < 6; i++)
         {
             VkExtent3D extent{};
             {
-                extent.width = hdrLdRes.width;
+                extent.width = hdrLdRes.width / 6;
                 extent.height = hdrLdRes.height;
                 extent.depth = 1;
             }
 
-            hdrBufToImgCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            hdrBufToImgCopy.imageSubresource.mipLevel = 0;
-            hdrBufToImgCopy.imageSubresource.baseArrayLayer = 0;
-            hdrBufToImgCopy.imageSubresource.layerCount = 1;
+            hdrBufToImgCopies[i].bufferRowLength = hdrLdRes.width;
+            hdrBufToImgCopies[i].bufferImageHeight = hdrLdRes.height;
+            hdrBufToImgCopies[i].imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            hdrBufToImgCopies[i].imageSubresource.mipLevel = 0;
+            hdrBufToImgCopies[i].imageSubresource.baseArrayLayer = i;
+            hdrBufToImgCopies[i].imageSubresource.layerCount = 1;
 
-            hdrBufToImgCopy.imageExtent = extent;
+            hdrBufToImgCopies[i].imageExtent = extent;
+            // In the unit of bytes:
+            hdrBufToImgCopies[i].bufferOffset = i * (hdrLdRes.width / 6) * sizeof(float) * 3;
         }
 
         vkCmdCopyBufferToImage(
             commandBuffers[0],
             stagingBuffer,
-            hdrImage,
+            hdrCubeMapImage,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            1, &hdrBufToImgCopy);
-
+            6, hdrBufToImgCopies);
+        
         // Transform the layout of the image to shader access resource
         VkImageMemoryBarrier hdrDstToShaderBarrier{};
         {
             hdrDstToShaderBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            hdrDstToShaderBarrier.image = hdrImage;
-            hdrDstToShaderBarrier.subresourceRange = subResRange;
+            hdrDstToShaderBarrier.image = hdrCubeMapImage;
+            hdrDstToShaderBarrier.subresourceRange = cubemapSubResRange;
             hdrDstToShaderBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
             hdrDstToShaderBarrier.dstAccessMask = VK_ACCESS_NONE;
             hdrDstToShaderBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
@@ -1033,7 +1055,7 @@ int main()
             swapchainRenderTargetTransBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
             swapchainRenderTargetTransBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
             swapchainRenderTargetTransBarrier.image = swapchainImages[imageIndex];
-            swapchainRenderTargetTransBarrier.subresourceRange = subResRange;
+            swapchainRenderTargetTransBarrier.subresourceRange = swapchainPresentSubResRange;
         }
 
         vkCmdPipelineBarrier(commandBuffers[currentFrame],
@@ -1070,7 +1092,7 @@ int main()
         vkCmdBeginRendering(commandBuffers[currentFrame], &renderInfo);
 
         // Bind the hdri descriptor set
-        vkCmdBindDescriptorSets(commandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &hdrDescriptorSet, 0, NULL);
+        vkCmdBindDescriptorSets(commandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &hdrCubeMapDescriptorSet, 0, NULL);
 
         // Bind the graphics pipeline
         vkCmdBindPipeline(commandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
@@ -1109,7 +1131,7 @@ int main()
             swapchainPresentTransBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
             swapchainPresentTransBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
             swapchainPresentTransBarrier.image = swapchainImages[imageIndex];
-            swapchainPresentTransBarrier.subresourceRange = subResRange;
+            swapchainPresentTransBarrier.subresourceRange = swapchainPresentSubResRange;
         }
 
         vkCmdPipelineBarrier(commandBuffers[currentFrame],
