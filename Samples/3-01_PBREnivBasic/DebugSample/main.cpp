@@ -18,6 +18,8 @@
 #include <iostream>
 #include <fstream>
 
+// TODO: Make the application, realtime swapchain application class for the Level 3 examples.
+
 #define _USE_MATH_DEFINES
 #include <math.h>
 
@@ -924,6 +926,7 @@ int main()
     // Send the HDR cubemap image to GPU:
     // - Copy RAM to GPU staging buffer;
     // - Copy buffer to image;
+    // - Copy Camera parameters to the GPU buffer;
     {
         // Create the staging buffer
         VkBuffer stagingBuffer;
@@ -1066,6 +1069,19 @@ int main()
 
         // Destroy temp resources
         vmaDestroyBuffer(allocator, stagingBuffer, stagingBufAlloc);
+
+        // Copy camera data to ubo buffer
+        void* pUboData;
+        vmaMapMemory(allocator, cameraParaBufferAlloc, &pUboData);
+
+        float cameraData[16] = {};
+        camera.GetView(cameraData);
+        camera.GetRight(&cameraData[4]);
+        camera.GetUp(&cameraData[8]);
+        camera.GetNearPlane(cameraData[12], cameraData[13], cameraData[14]);
+
+        memcpy(pUboData, cameraData, sizeof(cameraData));
+        vmaUnmapMemory(allocator, cameraParaBufferAlloc);
     }
 
     // Main Loop

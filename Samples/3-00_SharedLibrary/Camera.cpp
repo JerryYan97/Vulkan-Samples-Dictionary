@@ -16,18 +16,21 @@ namespace SharedLib
 
         m_isHold = false;
 
-        m_view[0] = 0.f;
-        m_view[1] = 0.f;
-        m_view[2] = 1.f;
+        m_view[0] = 0.8f;
+        m_view[1] = 0.0f;
+        m_view[2] = 0.1f;
+        NormalizeVec(m_view, 3);
 
         m_up[0] = 0.f;
         m_up[1] = 1.f;
         m_up[2] = 0.f;
 
         CrossProductVec3(m_view, m_up, m_holdRight);
+        NormalizeVec(m_holdRight, 3);
 
         m_fov = 47.f * M_PI / 180.f; // vertical field of view.
-        m_aspect = 960.f / 680.f;
+        // m_aspect = 960.f / 680.f;
+        m_aspect = 1280.f / 640.f;
 
         m_far = 100.f;
         m_near = 0.1f;
@@ -120,5 +123,15 @@ namespace SharedLib
         float* invVpMat)
     {
 
+    }
+
+    void Camera::GetNearPlane(
+        float& width,
+        float& height,
+        float& near)
+    {
+        near   = m_near;
+        height = 2.f * near * tanf(m_fov / 2.f);
+        width  = m_aspect * height;
     }
 }

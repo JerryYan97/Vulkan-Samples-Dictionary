@@ -16,6 +16,11 @@ namespace SharedLib
         void GenViewPerspectiveMatrices(float* viewMat, float* perspectiveMat, float* vpMat);
         void GenReverseViewPerspectiveMatrices(float* invVpMat);
 
+        void GetView(float* oVec) { memcpy(oVec, m_view, sizeof(float) * 3); }
+        void GetUp(float* oVec) { memcpy(oVec, m_up, sizeof(float) * 3); }
+        void GetRight(float* oVec) { memcpy(oVec, m_holdRight, sizeof(float) * 3); }
+        void GetNearPlane(float& width, float& height, float& near);
+
     private:
         void OnMiddleMouseButtonEvent(HEvent& ievent);
 
