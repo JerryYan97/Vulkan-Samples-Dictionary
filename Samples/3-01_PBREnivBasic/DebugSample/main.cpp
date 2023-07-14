@@ -140,13 +140,13 @@ std::vector<VkImage> swapchainImages;
 VkImage hdrCubeMapImage;
 VkImageView hdrCubeMapView;
 VkSampler hdrSampler;
-VkDescriptorSet hdrCubeMapDescriptorSet;
 VmaAllocation hdrCubeMapAlloc;
 
 SharedLib::Camera camera;
 VkBuffer cameraParaBuffer;
-VkDescriptorSet cameraParaUboDescriptorSet;
 VmaAllocation cameraParaBufferAlloc;
+
+VkDescriptorSet skyboxPipelineDescriptorSet0;
 
 VkDescriptorPool descriptorPool;
 VmaAllocator allocator;
@@ -155,7 +155,29 @@ VmaAllocator allocator;
 // Create Camera related buffer, UBO objects
 void CreateCameraUboObjects()
 {
+    // The alignment of a vec3 is 4 floats and the element alignment of a struct is the largest element alignment,
+    // which is also the 4 float. Therefore, we need 16 floats as the buffer to store the Camera's parameters.
+    VkBufferCreateInfo bufferInfo{};
+    {
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = 16 * sizeof(float);
+        bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    }
 
+    VmaAllocationCreateInfo bufferAllocInfo{};
+    {
+        bufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        bufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
+                                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    }
+
+    vmaCreateBuffer(allocator, &bufferInfo, &bufferAllocInfo, &cameraParaBuffer, &cameraParaBufferAlloc, nullptr);
+}
+
+void DestroyCameraUboObjects()
+{
+    vmaDestroyBuffer(allocator, cameraParaBuffer, cameraParaBufferAlloc);
 }
 
 // Create HDR releted objects
@@ -722,6 +744,22 @@ int main()
     HDRLoaderResult hdrLdRes;
     bool ret = HDRLoader::load(hdriFilePath.c_str(), hdrLdRes);
 
+    // Create GPU resources for the camera ubo
+    CreateCameraUboObjects();
+
+    // Create pipeline binding and descriptor objects for the camera parameters
+    VkDescriptorSetLayoutBinding cameraUboBinding{};
+    cameraUboBinding.binding = 1;
+    cameraUboBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    cameraUboBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    cameraUboBinding.descriptorCount = 1;
+
+    // Information to link the descriptor to the camera gpu buffer.
+    VkDescriptorBufferInfo desCameraParaBufInfo{};
+    desCameraParaBufInfo.buffer = cameraParaBuffer;
+    desCameraParaBufInfo.offset = 0;
+    desCameraParaBufInfo.range = sizeof(float) * 16;
+
     // Create GPU resources for the HDRI image
     CreateHdrRenderObjects(hdrLdRes);
 
@@ -732,30 +770,6 @@ int main()
     hdriSamplerBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     hdriSamplerBinding.descriptorCount = 1;
 
-    // Create pipeline binding objects for the camera parameters
-    VkDescriptorSetLayoutBinding cameraUBOBinding{};
-    cameraUBOBinding.binding = 1;
-    cameraUBOBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-    cameraUBOBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    cameraUBOBinding.descriptorCount = 1;
-
-    VkDescriptorSetLayoutCreateInfo hdriDesSetLayoutInfo{};
-    hdriDesSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    hdriDesSetLayoutInfo.bindingCount = 1;
-    hdriDesSetLayoutInfo.pBindings = &hdriSamplerBinding;
-
-    VkDescriptorSetLayout hdriDesSetLayout{};
-    VK_CHECK(vkCreateDescriptorSetLayout(device, &hdriDesSetLayoutInfo, nullptr, &hdriDesSetLayout));
-
-    // Allocate the memory for the hdri descriptor. 
-    VkDescriptorSetAllocateInfo hdriDesSetAllocInfo{};
-    hdriDesSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    hdriDesSetAllocInfo.descriptorPool = descriptorPool;
-    hdriDesSetAllocInfo.pSetLayouts = &hdriDesSetLayout;
-    hdriDesSetAllocInfo.descriptorSetCount = 1;
-
-    VK_CHECK(vkAllocateDescriptorSets(device, &hdriDesSetAllocInfo, &hdrCubeMapDescriptorSet));
-
     // Link the image view and image info to the descriptor set.
     VkDescriptorImageInfo hdriDesImgInfo{};
     {
@@ -764,24 +778,56 @@ int main()
         hdriDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     }
 
+    // Create pipeline's descriptors layout
+    VkDescriptorSetLayoutBinding skyboxPipelineDesSet0LayoutBindings[2] = {hdriSamplerBinding, cameraUboBinding};
+    VkDescriptorSetLayoutCreateInfo skyboxPipelineDesSet0LayoutInfo{};
+    skyboxPipelineDesSet0LayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    skyboxPipelineDesSet0LayoutInfo.bindingCount = 2;
+    skyboxPipelineDesSet0LayoutInfo.pBindings = skyboxPipelineDesSet0LayoutBindings;
+
+    VkDescriptorSetLayout skyboxPipelineDesSet0Layout{};
+    VK_CHECK(vkCreateDescriptorSetLayout(device, &skyboxPipelineDesSet0LayoutInfo, nullptr, &skyboxPipelineDesSet0Layout));
+
+    // Create pipeline descirptor
+    VkDescriptorSetAllocateInfo skyboxPipelineDesSet0AllocInfo{};
+    skyboxPipelineDesSet0AllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    skyboxPipelineDesSet0AllocInfo.descriptorPool = descriptorPool;
+    skyboxPipelineDesSet0AllocInfo.pSetLayouts = &skyboxPipelineDesSet0Layout;
+    skyboxPipelineDesSet0AllocInfo.descriptorSetCount = 1;
+
+    VK_CHECK(vkAllocateDescriptorSets(device, &skyboxPipelineDesSet0AllocInfo, &skyboxPipelineDescriptorSet0));
+
+    // Link descriptors to the buffer and image
     VkWriteDescriptorSet writeHdrDesSet{};
     {
         writeHdrDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         writeHdrDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        writeHdrDesSet.dstSet = hdrCubeMapDescriptorSet;
+        writeHdrDesSet.dstSet = skyboxPipelineDescriptorSet0;
         writeHdrDesSet.dstBinding = 0;
         writeHdrDesSet.pImageInfo = &hdriDesImgInfo;
         writeHdrDesSet.descriptorCount = 1;
     }
-
-    vkUpdateDescriptorSets(device, 1, &writeHdrDesSet, 0, NULL);
+    VkWriteDescriptorSet writeCameraBufDesSet{};
+    {
+        writeCameraBufDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeCameraBufDesSet.dstSet = skyboxPipelineDescriptorSet0;
+        writeCameraBufDesSet.dstBinding = 1;
+        writeCameraBufDesSet.dstArrayElement = 0;
+        writeCameraBufDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        writeCameraBufDesSet.descriptorCount = 1;
+        writeCameraBufDesSet.pBufferInfo = &desCameraParaBufInfo;
+    }
+    
+    // Linking skybox pipeline descriptors: skybox cubemap and camera buffer descriptors to their GPU memory and info.
+    VkWriteDescriptorSet writeSkyboxPipelineDescriptors[2] = { writeHdrDesSet, writeCameraBufDesSet };
+    vkUpdateDescriptorSets(device, 2, writeSkyboxPipelineDescriptors, 0, NULL);
 
     // Create pipeline layout
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     {
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pipelineLayoutInfo.setLayoutCount = 1;
-        pipelineLayoutInfo.pSetLayouts = &hdriDesSetLayout;
+        pipelineLayoutInfo.pSetLayouts = &skyboxPipelineDesSet0Layout;
         pipelineLayoutInfo.pushConstantRangeCount = 0;
     }
     VkPipelineLayout pipelineLayout;
@@ -1108,8 +1154,8 @@ int main()
 
         vkCmdBeginRendering(commandBuffers[currentFrame], &renderInfo);
 
-        // Bind the hdri descriptor set
-        vkCmdBindDescriptorSets(commandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &hdrCubeMapDescriptorSet, 0, NULL);
+        // Bind the skybox pipeline descriptor sets
+        vkCmdBindDescriptorSets(commandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &skyboxPipelineDescriptorSet0, 0, NULL);
 
         // Bind the graphics pipeline
         vkCmdBindPipeline(commandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
@@ -1228,6 +1274,7 @@ int main()
     }
 
     DestroyHdrRenderObjs();
+    DestroyCameraUboObjects();
 
     // Destroy the command pool
     vkDestroyCommandPool(device, commandPool, nullptr);
@@ -1243,7 +1290,7 @@ int main()
     vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 
     // Destroy the descriptor set layout
-    vkDestroyDescriptorSetLayout(device, hdriDesSetLayout, nullptr);
+    vkDestroyDescriptorSetLayout(device, skyboxPipelineDesSet0Layout, nullptr);
 
     // Destroy the descriptor pool
     vkDestroyDescriptorPool(device, descriptorPool, nullptr);
