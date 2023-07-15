@@ -1148,7 +1148,17 @@ int main()
         VK_CHECK(vkBeginCommandBuffer(commandBuffers[currentFrame], &beginInfo));
 
         // Update the camera according to mouse input and sent camera data to the UBO
+        void* pUboData;
+        vmaMapMemory(allocator, cameraParaBufferAllocs[currentFrame], &pUboData);
 
+        float cameraData[16] = {};
+        camera.GetView(cameraData);
+        camera.GetRight(&cameraData[4]);
+        camera.GetUp(&cameraData[8]);
+        camera.GetNearPlane(cameraData[12], cameraData[13], cameraData[14]);
+
+        memcpy(pUboData, cameraData, sizeof(cameraData));
+        vmaUnmapMemory(allocator, cameraParaBufferAllocs[currentFrame]);
 
         // Transform the layout of the swapchain from undefined to render target.
         VkImageMemoryBarrier swapchainRenderTargetTransBarrier{};
