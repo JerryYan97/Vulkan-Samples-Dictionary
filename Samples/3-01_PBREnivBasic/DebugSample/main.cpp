@@ -6,6 +6,8 @@
 #include "vk_mem_alloc.h"
 
 #include "../../3-00_SharedLibrary/Camera.h"
+#include "../../3-00_SharedLibrary/Event.h"
+#include "../../3-00_SharedLibrary/MathUtils.h"
 
 #include <vulkan/vulkan.h>
 #include <glfw3.h>
@@ -18,7 +20,8 @@
 #include <iostream>
 #include <fstream>
 
-// TODO: Make the application, realtime swapchain application class for the Level 3 examples.
+// TODO1: Make the application, realtime swapchain application class for the Level 3 examples.
+// TODO2: Get rid of the ImGUI in this application. (Or the imgui is the default for every level 3 application) 
 
 #define _USE_MATH_DEFINES
 #include <math.h>
@@ -152,6 +155,32 @@ std::vector<VkDescriptorSet> skyboxPipelineDescriptorSet0s;
 VkDescriptorPool descriptorPool;
 VmaAllocator allocator;
 
+static void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+{
+    // Get IO information and create events
+    SharedLib::HEventArguments args;
+    bool isDown = false;
+
+    if (button == GLFW_MOUSE_BUTTON_MIDDLE && action == GLFW_PRESS)
+    {
+        isDown = true;
+    }
+
+    args[crc32("IS_DOWN")] = isDown;
+
+    if (isDown)
+    {
+        SharedLib::HFVec2 pos;
+        double xpos, ypos;
+        glfwGetCursorPos(window, &xpos, &ypos);
+        pos.ele[0] = xpos;
+        pos.ele[1] = ypos;
+        args[crc32("POS")] = pos;
+    }
+
+    SharedLib::HEvent mEvent(args, "MOUSE_MIDDLE_BUTTON");
+    camera.OnEvent(mEvent);
+}
 
 // Create Camera related buffer, UBO objects
 void CreateCameraUboObjects()
@@ -519,6 +548,7 @@ int main()
     const uint32_t HEIGHT = 640;
     window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
     glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
+    glfwSetMouseButtonCallback(window, mouse_button_callback);
 
     // Create vulkan surface from the glfw window.
     VK_CHECK(glfwCreateWindowSurface(instance, window, nullptr, &surface));
@@ -1111,6 +1141,11 @@ int main()
     while (!glfwWindowShouldClose(window))
     {
         glfwPollEvents();
+        // ImGui::NewFrame();
+
+        // Prepare the Dear ImGUI frame data
+        ImGui_ImplGlfw_NewFrame();
+        // ImGui::NewFrame();
 
         // Draw Frame
         // Wait for the resources from the possible on flight frame
@@ -1132,10 +1167,6 @@ int main()
             throw std::runtime_error("failed to acquire swap chain image!");
         }
 
-        // Prepare the Dear ImGUI frame data
-        ImGui_ImplGlfw_NewFrame();
-        // ImGui::NewFrame();
-
         // Reset unused previous frame's resource
         vkResetFences(device, 1, &inFlightFences[currentFrame]);
         vkResetCommandBuffer(commandBuffers[currentFrame], 0);
@@ -1156,6 +1187,8 @@ int main()
         camera.GetRight(&cameraData[4]);
         camera.GetUp(&cameraData[8]);
         camera.GetNearPlane(cameraData[12], cameraData[13], cameraData[14]);
+
+        std::cout << "View: [" << cameraData[0] << ", " << cameraData[1] << ", " << cameraData[2] << "]" << std::endl;
 
         memcpy(pUboData, cameraData, sizeof(cameraData));
         vmaUnmapMemory(allocator, cameraParaBufferAllocs[currentFrame]);
