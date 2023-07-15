@@ -145,10 +145,9 @@ VkSampler hdrSampler;
 VmaAllocation hdrCubeMapAlloc;
 
 SharedLib::Camera camera;
-VkBuffer cameraParaBuffer;
-VmaAllocation cameraParaBufferAlloc;
-
-VkDescriptorSet skyboxPipelineDescriptorSet0;
+std::vector<VkBuffer> cameraParaBuffers;
+std::vector<VmaAllocation> cameraParaBufferAllocs;
+std::vector<VkDescriptorSet> skyboxPipelineDescriptorSet0s;
 
 VkDescriptorPool descriptorPool;
 VmaAllocator allocator;
@@ -174,12 +173,21 @@ void CreateCameraUboObjects()
                                 VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
     }
 
-    vmaCreateBuffer(allocator, &bufferInfo, &bufferAllocInfo, &cameraParaBuffer, &cameraParaBufferAlloc, nullptr);
+    cameraParaBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+    cameraParaBufferAllocs.resize(MAX_FRAMES_IN_FLIGHT);
+    
+    for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        vmaCreateBuffer(allocator, &bufferInfo, &bufferAllocInfo, &cameraParaBuffers[i], &cameraParaBufferAllocs[i], nullptr);
+    }
 }
 
 void DestroyCameraUboObjects()
 {
-    vmaDestroyBuffer(allocator, cameraParaBuffer, cameraParaBufferAlloc);
+    for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        vmaDestroyBuffer(allocator, cameraParaBuffers[i], cameraParaBufferAllocs[i]);
+    }
 }
 
 // Create HDR releted objects
@@ -757,10 +765,7 @@ int main()
     cameraUboBinding.descriptorCount = 1;
 
     // Information to link the descriptor to the camera gpu buffer.
-    VkDescriptorBufferInfo desCameraParaBufInfo{};
-    desCameraParaBufInfo.buffer = cameraParaBuffer;
-    desCameraParaBufInfo.offset = 0;
-    desCameraParaBufInfo.range = sizeof(float) * 16;
+    
 
     // Create GPU resources for the HDRI image
     CreateHdrRenderObjects(hdrLdRes);
@@ -771,14 +776,6 @@ int main()
     hdriSamplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
     hdriSamplerBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     hdriSamplerBinding.descriptorCount = 1;
-
-    // Link the image view and image info to the descriptor set.
-    VkDescriptorImageInfo hdriDesImgInfo{};
-    {
-        hdriDesImgInfo.imageView = hdrCubeMapView;
-        hdriDesImgInfo.sampler = hdrSampler;
-        hdriDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    }
 
     // Create pipeline's descriptors layout
     VkDescriptorSetLayoutBinding skyboxPipelineDesSet0LayoutBindings[2] = {hdriSamplerBinding, cameraUboBinding};
@@ -797,32 +794,53 @@ int main()
     skyboxPipelineDesSet0AllocInfo.pSetLayouts = &skyboxPipelineDesSet0Layout;
     skyboxPipelineDesSet0AllocInfo.descriptorSetCount = 1;
 
-    VK_CHECK(vkAllocateDescriptorSets(device, &skyboxPipelineDesSet0AllocInfo, &skyboxPipelineDescriptorSet0));
+    skyboxPipelineDescriptorSet0s.resize(MAX_FRAMES_IN_FLIGHT);
+    for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        VK_CHECK(vkAllocateDescriptorSets(device, &skyboxPipelineDesSet0AllocInfo, &skyboxPipelineDescriptorSet0s[i]));
+    }
 
     // Link descriptors to the buffer and image
-    VkWriteDescriptorSet writeHdrDesSet{};
+    VkDescriptorImageInfo hdriDesImgInfo{};
     {
-        writeHdrDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeHdrDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        writeHdrDesSet.dstSet = skyboxPipelineDescriptorSet0;
-        writeHdrDesSet.dstBinding = 0;
-        writeHdrDesSet.pImageInfo = &hdriDesImgInfo;
-        writeHdrDesSet.descriptorCount = 1;
+        hdriDesImgInfo.imageView = hdrCubeMapView;
+        hdriDesImgInfo.sampler = hdrSampler;
+        hdriDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     }
-    VkWriteDescriptorSet writeCameraBufDesSet{};
+
+    for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
-        writeCameraBufDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeCameraBufDesSet.dstSet = skyboxPipelineDescriptorSet0;
-        writeCameraBufDesSet.dstBinding = 1;
-        writeCameraBufDesSet.dstArrayElement = 0;
-        writeCameraBufDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        writeCameraBufDesSet.descriptorCount = 1;
-        writeCameraBufDesSet.pBufferInfo = &desCameraParaBufInfo;
+        VkDescriptorBufferInfo desCameraParaBufInfo{};
+        {
+            desCameraParaBufInfo.buffer = cameraParaBuffers[i];
+            desCameraParaBufInfo.offset = 0;
+            desCameraParaBufInfo.range = sizeof(float) * 16;
+        }
+
+        VkWriteDescriptorSet writeCameraBufDesSet{};
+        {
+            writeCameraBufDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writeCameraBufDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            writeCameraBufDesSet.dstSet = skyboxPipelineDescriptorSet0s[i];
+            writeCameraBufDesSet.dstBinding = 1;
+            writeCameraBufDesSet.descriptorCount = 1;
+            writeCameraBufDesSet.pBufferInfo = &desCameraParaBufInfo;
+        }
+
+        VkWriteDescriptorSet writeHdrDesSet{};
+        {
+            writeHdrDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writeHdrDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            writeHdrDesSet.dstSet = skyboxPipelineDescriptorSet0s[i];
+            writeHdrDesSet.dstBinding = 0;
+            writeHdrDesSet.pImageInfo = &hdriDesImgInfo;
+            writeHdrDesSet.descriptorCount = 1;
+        }
+
+        // Linking skybox pipeline descriptors: skybox cubemap and camera buffer descriptors to their GPU memory and info.
+        VkWriteDescriptorSet writeSkyboxPipelineDescriptors[2] = { writeHdrDesSet, writeCameraBufDesSet };
+        vkUpdateDescriptorSets(device, 2, writeSkyboxPipelineDescriptors, 0, NULL);
     }
-    
-    // Linking skybox pipeline descriptors: skybox cubemap and camera buffer descriptors to their GPU memory and info.
-    VkWriteDescriptorSet writeSkyboxPipelineDescriptors[2] = { writeHdrDesSet, writeCameraBufDesSet };
-    vkUpdateDescriptorSets(device, 2, writeSkyboxPipelineDescriptors, 0, NULL);
 
     // Create pipeline layout
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
@@ -1071,17 +1089,20 @@ int main()
         vmaDestroyBuffer(allocator, stagingBuffer, stagingBufAlloc);
 
         // Copy camera data to ubo buffer
-        void* pUboData;
-        vmaMapMemory(allocator, cameraParaBufferAlloc, &pUboData);
+        for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+        {
+            void* pUboData;
+            vmaMapMemory(allocator, cameraParaBufferAllocs[i], &pUboData);
 
-        float cameraData[16] = {};
-        camera.GetView(cameraData);
-        camera.GetRight(&cameraData[4]);
-        camera.GetUp(&cameraData[8]);
-        camera.GetNearPlane(cameraData[12], cameraData[13], cameraData[14]);
+            float cameraData[16] = {};
+            camera.GetView(cameraData);
+            camera.GetRight(&cameraData[4]);
+            camera.GetUp(&cameraData[8]);
+            camera.GetNearPlane(cameraData[12], cameraData[13], cameraData[14]);
 
-        memcpy(pUboData, cameraData, sizeof(cameraData));
-        vmaUnmapMemory(allocator, cameraParaBufferAlloc);
+            memcpy(pUboData, cameraData, sizeof(cameraData));
+            vmaUnmapMemory(allocator, cameraParaBufferAllocs[i]);
+        }
     }
 
     // Main Loop
@@ -1125,6 +1146,9 @@ int main()
             beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         }
         VK_CHECK(vkBeginCommandBuffer(commandBuffers[currentFrame], &beginInfo));
+
+        // Update the camera according to mouse input and sent camera data to the UBO
+
 
         // Transform the layout of the swapchain from undefined to render target.
         VkImageMemoryBarrier swapchainRenderTargetTransBarrier{};
@@ -1171,7 +1195,7 @@ int main()
         vkCmdBeginRendering(commandBuffers[currentFrame], &renderInfo);
 
         // Bind the skybox pipeline descriptor sets
-        vkCmdBindDescriptorSets(commandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &skyboxPipelineDescriptorSet0, 0, NULL);
+        vkCmdBindDescriptorSets(commandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &skyboxPipelineDescriptorSet0s[currentFrame], 0, NULL);
 
         // Bind the graphics pipeline
         vkCmdBindPipeline(commandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
