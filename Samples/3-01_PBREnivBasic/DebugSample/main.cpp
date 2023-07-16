@@ -155,31 +155,19 @@ std::vector<VkDescriptorSet> skyboxPipelineDescriptorSet0s;
 VkDescriptorPool descriptorPool;
 VmaAllocator allocator;
 
+bool isDown = false;
+
 static void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 {
-    // Get IO information and create events
-    SharedLib::HEventArguments args;
-    bool isDown = false;
-
     if (button == GLFW_MOUSE_BUTTON_MIDDLE && action == GLFW_PRESS)
     {
         isDown = true;
     }
 
-    args[crc32("IS_DOWN")] = isDown;
-
-    if (isDown)
+    if (button == GLFW_MOUSE_BUTTON_MIDDLE && action == GLFW_RELEASE)
     {
-        SharedLib::HFVec2 pos;
-        double xpos, ypos;
-        glfwGetCursorPos(window, &xpos, &ypos);
-        pos.ele[0] = xpos;
-        pos.ele[1] = ypos;
-        args[crc32("POS")] = pos;
+        isDown = false;
     }
-
-    SharedLib::HEvent mEvent(args, "MOUSE_MIDDLE_BUTTON");
-    camera.OnEvent(mEvent);
 }
 
 // Create Camera related buffer, UBO objects
@@ -1147,6 +1135,23 @@ int main()
         ImGui_ImplGlfw_NewFrame();
         // ImGui::NewFrame();
 
+        // Get IO information and create events
+        SharedLib::HEventArguments args;
+        args[crc32("IS_DOWN")] = isDown;
+
+        if (isDown)
+        {
+            SharedLib::HFVec2 pos;
+            double xpos, ypos;
+            glfwGetCursorPos(window, &xpos, &ypos);
+            pos.ele[0] = xpos;
+            pos.ele[1] = ypos;
+            args[crc32("POS")] = pos;
+        }
+
+        SharedLib::HEvent mEvent(args, "MOUSE_MIDDLE_BUTTON");
+        camera.OnEvent(mEvent);
+
         // Draw Frame
         // Wait for the resources from the possible on flight frame
         vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
@@ -1187,8 +1192,6 @@ int main()
         camera.GetRight(&cameraData[4]);
         camera.GetUp(&cameraData[8]);
         camera.GetNearPlane(cameraData[12], cameraData[13], cameraData[14]);
-
-        std::cout << "View: [" << cameraData[0] << ", " << cameraData[1] << ", " << cameraData[2] << "]" << std::endl;
 
         memcpy(pUboData, cameraData, sizeof(cameraData));
         vmaUnmapMemory(allocator, cameraParaBufferAllocs[currentFrame]);

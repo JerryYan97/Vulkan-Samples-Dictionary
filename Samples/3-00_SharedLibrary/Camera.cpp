@@ -134,4 +134,11 @@ namespace SharedLib
         height = 2.f * near * tanf(m_fov / 2.f);
         width  = m_aspect * height;
     }
+
+    void Camera::GetRight(
+        float* oVec)
+    {
+        CrossProductVec3(m_view, m_up, oVec);
+        NormalizeVec(oVec, 3);
+    }
 }
