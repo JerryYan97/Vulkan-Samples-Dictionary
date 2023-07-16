@@ -1,7 +1,3 @@
-#define IMGUI_DEFINE_MATH_OPERATORS
-#include "imgui_impl_glfw.h"
-#include "imgui_impl_vulkan.h"
-
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
 
@@ -952,13 +948,6 @@ int main()
         swapchainPresentSubResRange.layerCount = 1;
     }
 
-    // Setup Dear ImGui context
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
-
-    ImGui_ImplGlfw_InitForVulkan(window, true);
-
     // Send the HDR cubemap image to GPU:
     // - Copy RAM to GPU staging buffer;
     // - Copy buffer to image;
@@ -1129,11 +1118,6 @@ int main()
     while (!glfwWindowShouldClose(window))
     {
         glfwPollEvents();
-        // ImGui::NewFrame();
-
-        // Prepare the Dear ImGUI frame data
-        ImGui_ImplGlfw_NewFrame();
-        // ImGui::NewFrame();
 
         // Get IO information and create events
         SharedLib::HEventArguments args;
@@ -1336,8 +1320,6 @@ int main()
     }
 
     vkDeviceWaitIdle(device);
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
 
     // Cleanup
     // Cleanup Swapchain
