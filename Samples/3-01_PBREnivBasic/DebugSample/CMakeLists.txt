@@ -24,6 +24,8 @@ link_directories("../../../ThirdPartyLibs/glfw/build/src/Debug/")
 
 add_definitions(-DSOURCE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}\")
 add_executable(${MY_APP_NAME} "main.cpp"
+                              ${CMAKE_CURRENT_SOURCE_DIR}/PBREnivBasicApp.h
+                              ${CMAKE_CURRENT_SOURCE_DIR}/PBREnivBasicApp.cpp
                               ${DearImGUIPath}/imgui.cpp
                               ${DearImGUIPath}/imgui_draw.cpp
                               ${DearImGUIPath}/imgui_demo.cpp
