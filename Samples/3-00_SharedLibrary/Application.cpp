@@ -320,8 +320,7 @@ namespace SharedLib
 
     // ================================================================================================================
     VkShaderModule Application::CreateShaderModule(
-        const std::string& spvName,
-        const VkDevice&    device)
+        const std::string& spvName)
     {
         // Create  Shader Module -- SOURCE_PATH is a MACRO definition passed in during compilation, which is specified
         //                          in the CMakeLists.txt file in the same level of repository.
@@ -336,9 +335,153 @@ namespace SharedLib
             shaderModuleCreateInfo.pCode = (uint32_t*)inputShaderStr.data();
         }
         VkShaderModule shaderModule;
-        CheckVkResult(vkCreateShaderModule(device, &shaderModuleCreateInfo, nullptr, &shaderModule));
+        CheckVkResult(vkCreateShaderModule(m_device, &shaderModuleCreateInfo, nullptr, &shaderModule));
 
         return shaderModule;
+    }
+
+    // ================================================================================================================
+    std::vector<VkDeviceQueueCreateInfo> Application::CreateDeviceQueueInfos(
+        const std::set<uint32_t>& uniqueQueueFamilies)
+    {
+        std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+        float queuePriority = 1.0f;
+        for (uint32_t queueFamily : uniqueQueueFamilies) {
+            VkDeviceQueueCreateInfo queueCreateInfo{};
+            queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+            queueCreateInfo.queueFamilyIndex = queueFamily;
+            queueCreateInfo.queueCount = 1;
+            queueCreateInfo.pQueuePriorities = &queuePriority;
+            queueCreateInfos.push_back(queueCreateInfo);
+        }
+
+        return queueCreateInfos;
+    }
+
+    // ================================================================================================================
+    VkPipeline Application::CreateGfxPipeline(
+        const VkShaderModule&                   vsShaderModule,
+        const VkShaderModule&                   psShaderModule,
+        const VkPipelineRenderingCreateInfoKHR& pipelineRenderCreateInfo,
+        const VkPipelineLayout&                 pipelineLayout)
+    {
+        VkPipelineShaderStageCreateInfo shaderStgInfo[2];
+        {
+            shaderStgInfo[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            shaderStgInfo[0].pNext = nullptr;
+            shaderStgInfo[0].flags = 0;
+            shaderStgInfo[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+            shaderStgInfo[0].module = vsShaderModule;
+            shaderStgInfo[0].pName = "main";
+            shaderStgInfo[0].pSpecializationInfo = nullptr;
+
+            shaderStgInfo[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            shaderStgInfo[1].pNext = nullptr;
+            shaderStgInfo[1].flags = 0;
+            shaderStgInfo[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+            shaderStgInfo[1].module = psShaderModule;
+            shaderStgInfo[1].pName = "main";
+            shaderStgInfo[1].pSpecializationInfo = nullptr;
+        }
+
+        // Create vertex input info (Our vertices are in the vert shader)
+        VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+        {
+            vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+            vertexInputInfo.vertexBindingDescriptionCount = 0;
+            vertexInputInfo.vertexAttributeDescriptionCount = 0;
+        }
+        
+        // Create the input assembly info.
+        VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+        {
+            inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+            inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+            inputAssembly.primitiveRestartEnable = VK_FALSE;
+        }
+        
+        // Create the viewport and scissor info.
+        VkPipelineViewportStateCreateInfo viewportState{};
+        {
+            viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+            viewportState.viewportCount = 1;
+            viewportState.scissorCount = 1;
+        }
+        
+        // Create the rasterization info.
+        VkPipelineRasterizationStateCreateInfo rasterizer{};
+        {
+            rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+            rasterizer.depthClampEnable = VK_FALSE;
+            rasterizer.rasterizerDiscardEnable = VK_FALSE;
+            rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+            rasterizer.lineWidth = 1.0f;
+            rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+            rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+            rasterizer.depthBiasEnable = VK_FALSE;
+        }
+
+        // Create the multisample info.
+        VkPipelineMultisampleStateCreateInfo multisampling{};
+        {
+            multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+            multisampling.sampleShadingEnable = VK_FALSE;
+            multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+        }
+        
+        // Create the color blend info.
+        VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+        {
+            colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+            colorBlendAttachment.blendEnable = VK_FALSE;
+        }
+
+        VkPipelineColorBlendStateCreateInfo colorBlending{};
+        {
+            colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+            colorBlending.logicOpEnable = VK_FALSE;
+            colorBlending.logicOp = VK_LOGIC_OP_COPY;
+            colorBlending.attachmentCount = 1;
+            colorBlending.pAttachments = &colorBlendAttachment;
+            colorBlending.blendConstants[0] = 0.0f;
+            colorBlending.blendConstants[1] = 0.0f;
+            colorBlending.blendConstants[2] = 0.0f;
+            colorBlending.blendConstants[3] = 0.0f;
+        }
+
+        // Create the dynamic state info for scissor and viewport
+        std::vector<VkDynamicState> dynamicStates = {
+                VK_DYNAMIC_STATE_VIEWPORT,
+                VK_DYNAMIC_STATE_SCISSOR
+        };
+        VkPipelineDynamicStateCreateInfo dynamicState{};
+        {
+            dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+            dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
+            dynamicState.pDynamicStates = dynamicStates.data();
+        }
+
+        VkGraphicsPipelineCreateInfo pipelineInfo{};
+        {
+            pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+            pipelineInfo.pNext = &pipelineRenderCreateInfo;
+            pipelineInfo.stageCount = 2;
+            pipelineInfo.pStages = shaderStgInfo;
+            pipelineInfo.pVertexInputState = &vertexInputInfo;
+            pipelineInfo.pInputAssemblyState = &inputAssembly;
+            pipelineInfo.pViewportState = &viewportState;
+            pipelineInfo.pRasterizationState = &rasterizer;
+            pipelineInfo.pMultisampleState = &multisampling;
+            pipelineInfo.pColorBlendState = &colorBlending;
+            pipelineInfo.pDynamicState = &dynamicState;
+            pipelineInfo.layout = pipelineLayout;
+            pipelineInfo.renderPass = nullptr;
+            pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+        }
+        VkPipeline graphicsPipeline;
+        VK_CHECK(vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline));
+
+        return graphicsPipeline;
     }
 
     // ================================================================================================================
@@ -495,6 +638,8 @@ namespace SharedLib
             swapchainCreateInfo.clipped = VK_TRUE;
         }
         VK_CHECK(vkCreateSwapchainKHR(m_device, &swapchainCreateInfo, nullptr, &m_swapchain));
+
+        CreateSwapchainImageViews();
     }
 
     // ================================================================================================================

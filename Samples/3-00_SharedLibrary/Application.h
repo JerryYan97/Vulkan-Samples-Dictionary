@@ -11,6 +11,8 @@ struct GLFWwindow;
 // The design philosophy of the SharedLib is to reuse code as much as possible and writing new code in examples as less as possible.
 // This would lead to:
 // - Small granular functions and versatile input arguments.
+
+// TODO: I maybe need a standalone pipeline class.
 namespace SharedLib
 {
     constexpr int MAX_FRAMES_IN_FLIGHT = 2;
@@ -29,6 +31,8 @@ namespace SharedLib
     protected:
         // VkInstance, VkPhysicalDevice, VkDevice, gfxFamilyQueueIdx, presentFamilyQueueIdx,
         // computeFamilyQueueIdx (TODO), descriptor pool, vmaAllocator.
+        // InitXXX(...) functions must initialize a member object instead of returning it.
+        // Member objects initialized by the InitXXX(...) functions have to be destroied by destructor.
         void InitInstance(const std::vector<const char*>& instanceExts,
                           const uint32_t                  instanceExtsCnt);
 
@@ -51,7 +55,13 @@ namespace SharedLib
         void InitGfxCommandBuffers(const uint32_t cmdBufCnt);
 
         // CreateXXX(...) functions are more flexible. They are utility functions for children classes.
-        VkShaderModule CreateShaderModule(const std::string& spvName, const VkDevice& device);
+        // CreateXXX(...) cannot initialize any member objects. They have to return objects.
+        VkShaderModule                       CreateShaderModule(const std::string& spvName);
+        std::vector<VkDeviceQueueCreateInfo> CreateDeviceQueueInfos(const std::set<uint32_t>& uniqueQueueFamilies);
+        VkPipeline                           CreateGfxPipeline(const VkShaderModule& vsShaderModule,
+                                                               const VkShaderModule& psShaderModule,
+                                                               const VkPipelineRenderingCreateInfoKHR& pipelineRenderCreateInfo,
+                                                               const VkPipelineLayout& pipelineLayout);
 
         // The class manages both of the creation and destruction of the objects below.
         VkInstance       m_instance;
@@ -62,10 +72,8 @@ namespace SharedLib
         VkQueue          m_graphicsQueue;
         VkCommandPool    m_gfxCmdPool;
         
-        VkDebugUtilsMessengerEXT m_debugMessenger;
-
-        VmaAllocator*    m_pAllocator;
-
+        VkDebugUtilsMessengerEXT     m_debugMessenger;
+        VmaAllocator*                m_pAllocator;
         std::vector<VkCommandBuffer> m_gfxCmdBufs;
     };
 
