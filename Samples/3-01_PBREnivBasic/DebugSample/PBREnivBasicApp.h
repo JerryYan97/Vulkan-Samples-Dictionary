@@ -21,8 +21,15 @@ private:
     void InitSkyboxPipelineDescriptorSetLayout();
     void InitSkyboxPipelineLayout();
     void InitSkyboxShaderModules();
+    void InitSkyboxPipelineDescriptorSets();
 
     void InitHdrRenderObjects();
+    void InitCameraUboObjects();
+
+    void InitSyncObjects();
+
+    void DestroyHdrRenderObjs();
+    void DestroyCameraUboObjects();
 
     VkImage       m_hdrCubeMapImage;
     VkImageView   m_hdrCubeMapView;
@@ -34,9 +41,13 @@ private:
     std::vector<VmaAllocation>   m_cameraParaBufferAllocs;
     std::vector<VkDescriptorSet> m_skyboxPipelineDescriptorSet0s;
 
-    VkShaderModule m_vsSkyboxShaderModule;
-    VkShaderModule m_psSkyboxShaderModule;
+    VkShaderModule        m_vsSkyboxShaderModule;
+    VkShaderModule        m_psSkyboxShaderModule;
     VkDescriptorSetLayout m_skyboxPipelineDesSet0Layout;
-    VkPipelineLayout m_skyboxPipelineLayout;
-    VkPipeline m_skyboxPipeline;
+    VkPipelineLayout      m_skyboxPipelineLayout;
+    VkPipeline            m_skyboxPipeline;
+
+    std::vector<VkSemaphore> m_imageAvailableSemaphores;
+    std::vector<VkSemaphore> m_renderFinishedSemaphores;
+    std::vector<VkFence>     m_inFlightFences;
 };

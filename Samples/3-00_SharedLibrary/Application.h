@@ -11,8 +11,12 @@ struct GLFWwindow;
 // The design philosophy of the SharedLib is to reuse code as much as possible and writing new code in examples as less as possible.
 // This would lead to:
 // - Small granular functions and versatile input arguments.
-
-// TODO: I maybe need a standalone pipeline class.
+// - Speed is not a problem. The key is easy to use. So, I should feel free to use all kinds of data structure.
+// - All CmdBuffer operations need to stay in the main.cpp.
+// - In principle, all member variables should be init in InitXXX(...) and destroied in the destructor. Or, the variable
+//   shouldn't be in the class, but can be created by the public interface.
+// 
+// TODO: I may need a standalone pipeline class.
 namespace SharedLib
 {
     constexpr int MAX_FRAMES_IN_FLIGHT = 2;
@@ -62,6 +66,9 @@ namespace SharedLib
                                                                const VkShaderModule& psShaderModule,
                                                                const VkPipelineRenderingCreateInfoKHR& pipelineRenderCreateInfo,
                                                                const VkPipelineLayout& pipelineLayout);
+
+        void CreateVmaVkBuffer();
+        void CreateVmaVkImage();
 
         // The class manages both of the creation and destruction of the objects below.
         VkInstance       m_instance;
