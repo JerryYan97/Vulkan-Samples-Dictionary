@@ -23,6 +23,8 @@ typedef VkFlags VmaAllocationCreateFlags;
 // TODO: I may need a standalone pipeline class.
 namespace SharedLib
 {
+    class HEvent;
+
     constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 
     // Base Vulkan application without a swapchain -- Basically abstract.
@@ -108,6 +110,7 @@ namespace SharedLib
     };
 
     // Vulkan application with a swapchain and glfwWindow.
+    // Hide swapchain operations.
     class GlfwApplication : public Application
     {
     public:
@@ -117,13 +120,16 @@ namespace SharedLib
         virtual void AppInit() override { /* Unimplemented */ };
 
         bool WindowShouldClose();
-        bool AcquireNextImgIdx(uint32_t& idx); // True: Get the idx; False: Recreate Swapchain.
+        bool NextImgIdxOrNewSwapchain(uint32_t& idx); // True: Get the idx; False: Recreate Swapchain.
         // virtual void FrameStart();
 
     protected:
         void InitSwapchain();
         void InitPresentQueueFamilyIdx();
         void InitPresentQueue();
+        void InitSwapchainSyncObjects();
+
+        HEvent CreateMiddleMouseEvent();
 
         // The class manages both of the creation and destruction of the objects below.
         uint32_t                 m_currentFrame;
@@ -136,6 +142,11 @@ namespace SharedLib
         VkQueue                  m_presentQueue;
         std::vector<VkImageView> m_swapchainImageViews;
         std::vector<VkImage>     m_swapchainImages;
+
+
+        std::vector<VkSemaphore> m_imageAvailableSemaphores;
+        std::vector<VkSemaphore> m_renderFinishedSemaphores;
+        std::vector<VkFence>     m_inFlightFences;
 
     private:
         void CreateSwapchainImageViews();

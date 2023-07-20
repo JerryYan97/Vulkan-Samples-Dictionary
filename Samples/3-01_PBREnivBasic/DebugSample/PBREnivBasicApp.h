@@ -37,8 +37,6 @@ private:
     void InitHdrRenderObjects();
     void InitCameraUboObjects();
 
-    void InitSyncObjects();
-
     void DestroyHdrRenderObjs();
     void DestroyCameraUboObjects();
 
@@ -58,8 +56,4 @@ private:
     VkDescriptorSetLayout m_skyboxPipelineDesSet0Layout;
     VkPipelineLayout      m_skyboxPipelineLayout;
     VkPipeline            m_skyboxPipeline;
-
-    std::vector<VkSemaphore> m_imageAvailableSemaphores;
-    std::vector<VkSemaphore> m_renderFinishedSemaphores;
-    std::vector<VkFence>     m_inFlightFences;
 };

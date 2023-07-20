@@ -3,6 +3,8 @@
 
 #include "Application.h"
 #include "VulkanDbgUtils.h"
+#include "../3-00_SharedLibrary/Event.h"
+#include "../3-00_SharedLibrary/MathUtils.h"
 #include <cassert>
 #include <glfw3.h>
 
@@ -567,6 +569,22 @@ namespace SharedLib
     {
         CleanupSwapchain();
 
+        // Cleanup syn objects
+        for (auto itr : m_imageAvailableSemaphores)
+        {
+            vkDestroySemaphore(m_device, itr, nullptr);
+        }
+
+        for (auto itr : m_renderFinishedSemaphores)
+        {
+            vkDestroySemaphore(m_device, itr, nullptr);
+        }
+
+        for (auto itr : m_inFlightFences)
+        {
+            vkDestroyFence(m_device, itr, nullptr);
+        }
+
         // Destroy vulkan surface
         vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
 
@@ -582,9 +600,77 @@ namespace SharedLib
     }
 
     // ================================================================================================================
-    void GlfwApplication::FrameStart()
+    HEvent GlfwApplication::CreateMiddleMouseEvent()
     {
+        // Get IO information and create events
+        SharedLib::HEventArguments args;
+        args[crc32("IS_DOWN")] = isDown;
 
+        if (isDown)
+        {
+            SharedLib::HFVec2 pos;
+            double xpos, ypos;
+            glfwGetCursorPos(window, &xpos, &ypos);
+            pos.ele[0] = xpos;
+            pos.ele[1] = ypos;
+            args[crc32("POS")] = pos;
+        }
+
+        SharedLib::HEvent mEvent(args, "MOUSE_MIDDLE_BUTTON");
+    }
+
+    // ================================================================================================================
+    bool GlfwApplication::NextImgIdxOrNewSwapchain(
+        uint32_t& idx)
+    {
+        // Get next available image from the swapchain
+        VkResult result = vkAcquireNextImageKHR(m_device,
+                                                m_swapchain,
+                                                UINT64_MAX,
+                                                m_imageAvailableSemaphores[m_currentFrame],
+                                                VK_NULL_HANDLE,
+                                                &idx);
+
+        if (result == VK_ERROR_OUT_OF_DATE_KHR)
+        {
+            // The surface is imcompatiable with the swapchain (resize window).
+            RecreateSwapchain();
+            return false;
+        }
+        else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+        {
+            // Not success or usable.
+            throw std::runtime_error("failed to acquire swap chain image!");
+        }
+
+        return true;
+    }
+
+    // ================================================================================================================
+    void GlfwApplication::InitSwapchainSyncObjects()
+    {
+        // Create Sync objects
+        m_imageAvailableSemaphores.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
+        m_renderFinishedSemaphores.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
+        m_inFlightFences.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
+
+        VkSemaphoreCreateInfo semaphoreInfo{};
+        {
+            semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        }
+
+        VkFenceCreateInfo fenceInfo{};
+        {
+            fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+            fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+        }
+
+        for (size_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
+        {
+            VK_CHECK(vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_imageAvailableSemaphores[i]));
+            VK_CHECK(vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_renderFinishedSemaphores[i]));
+            VK_CHECK(vkCreateFence(m_device, &fenceInfo, nullptr, &m_inFlightFences[i]));
+        }
     }
 
     // ================================================================================================================

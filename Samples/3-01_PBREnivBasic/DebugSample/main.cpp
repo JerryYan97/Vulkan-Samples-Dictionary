@@ -191,18 +191,9 @@ int main()
 
         // Get next available image from the swapchain
         uint32_t imageIndex;
-        VkResult result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
-
-        if (result == VK_ERROR_OUT_OF_DATE_KHR)
+        if (app.NextImgIdxOrNewSwapchain(imageIndex) == false)
         {
-            // The surface is imcompatiable with the swapchain (resize window).
-            RecreateSwapchain();
             continue;
-        }
-        else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
-        {
-            // Not success or usable.
-            throw std::runtime_error("failed to acquire swap chain image!");
         }
 
         // Reset unused previous frame's resource

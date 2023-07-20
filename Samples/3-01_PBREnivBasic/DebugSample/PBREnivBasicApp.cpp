@@ -52,22 +52,6 @@ PBREnivBasicApp::~PBREnivBasicApp()
     vkDeviceWaitIdle(m_device);
     delete m_pCamera;
 
-    // Cleanup syn objects
-    for (auto itr : m_imageAvailableSemaphores)
-    {
-        vkDestroySemaphore(m_device, itr, nullptr);
-    }
-
-    for (auto itr : m_renderFinishedSemaphores)
-    {
-        vkDestroySemaphore(m_device, itr, nullptr);
-    }
-
-    for (auto itr : m_inFlightFences)
-    {
-        vkDestroyFence(m_device, itr, nullptr);
-    }
-
     DestroyHdrRenderObjs();
     DestroyCameraUboObjects();
 
@@ -375,33 +359,6 @@ void PBREnivBasicApp::InitSkyboxPipeline()
 }
 
 // ================================================================================================================
-void PBREnivBasicApp::InitSyncObjects()
-{
-    // Create Sync objects
-    m_imageAvailableSemaphores.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
-    m_renderFinishedSemaphores.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
-    m_inFlightFences.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
-
-    VkSemaphoreCreateInfo semaphoreInfo{};
-    {
-        semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-    }
-
-    VkFenceCreateInfo fenceInfo{};
-    {
-        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-    }
-
-    for (size_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
-    {
-        VK_CHECK(vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_imageAvailableSemaphores[i]));
-        VK_CHECK(vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_renderFinishedSemaphores[i]));
-        VK_CHECK(vkCreateFence(m_device, &fenceInfo, nullptr, &m_inFlightFences[i]));
-    }
-}
-
-// ================================================================================================================
 void PBREnivBasicApp::AppInit()
 {
     glfwInit();
@@ -461,5 +418,5 @@ void PBREnivBasicApp::AppInit()
     InitHdrRenderObjects();
     InitCameraUboObjects();
     InitSkyboxPipelineDescriptorSets();
-    InitSyncObjects();
+    InitSwapchainSyncObjects();
 }
