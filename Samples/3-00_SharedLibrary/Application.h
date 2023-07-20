@@ -6,7 +6,11 @@
 #include <set>
 
 VK_DEFINE_HANDLE(VmaAllocator)
+VK_DEFINE_HANDLE(VmaAllocation)
 struct GLFWwindow;
+
+enum VmaMemoryUsage;
+typedef VkFlags VmaAllocationCreateFlags;
 
 // The design philosophy of the SharedLib is to reuse code as much as possible and writing new code in examples as less as possible.
 // This would lead to:
@@ -31,6 +35,28 @@ namespace SharedLib
 
         // The InitXXX(...) should be called in it. It is expected to called after the constructor.
         virtual void AppInit() = 0;
+
+        void CreateVmaVkBuffer(VmaMemoryUsage           vmaMemUsage, 
+                               VmaAllocationCreateFlags vmaAllocFlags, 
+                               VkSharingMode            sharingMode,
+                               VkBufferUsageFlags       bufferUsageFlag,
+                               VkDeviceSize             byteNum,
+                               VkBuffer*                pBuffer,
+                               VmaAllocation*           pAllocation);
+
+        void CreateVmaVkImage();
+
+        void CopyRamDataToGpuBuffer(void*         pSrc,
+                                    VkBuffer      dstBuffer, 
+                                    VmaAllocation dstAllocation,
+                                    uint32_t      byteNum);
+
+        void SubmitCmdBufToGfxQueue(VkCommandBuffer cmdBuf, VkFence signalFence);
+
+        VmaAllocator* GetVmaAllocator() { return m_pAllocator; }
+        VkCommandBuffer GetGfxCmdBuffer(uint32_t i) { return m_gfxCmdBufs[i]; }
+        VkDevice GetVkDevice() { return m_device; }
+
 
     protected:
         // VkInstance, VkPhysicalDevice, VkDevice, gfxFamilyQueueIdx, presentFamilyQueueIdx,
@@ -67,9 +93,6 @@ namespace SharedLib
                                                                const VkPipelineRenderingCreateInfoKHR& pipelineRenderCreateInfo,
                                                                const VkPipelineLayout& pipelineLayout);
 
-        void CreateVmaVkBuffer();
-        void CreateVmaVkImage();
-
         // The class manages both of the creation and destruction of the objects below.
         VkInstance       m_instance;
         VkPhysicalDevice m_physicalDevice;
@@ -92,6 +115,10 @@ namespace SharedLib
         ~GlfwApplication();
 
         virtual void AppInit() override { /* Unimplemented */ };
+
+        bool WindowShouldClose();
+        bool AcquireNextImgIdx(uint32_t& idx); // True: Get the idx; False: Recreate Swapchain.
+        // virtual void FrameStart();
 
     protected:
         void InitSwapchain();

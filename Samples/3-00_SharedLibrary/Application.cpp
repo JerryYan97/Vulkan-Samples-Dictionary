@@ -485,6 +485,71 @@ namespace SharedLib
     }
 
     // ================================================================================================================
+    void Application::CreateVmaVkBuffer(
+        VmaMemoryUsage           vmaMemUsage,
+        VmaAllocationCreateFlags vmaAllocFlags,
+        VkSharingMode            sharingMode,
+        VkBufferUsageFlags       bufferUsageFlag,
+        VkDeviceSize             byteNum,
+        VkBuffer*                pBuffer,
+        VmaAllocation*           pAllocation)
+    {
+        VmaAllocationCreateInfo stagingBufAllocInfo{};
+        {
+            stagingBufAllocInfo.usage = vmaMemUsage;
+            stagingBufAllocInfo.flags = vmaAllocFlags;
+        }
+
+        VkBufferCreateInfo stgBufInfo{};
+        {
+            stgBufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+            stgBufInfo.sharingMode = sharingMode;
+            stgBufInfo.usage = bufferUsageFlag;
+            stgBufInfo.size = byteNum;
+        }
+
+        VK_CHECK(vmaCreateBuffer(*m_pAllocator, &stgBufInfo, &stagingBufAllocInfo, pBuffer, pAllocation, nullptr));
+    }
+
+    // ================================================================================================================
+    void Application::CreateVmaVkImage()
+    {}
+
+    // ================================================================================================================
+    void Application::CopyRamDataToGpuBuffer(
+        void*         pSrc,
+        VkBuffer      dstBuffer,
+        VmaAllocation dstAllocation,
+        uint32_t      byteNum)
+    {
+        void* pBufferDataMap;
+        VK_CHECK(vmaMapMemory(*m_pAllocator, dstAllocation, &pBufferDataMap));
+        memcpy(pBufferDataMap, pSrc, byteNum);
+        vmaUnmapMemory(*m_pAllocator, dstAllocation);
+    }
+
+    // ================================================================================================================
+    void Application::SubmitCmdBufToGfxQueue(
+        VkCommandBuffer cmdBuf, 
+        VkFence         signalFence)
+    {
+        // Submit the filled command buffer to the graphics queue to draw the image
+        VkSubmitInfo submitInfo{};
+        {
+            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            submitInfo.commandBufferCount = 1;
+            submitInfo.pCommandBuffers = &cmdBuf;
+        }
+        vkResetFences(m_device, 1, &signalFence);
+        VK_CHECK(vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, signalFence));
+
+        // Wait for the end of all transformation and reset the command buffer. The fence would be waited in the first
+        // loop.
+        vkWaitForFences(m_device, 1, &signalFence, VK_TRUE, UINT64_MAX);
+        vkResetCommandBuffer(cmdBuf, 0);
+    }
+
+    // ================================================================================================================
     GlfwApplication::GlfwApplication() :
         Application::Application(),
         m_currentFrame(0),
@@ -508,6 +573,18 @@ namespace SharedLib
         glfwDestroyWindow(m_pWindow);
 
         glfwTerminate();
+    }
+
+    // ================================================================================================================
+    bool GlfwApplication::WindowShouldClose()
+    { 
+        return glfwWindowShouldClose(m_pWindow); 
+    }
+
+    // ================================================================================================================
+    void GlfwApplication::FrameStart()
+    {
+
     }
 
     // ================================================================================================================

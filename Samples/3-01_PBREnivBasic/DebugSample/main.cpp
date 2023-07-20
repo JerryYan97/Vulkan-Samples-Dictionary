@@ -2,6 +2,7 @@
 #include "vk_mem_alloc.h"
 
 #include "PBREnivBasicApp.h"
+#include "../../3-00_SharedLibrary/VulkanDbgUtils.h"
 
 #include <vulkan/vulkan.h>
 #include <glfw3.h>
@@ -10,7 +11,8 @@
 
 int main()
 {
-    PBREnivBasicApp app();
+    PBREnivBasicApp app;
+    app.AppInit();
 
     VkImageSubresourceRange swapchainPresentSubResRange{};
     {
@@ -27,37 +29,31 @@ int main()
     // - Copy Camera parameters to the GPU buffer;
     {
         // Create the staging buffer
-        VkBuffer stagingBuffer;
+        VkBuffer      stagingBuffer;
         VmaAllocation stagingBufAlloc;
+        VmaAllocator* pAllocator = app.GetVmaAllocator();
+        VkCommandBuffer stagingCmdBuffer = app.GetGfxCmdBuffer(0);
+        HDRLoaderResult hdrLdRes = app.GetHdrLoadResult();
+        VkImage cubeMapImage = app.GetCubeMapImage();
+        VkFence stagingFence = app.GetFence(0);
 
-        VmaAllocationCreateInfo stagingBufAllocInfo{};
-        {
-            stagingBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-            stagingBufAllocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-        }
-
-        VkBufferCreateInfo stgBufInfo{};
-        {
-            stgBufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-            stgBufInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-            stgBufInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-            stgBufInfo.size = 3 * sizeof(float) * hdrLdRes.width * hdrLdRes.height;
-        }
-
-        VK_CHECK(vmaCreateBuffer(allocator, &stgBufInfo, &stagingBufAllocInfo, &stagingBuffer, &stagingBufAlloc, nullptr));
+        app.CreateVmaVkBuffer(VMA_MEMORY_USAGE_AUTO, 
+                              VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+                              VK_SHARING_MODE_EXCLUSIVE,
+                              VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                              app.GetHdrByteNum(),
+                              &stagingBuffer,
+                              &stagingBufAlloc);
 
         // Copy the RAM data to the staging buffer
-        void* pStgBufMem;
-        VK_CHECK(vmaMapMemory(allocator, stagingBufAlloc, &pStgBufMem));
-        memcpy(pStgBufMem, hdrLdRes.cols, 3 * sizeof(float) * hdrLdRes.width * hdrLdRes.height);
-        vmaUnmapMemory(allocator, stagingBufAlloc);
+        app.CopyRamDataToGpuBuffer(app.GetHdrDataPointer(), stagingBuffer, stagingBufAlloc, app.GetHdrByteNum());
 
-        /* Send staging buffer data to the GPU image. */ 
+        /* Send staging buffer data to the GPU image. */
         VkCommandBufferBeginInfo beginInfo{};
         {
             beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         }
-        VK_CHECK(vkBeginCommandBuffer(commandBuffers[0], &beginInfo));
+        VK_CHECK(vkBeginCommandBuffer(stagingCmdBuffer, &beginInfo));
 
         // Cubemap's 6 layers SubresourceRange
         VkImageSubresourceRange cubemapSubResRange{};
@@ -73,7 +69,7 @@ int main()
         VkImageMemoryBarrier hdrUndefToDstBarrier{};
         {
             hdrUndefToDstBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            hdrUndefToDstBarrier.image = hdrCubeMapImage;
+            hdrUndefToDstBarrier.image = cubeMapImage;
             hdrUndefToDstBarrier.subresourceRange = cubemapSubResRange;
             hdrUndefToDstBarrier.srcAccessMask = 0;
             hdrUndefToDstBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
@@ -82,7 +78,7 @@ int main()
         }
         
         vkCmdPipelineBarrier(
-            commandBuffers[0], 
+            stagingCmdBuffer,
             VK_PIPELINE_STAGE_HOST_BIT, 
             VK_PIPELINE_STAGE_TRANSFER_BIT,
             0,
@@ -121,9 +117,9 @@ int main()
         }
 
         vkCmdCopyBufferToImage(
-            commandBuffers[0],
+            stagingCmdBuffer,
             stagingBuffer,
-            hdrCubeMapImage,
+            cubeMapImage,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             6, hdrBufToImgCopies);
         
@@ -131,7 +127,7 @@ int main()
         VkImageMemoryBarrier hdrDstToShaderBarrier{};
         {
             hdrDstToShaderBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            hdrDstToShaderBarrier.image = hdrCubeMapImage;
+            hdrDstToShaderBarrier.image = cubeMapImage;
             hdrDstToShaderBarrier.subresourceRange = cubemapSubResRange;
             hdrDstToShaderBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
             hdrDstToShaderBarrier.dstAccessMask = VK_ACCESS_NONE;
@@ -140,7 +136,7 @@ int main()
         }
 
         vkCmdPipelineBarrier(
-            commandBuffers[0],
+            stagingCmdBuffer,
             VK_PIPELINE_STAGE_TRANSFER_BIT,
             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
             0,
@@ -149,47 +145,27 @@ int main()
             1, &hdrDstToShaderBarrier);
 
         // End the command buffer and submit the packets
-        vkEndCommandBuffer(commandBuffers[0]);
+        vkEndCommandBuffer(stagingCmdBuffer);
 
-        // Submit the filled command buffer to the graphics queue to draw the image
-        VkSubmitInfo submitInfo{};
-        {
-            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-            submitInfo.commandBufferCount = 1;
-            submitInfo.pCommandBuffers = &commandBuffers[0];
-        }
-        vkResetFences(device, 1, &inFlightFences[0]);
-        VK_CHECK(vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFences[0]));
-
-        // Wait for the end of all transformation and reset the command buffer. The fence would be waited in the first loop.
-        vkWaitForFences(device, 1, &inFlightFences[0], VK_TRUE, UINT64_MAX);
-        vkResetCommandBuffer(commandBuffers[0], 0);
+        app.SubmitCmdBufToGfxQueue(stagingCmdBuffer, stagingFence);
 
         // Destroy temp resources
-        vmaDestroyBuffer(allocator, stagingBuffer, stagingBufAlloc);
+        vmaDestroyBuffer(*pAllocator, stagingBuffer, stagingBufAlloc);
 
         // Copy camera data to ubo buffer
-        for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+        for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
         {
-            void* pUboData;
-            vmaMapMemory(allocator, cameraParaBufferAllocs[i], &pUboData);
-
-            float cameraData[16] = {};
-            camera.GetView(cameraData);
-            camera.GetRight(&cameraData[4]);
-            camera.GetUp(&cameraData[8]);
-            camera.GetNearPlane(cameraData[12], cameraData[13], cameraData[14]);
-
-            memcpy(pUboData, cameraData, sizeof(cameraData));
-            vmaUnmapMemory(allocator, cameraParaBufferAllocs[i]);
+            app.SendCameraDataToBuffer(i);
         }
     }
 
     // Main Loop
     // Two draws. First draw draws triangle into an image with window 1 window size.
     // Second draw draws GUI. GUI would use the image drawn from the first draw.
-    while (!glfwWindowShouldClose(window))
+    while (!app.WindowShouldClose())
     {
+        app.FrameStart();
+
         glfwPollEvents();
 
         // Get IO information and create events

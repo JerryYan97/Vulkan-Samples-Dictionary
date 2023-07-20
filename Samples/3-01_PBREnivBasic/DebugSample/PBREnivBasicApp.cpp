@@ -2,7 +2,6 @@
 #include <glfw3.h>
 #include "../../3-00_SharedLibrary/VulkanDbgUtils.h"
 #include "../../3-00_SharedLibrary/Camera.h"
-#include "hdrloader.h"
 
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
@@ -104,13 +103,38 @@ void PBREnivBasicApp::DestroyCameraUboObjects()
 }
 
 // ================================================================================================================
+VkDeviceSize PBREnivBasicApp::GetHdrByteNum()
+{
+    return 3 * sizeof(float) * m_hdrLoaderResult.width * m_hdrLoaderResult.height;
+}
+
+// ================================================================================================================
+void PBREnivBasicApp::GetCameraData(
+    float* pBuffer)
+{
+    
+}
+
+// ================================================================================================================
+void PBREnivBasicApp::SendCameraDataToBuffer(
+    uint32_t i)
+{
+    float cameraData[16] = {};
+    m_pCamera->GetView(cameraData);
+    m_pCamera->GetRight(&cameraData[4]);
+    m_pCamera->GetUp(&cameraData[8]);
+    m_pCamera->GetNearPlane(cameraData[12], cameraData[13], cameraData[14]);
+
+    CopyRamDataToGpuBuffer(cameraData, m_cameraParaBuffers[i], m_cameraParaBufferAllocs[i], sizeof(cameraData));
+}
+
+// ================================================================================================================
 void PBREnivBasicApp::InitHdrRenderObjects()
 {
     // Load the HDRI image into RAM
     std::string hdriFilePath = SOURCE_PATH;
     hdriFilePath += "/../data/output_skybox.hdr";
-    HDRLoaderResult hdrLdRes;
-    bool ret = HDRLoader::load(hdriFilePath.c_str(), hdrLdRes);
+    bool ret = HDRLoader::load(hdriFilePath.c_str(), m_hdrLoaderResult);
 
     VmaAllocationCreateInfo hdrAllocInfo{};
     {
@@ -120,8 +144,8 @@ void PBREnivBasicApp::InitHdrRenderObjects()
 
     VkExtent3D extent{};
     {
-        extent.width = hdrLdRes.width / 6;
-        extent.height = hdrLdRes.height;
+        extent.width = m_hdrLoaderResult.width / 6;
+        extent.height = m_hdrLoaderResult.height;
         extent.depth = 1;
     }
 
