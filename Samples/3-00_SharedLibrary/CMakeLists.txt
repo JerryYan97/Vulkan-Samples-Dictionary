@@ -11,4 +11,7 @@ target_sources(
     ${CMAKE_CURRENT_SOURCE_DIR}/Event.h
     ${CMAKE_CURRENT_SOURCE_DIR}/MathUtils.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/MathUtils.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Application.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Application.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/VulkanDbgUtils.h
 )
