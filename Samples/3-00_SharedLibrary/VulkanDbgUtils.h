@@ -6,7 +6,7 @@
 	case r:       \
 		return #r \
 
-const std::string to_string(VkResult result)
+static const std::string to_string(VkResult result)
 {
     switch (result) {
         STR(VK_NOT_READY);
@@ -51,7 +51,7 @@ const std::string to_string(VkResult result)
     }
 }
 
-VKAPI_ATTR VkBool32 VKAPI_CALL debug_utils_messenger_callback(
+static VKAPI_ATTR VkBool32 VKAPI_CALL debug_utils_messenger_callback(
     VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
     VkDebugUtilsMessageTypeFlagsEXT message_type,
     const VkDebugUtilsMessengerCallbackDataEXT* callback_data,

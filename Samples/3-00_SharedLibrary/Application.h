@@ -72,10 +72,7 @@ namespace SharedLib
         void InitPhysicalDevice();
 
         void InitGfxQueueFamilyIdx();
-
-        void InitQueueCreateInfos(const std::set<uint32_t>&             uniqueQueueFamilies,
-                                  std::vector<VkDeviceQueueCreateInfo>& queueCreateInfos);
-
+        
         void InitDevice(const std::vector<const char*>&             deviceExts,
                         const uint32_t                              deviceExtsCnt,
                         const std::vector<VkDeviceQueueCreateInfo>& queueCreateInfos,
@@ -140,6 +137,7 @@ namespace SharedLib
         void InitPresentQueueFamilyIdx();
         void InitPresentQueue();
         void InitSwapchainSyncObjects();
+        void InitGlfwWindowAndCallbacks();
 
         HEvent CreateMiddleMouseEvent(bool isDown);
 

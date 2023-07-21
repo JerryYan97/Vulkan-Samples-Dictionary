@@ -3,19 +3,10 @@
 #include "../../3-00_SharedLibrary/VulkanDbgUtils.h"
 #include "../../3-00_SharedLibrary/Camera.h"
 
-#define VMA_IMPLEMENTATION
+// #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
 
-static bool g_framebufferResized = false;
 static bool g_isDown = false;
-
-static void FramebufferResizeCallback(
-    GLFWwindow* window, 
-    int         width, 
-    int         height)
-{
-    g_framebufferResized = true;
-}
 
 static void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
 {
@@ -370,11 +361,7 @@ void PBREnivBasicApp::AppInit()
     InitInstance(instExtensions, glfwExtensionCount);
 
     // Init glfw window.
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    const uint32_t WIDTH = 1280;
-    const uint32_t HEIGHT = 640;
-    m_pWindow = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
-    glfwSetFramebufferSizeCallback(m_pWindow, FramebufferResizeCallback);
+    InitGlfwWindowAndCallbacks();
     glfwSetMouseButtonCallback(m_pWindow, MouseButtonCallback);
 
     // Create vulkan surface from the glfw window.

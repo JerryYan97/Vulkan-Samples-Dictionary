@@ -8,6 +8,16 @@
 #include <cassert>
 #include <glfw3.h>
 
+static bool g_framebufferResized = false;
+
+static void FramebufferResizeCallback(
+    GLFWwindow* window, 
+    int         width, 
+    int         height)
+{
+    g_framebufferResized = true;
+}
+
 namespace SharedLib
 {
     // ================================================================================================================
@@ -180,28 +190,6 @@ namespace SharedLib
             }
         }
         assert(foundGraphics);
-    }
-
-    // ================================================================================================================
-    void Application::InitQueueCreateInfos(
-        const std::set<uint32_t>&             uniqueQueueFamilies,
-        std::vector<VkDeviceQueueCreateInfo>& queueCreateInfos)
-    {
-        // Use the queue family index to initialize the queue create info.
-        float queue_priorities[1] = { 0.0 };
-
-        // Queue family index should be unique in vk1.2:
-        // https://vulkan.lunarg.com/doc/view/1.2.198.0/windows/1.2-extensions/vkspec.html#VUID-VkDeviceCreateInfo-queueFamilyIndex-02802
-        std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-        float queuePriority = 1.0f;
-        for (uint32_t queueFamily : uniqueQueueFamilies) {
-            VkDeviceQueueCreateInfo queueCreateInfo{};
-            queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-            queueCreateInfo.queueFamilyIndex = queueFamily;
-            queueCreateInfo.queueCount = 1;
-            queueCreateInfo.pQueuePriorities = &queuePriority;
-            queueCreateInfos.push_back(queueCreateInfo);
-        }
     }
 
     // ================================================================================================================
@@ -618,6 +606,7 @@ namespace SharedLib
         }
 
         SharedLib::HEvent mEvent(args, "MOUSE_MIDDLE_BUTTON");
+        return mEvent;
     }
 
     // ================================================================================================================
@@ -687,9 +676,9 @@ namespace SharedLib
         }
         VkResult result = vkQueuePresentKHR(m_presentQueue, &presentInfo);
 
-        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized)
+        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || g_framebufferResized)
         {
-            framebufferResized = false;
+            g_framebufferResized = false;
             RecreateSwapchain();
         }
         else if (result != VK_SUCCESS)
@@ -701,6 +690,15 @@ namespace SharedLib
     void GlfwApplication::FrameEnd()
     {
         m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+    }
+
+    void GlfwApplication::InitGlfwWindowAndCallbacks()
+    {
+        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+        const uint32_t WIDTH = 1280;
+        const uint32_t HEIGHT = 640;
+        m_pWindow = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
+        glfwSetFramebufferSizeCallback(m_pWindow, FramebufferResizeCallback);
     }
 
     // ================================================================================================================
