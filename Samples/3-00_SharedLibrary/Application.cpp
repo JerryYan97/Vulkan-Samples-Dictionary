@@ -588,6 +588,7 @@ namespace SharedLib
     }
 
     // ================================================================================================================
+    // TODO: It should be a more general event creation function.
     HEvent GlfwApplication::CreateMiddleMouseEvent(
         bool isDown)
     {

@@ -32,7 +32,7 @@ int main()
         VmaAllocation stagingBufAlloc;
         VmaAllocator* pAllocator = app.GetVmaAllocator();
         VkCommandBuffer stagingCmdBuffer = app.GetGfxCmdBuffer(0);
-        HDRLoaderResult hdrLdRes = app.GetHdrLoadResult();
+        VkExtent2D hdrImgExtent = app.GetHdrImgExtent();
         VkImage cubeMapImage = app.GetCubeMapImage();
         VkFence stagingFence = app.GetFence(0);
 
@@ -98,13 +98,13 @@ int main()
         {
             VkExtent3D extent{};
             {
-                extent.width = hdrLdRes.width / 6;
-                extent.height = hdrLdRes.height;
+                extent.width = hdrImgExtent.width / 6;
+                extent.height = hdrImgExtent.height;
                 extent.depth = 1;
             }
 
-            hdrBufToImgCopies[i].bufferRowLength = hdrLdRes.width;
-            hdrBufToImgCopies[i].bufferImageHeight = hdrLdRes.height;
+            hdrBufToImgCopies[i].bufferRowLength = hdrImgExtent.width;
+            hdrBufToImgCopies[i].bufferImageHeight = hdrImgExtent.height;
             hdrBufToImgCopies[i].imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             hdrBufToImgCopies[i].imageSubresource.mipLevel = 0;
             hdrBufToImgCopies[i].imageSubresource.baseArrayLayer = i;
@@ -112,7 +112,7 @@ int main()
 
             hdrBufToImgCopies[i].imageExtent = extent;
             // In the unit of bytes:
-            hdrBufToImgCopies[i].bufferOffset = i * (hdrLdRes.width / 6) * sizeof(float) * 3;
+            hdrBufToImgCopies[i].bufferOffset = i * (hdrImgExtent.width / 6) * sizeof(float) * 3;
         }
 
         vkCmdCopyBufferToImage(
@@ -193,7 +193,7 @@ int main()
         VK_CHECK(vkBeginCommandBuffer(currentCmdBuffer, &beginInfo));
 
         // Update the camera according to mouse input and sent camera data to the UBO
-        app.SendCameraDataToBuffer(app.GetCurrentFrame());
+        app.UpdateCameraAndGpuBuffer();
 
         // Transform the layout of the swapchain from undefined to render target.
         VkImageMemoryBarrier swapchainRenderTargetTransBarrier{};

@@ -2,8 +2,8 @@
 #include <glfw3.h>
 #include "../../3-00_SharedLibrary/VulkanDbgUtils.h"
 #include "../../3-00_SharedLibrary/Camera.h"
+#include "../../3-00_SharedLibrary/Event.h"
 
-// #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
 
 static bool g_isDown = false;
@@ -101,6 +101,14 @@ void PBREnivBasicApp::SendCameraDataToBuffer(
     m_pCamera->GetNearPlane(cameraData[12], cameraData[13], cameraData[14]);
 
     CopyRamDataToGpuBuffer(cameraData, m_cameraParaBuffers[i], m_cameraParaBufferAllocs[i], sizeof(cameraData));
+}
+
+// ================================================================================================================
+void PBREnivBasicApp::UpdateCameraAndGpuBuffer()
+{
+    SharedLib::HEvent midMouseDownEvent = CreateMiddleMouseEvent(g_isDown);
+    m_pCamera->OnEvent(midMouseDownEvent);
+    SendCameraDataToBuffer(m_currentFrame);
 }
 
 // ================================================================================================================
@@ -343,10 +351,10 @@ void PBREnivBasicApp::InitSkyboxPipeline()
         pipelineRenderCreateInfo.pColorAttachmentFormats = &m_choisenSurfaceFormat.format;
     }
 
-    CreateGfxPipeline(m_vsSkyboxShaderModule,
-                      m_psSkyboxShaderModule,
-                      pipelineRenderCreateInfo,
-                      m_skyboxPipelineLayout);
+    m_skyboxPipeline = CreateGfxPipeline(m_vsSkyboxShaderModule,
+                                         m_psSkyboxShaderModule,
+                                         pipelineRenderCreateInfo,
+                                         m_skyboxPipelineLayout);
 }
 
 // ================================================================================================================

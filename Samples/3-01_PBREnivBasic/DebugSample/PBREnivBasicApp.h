@@ -17,10 +17,13 @@ public:
 
     virtual void AppInit() override;
 
+    void UpdateCameraAndGpuBuffer();
+
     VkDeviceSize GetHdrByteNum();
     void* GetHdrDataPointer() { return m_hdrLoaderResult.cols; }
     VkImage GetCubeMapImage() { return m_hdrCubeMapImage; }
-    HDRLoaderResult GetHdrLoadResult() { return m_hdrLoaderResult; }
+    VkExtent2D GetHdrImgExtent() 
+        { return VkExtent2D{ (uint32_t)m_hdrLoaderResult.width, (uint32_t)m_hdrLoaderResult.height}; }
 
     VkFence GetFence(uint32_t i) { return m_inFlightFences[i]; }
 
