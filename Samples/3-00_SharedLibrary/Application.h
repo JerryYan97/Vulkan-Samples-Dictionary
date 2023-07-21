@@ -19,8 +19,9 @@ typedef VkFlags VmaAllocationCreateFlags;
 // - All CmdBuffer operations need to stay in the main.cpp.
 // - In principle, all member variables should be init in InitXXX(...) and destroied in the destructor. Or, the variable
 //   shouldn't be in the class, but can be created by the public interface.
-// 
-// TODO: I may need a standalone pipeline class.
+// - Sync, CmdBuffer operations should be explicit in the main.cpp.
+// TODO1: I may need a standalone pipeline class.
+// TODO2: Dictionary Vma/VkBuffer/VkImage Management -- Need explicit create/destroy; return internal ids; element: id - {alloc, vkBuffer}.
 namespace SharedLib
 {
     class HEvent;
@@ -110,7 +111,8 @@ namespace SharedLib
     };
 
     // Vulkan application with a swapchain and glfwWindow.
-    // Hide swapchain operations.
+    // - Hide swapchain operations.
+    // - Hide GLFW.
     class GlfwApplication : public Application
     {
     public:
@@ -121,7 +123,13 @@ namespace SharedLib
 
         bool WindowShouldClose();
         bool NextImgIdxOrNewSwapchain(uint32_t& idx); // True: Get the idx; False: Recreate Swapchain.
-        // virtual void FrameStart();
+        virtual void FrameStart();
+
+        VkFence GetCurrentFrameFence() { return m_inFlightFences[m_currentFrame]; }
+        VkCommandBuffer GetCurrentFrameGfxCmdBuffer() { return m_gfxCmdBufs[m_currentFrame]; }
+        uint32_t GetCurrentFrame() { return m_currentFrame; }
+        VkImage GetSwapchainImage(uint32_t i) { return m_swapchainImages[i]; }
+        VkImageView GetSwapchainImageView(uint32_t i) { return m_swapchainImageViews[i]; }
 
     protected:
         void InitSwapchain();
@@ -129,7 +137,7 @@ namespace SharedLib
         void InitPresentQueue();
         void InitSwapchainSyncObjects();
 
-        HEvent CreateMiddleMouseEvent();
+        HEvent CreateMiddleMouseEvent(bool isDown);
 
         // The class manages both of the creation and destruction of the objects below.
         uint32_t                 m_currentFrame;

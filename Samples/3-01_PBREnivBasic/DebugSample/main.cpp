@@ -5,7 +5,6 @@
 #include "../../3-00_SharedLibrary/VulkanDbgUtils.h"
 
 #include <vulkan/vulkan.h>
-#include <glfw3.h>
 
 // TODO1: Make the application, realtime swapchain application class for the Level 3 examples.
 
@@ -164,30 +163,14 @@ int main()
     // Second draw draws GUI. GUI would use the image drawn from the first draw.
     while (!app.WindowShouldClose())
     {
+        VkDevice device = app.GetVkDevice();
+        VkFence inFlightFence = app.GetCurrentFrameFence();
+        VkCommandBuffer currentCmdBuffer = app.GetCurrentFrameGfxCmdBuffer();
+
         app.FrameStart();
 
-        glfwPollEvents();
-
-        // Get IO information and create events
-        SharedLib::HEventArguments args;
-        args[crc32("IS_DOWN")] = isDown;
-
-        if (isDown)
-        {
-            SharedLib::HFVec2 pos;
-            double xpos, ypos;
-            glfwGetCursorPos(window, &xpos, &ypos);
-            pos.ele[0] = xpos;
-            pos.ele[1] = ypos;
-            args[crc32("POS")] = pos;
-        }
-
-        SharedLib::HEvent mEvent(args, "MOUSE_MIDDLE_BUTTON");
-        camera.OnEvent(mEvent);
-
-        // Draw Frame
         // Wait for the resources from the possible on flight frame
-        vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
+        vkWaitForFences(device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
 
         // Get next available image from the swapchain
         uint32_t imageIndex;
@@ -197,28 +180,18 @@ int main()
         }
 
         // Reset unused previous frame's resource
-        vkResetFences(device, 1, &inFlightFences[currentFrame]);
-        vkResetCommandBuffer(commandBuffers[currentFrame], 0);
+        vkResetFences(device, 1, &inFlightFence);
+        vkResetCommandBuffer(currentCmdBuffer, 0);
 
         // Fill the command buffer
         VkCommandBufferBeginInfo beginInfo{};
         {
             beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         }
-        VK_CHECK(vkBeginCommandBuffer(commandBuffers[currentFrame], &beginInfo));
+        VK_CHECK(vkBeginCommandBuffer(currentCmdBuffer, &beginInfo));
 
         // Update the camera according to mouse input and sent camera data to the UBO
-        void* pUboData;
-        vmaMapMemory(allocator, cameraParaBufferAllocs[currentFrame], &pUboData);
-
-        float cameraData[16] = {};
-        camera.GetView(cameraData);
-        camera.GetRight(&cameraData[4]);
-        camera.GetUp(&cameraData[8]);
-        camera.GetNearPlane(cameraData[12], cameraData[13], cameraData[14]);
-
-        memcpy(pUboData, cameraData, sizeof(cameraData));
-        vmaUnmapMemory(allocator, cameraParaBufferAllocs[currentFrame]);
+        app.SendCameraDataToBuffer(app.GetCurrentFrame());
 
         // Transform the layout of the swapchain from undefined to render target.
         VkImageMemoryBarrier swapchainRenderTargetTransBarrier{};
@@ -227,11 +200,12 @@ int main()
             swapchainRenderTargetTransBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
             swapchainRenderTargetTransBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
             swapchainRenderTargetTransBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            swapchainRenderTargetTransBarrier.image = swapchainImages[imageIndex];
+            swapchainRenderTargetTransBarrier.image = app.GetSwapchainImage(imageIndex);
             swapchainRenderTargetTransBarrier.subresourceRange = swapchainPresentSubResRange;
         }
 
-        vkCmdPipelineBarrier(commandBuffers[currentFrame],
+        vkCmdPipelineBarrier(
+            app.GetCurrentFrameGfxCmdBuffer(),
             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             0,
@@ -245,7 +219,7 @@ int main()
         VkRenderingAttachmentInfoKHR renderAttachmentInfo{};
         {
             renderAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-            renderAttachmentInfo.imageView = swapchainImageViews[imageIndex];
+            renderAttachmentInfo.imageView = app.GetSwapchainImageView(imageIndex);
             renderAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
             renderAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             renderAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;

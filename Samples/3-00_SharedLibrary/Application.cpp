@@ -600,7 +600,8 @@ namespace SharedLib
     }
 
     // ================================================================================================================
-    HEvent GlfwApplication::CreateMiddleMouseEvent()
+    HEvent GlfwApplication::CreateMiddleMouseEvent(
+        bool isDown)
     {
         // Get IO information and create events
         SharedLib::HEventArguments args;
@@ -610,13 +611,19 @@ namespace SharedLib
         {
             SharedLib::HFVec2 pos;
             double xpos, ypos;
-            glfwGetCursorPos(window, &xpos, &ypos);
+            glfwGetCursorPos(m_pWindow, &xpos, &ypos);
             pos.ele[0] = xpos;
             pos.ele[1] = ypos;
             args[crc32("POS")] = pos;
         }
 
         SharedLib::HEvent mEvent(args, "MOUSE_MIDDLE_BUTTON");
+    }
+
+    // ================================================================================================================
+    void GlfwApplication::FrameStart()
+    {
+        glfwPollEvents();
     }
 
     // ================================================================================================================
