@@ -21,7 +21,15 @@ public:
     void* GetHdrDataPointer() { return m_hdrLoaderResult.cols; }
     VkImage GetCubeMapImage() { return m_hdrCubeMapImage; }
     HDRLoaderResult GetHdrLoadResult() { return m_hdrLoaderResult; }
+
     VkFence GetFence(uint32_t i) { return m_inFlightFences[i]; }
+
+    VkPipelineLayout GetSkyboxPipelineLayout() { return m_skyboxPipelineLayout; }
+
+    VkDescriptorSet GetSkyboxCurrentFrameDescriptorSet0() 
+        { return m_skyboxPipelineDescriptorSet0s[m_currentFrame]; }
+
+    VkPipeline GetSkyboxPipeline() { return m_skyboxPipeline; }
 
     void GetCameraData(float* pBuffer);
 

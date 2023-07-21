@@ -124,12 +124,16 @@ namespace SharedLib
         bool WindowShouldClose();
         bool NextImgIdxOrNewSwapchain(uint32_t& idx); // True: Get the idx; False: Recreate Swapchain.
         virtual void FrameStart();
+        virtual void FrameEnd();
 
+        void GfxCmdBufferFrameSubmitAndPresent();
+        
         VkFence GetCurrentFrameFence() { return m_inFlightFences[m_currentFrame]; }
         VkCommandBuffer GetCurrentFrameGfxCmdBuffer() { return m_gfxCmdBufs[m_currentFrame]; }
         uint32_t GetCurrentFrame() { return m_currentFrame; }
         VkImage GetSwapchainImage(uint32_t i) { return m_swapchainImages[i]; }
         VkImageView GetSwapchainImageView(uint32_t i) { return m_swapchainImageViews[i]; }
+        VkExtent2D GetSwapchainImageExtent() { return m_swapchainImageExtent; }
 
     protected:
         void InitSwapchain();
@@ -141,6 +145,7 @@ namespace SharedLib
 
         // The class manages both of the creation and destruction of the objects below.
         uint32_t                 m_currentFrame;
+        uint32_t                 m_swapchainNextImgId;
         VkSurfaceKHR             m_surface;
         VkSwapchainKHR           m_swapchain;
         GLFWwindow*              m_pWindow;

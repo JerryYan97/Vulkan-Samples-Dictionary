@@ -638,6 +638,8 @@ namespace SharedLib
                                                 VK_NULL_HANDLE,
                                                 &idx);
 
+        m_swapchainNextImgId = idx;
+
         if (result == VK_ERROR_OUT_OF_DATE_KHR)
         {
             // The surface is imcompatiable with the swapchain (resize window).
@@ -651,6 +653,54 @@ namespace SharedLib
         }
 
         return true;
+    }
+
+    // ================================================================================================================
+    void GlfwApplication::GfxCmdBufferFrameSubmitAndPresent()
+    {
+        // Submit the filled command buffer to the graphics queue to draw the image
+        VkSubmitInfo submitInfo{};
+        VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+        {
+            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            // This draw would wait at dstStage and wait for the waitSemaphores
+            submitInfo.waitSemaphoreCount = 1;
+            submitInfo.pWaitSemaphores = &m_imageAvailableSemaphores[m_currentFrame];
+            submitInfo.pWaitDstStageMask = waitStages;
+            submitInfo.commandBufferCount = 1;
+            submitInfo.pCommandBuffers = &m_gfxCmdBufs[m_currentFrame];
+            // This draw would let the signalSemaphore sign when it finishes
+            submitInfo.signalSemaphoreCount = 1;
+            submitInfo.pSignalSemaphores = &m_renderFinishedSemaphores[m_currentFrame];
+        }
+        VK_CHECK(vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_inFlightFences[m_currentFrame]));
+
+        // Put the swapchain into the present info and wait for the graphics queue previously before presenting.
+        VkPresentInfoKHR presentInfo{};
+        {
+            presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+            presentInfo.waitSemaphoreCount = 1;
+            presentInfo.pWaitSemaphores = &m_renderFinishedSemaphores[m_currentFrame];
+            presentInfo.swapchainCount = 1;
+            presentInfo.pSwapchains = &m_swapchain;
+            presentInfo.pImageIndices = &m_swapchainNextImgId;
+        }
+        VkResult result = vkQueuePresentKHR(m_presentQueue, &presentInfo);
+
+        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized)
+        {
+            framebufferResized = false;
+            RecreateSwapchain();
+        }
+        else if (result != VK_SUCCESS)
+        {
+            throw std::runtime_error("failed to present swap chain image!");
+        }
+    }
+
+    void GlfwApplication::FrameEnd()
+    {
+        m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
 
     // ================================================================================================================

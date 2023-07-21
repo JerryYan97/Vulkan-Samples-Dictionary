@@ -166,6 +166,8 @@ int main()
         VkDevice device = app.GetVkDevice();
         VkFence inFlightFence = app.GetCurrentFrameFence();
         VkCommandBuffer currentCmdBuffer = app.GetCurrentFrameGfxCmdBuffer();
+        VkDescriptorSet currentSkyboxPipelineDesSet0 = app.GetSkyboxCurrentFrameDescriptorSet0();
+        VkExtent2D swapchainImageExtent = app.GetSwapchainImageExtent();
 
         app.FrameStart();
 
@@ -205,7 +207,7 @@ int main()
         }
 
         vkCmdPipelineBarrier(
-            app.GetCurrentFrameGfxCmdBuffer(),
+            currentCmdBuffer,
             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             0,
@@ -236,13 +238,16 @@ int main()
             renderInfo.pColorAttachments = &renderAttachmentInfo;
         }
 
-        vkCmdBeginRendering(commandBuffers[currentFrame], &renderInfo);
+        vkCmdBeginRendering(currentCmdBuffer, &renderInfo);
 
         // Bind the skybox pipeline descriptor sets
-        vkCmdBindDescriptorSets(commandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &skyboxPipelineDescriptorSet0s[currentFrame], 0, NULL);
+        vkCmdBindDescriptorSets(currentCmdBuffer,
+                                VK_PIPELINE_BIND_POINT_GRAPHICS, 
+                                app.GetSkyboxPipelineLayout(), 
+                                0, 1, &currentSkyboxPipelineDesSet0, 0, NULL);
 
         // Bind the graphics pipeline
-        vkCmdBindPipeline(commandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+        vkCmdBindPipeline(currentCmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, app.GetSkyboxPipeline());
 
         // Set the viewport
         VkViewport viewport{};
@@ -254,19 +259,19 @@ int main()
             viewport.minDepth = 0.f;
             viewport.maxDepth = 1.f;
         }
-        vkCmdSetViewport(commandBuffers[currentFrame], 0, 1, &viewport);
+        vkCmdSetViewport(currentCmdBuffer, 0, 1, &viewport);
 
         // Set the scissor
         VkRect2D scissor{};
         {
             scissor.offset = { 0, 0 };
             scissor.extent = swapchainImageExtent;
-            vkCmdSetScissor(commandBuffers[currentFrame], 0, 1, &scissor);
+            vkCmdSetScissor(currentCmdBuffer, 0, 1, &scissor);
         }
 
-        vkCmdDraw(commandBuffers[currentFrame], 6, 1, 0, 0);
+        vkCmdDraw(currentCmdBuffer, 6, 1, 0, 0);
 
-        vkCmdEndRendering(commandBuffers[currentFrame]);
+        vkCmdEndRendering(currentCmdBuffer);
 
         // Transform the swapchain image layout from render target to present.
         // Transform the layout of the swapchain from undefined to render target.
@@ -277,11 +282,11 @@ int main()
             swapchainPresentTransBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
             swapchainPresentTransBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
             swapchainPresentTransBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-            swapchainPresentTransBarrier.image = swapchainImages[imageIndex];
+            swapchainPresentTransBarrier.image = app.GetSwapchainImage(imageIndex);
             swapchainPresentTransBarrier.subresourceRange = swapchainPresentSubResRange;
         }
 
-        vkCmdPipelineBarrier(commandBuffers[currentFrame],
+        vkCmdPipelineBarrier(currentCmdBuffer,
             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
             0,
@@ -289,48 +294,11 @@ int main()
             0, nullptr,
             1, &swapchainPresentTransBarrier);
 
-        VK_CHECK(vkEndCommandBuffer(commandBuffers[currentFrame]));
+        VK_CHECK(vkEndCommandBuffer(currentCmdBuffer));
 
-        // Submit the filled command buffer to the graphics queue to draw the image
-        VkSubmitInfo submitInfo{};
-        VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-        {
-            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-            // This draw would wait at dstStage and wait for the waitSemaphores
-            submitInfo.waitSemaphoreCount = 1;
-            submitInfo.pWaitSemaphores = &imageAvailableSemaphores[currentFrame];
-            submitInfo.pWaitDstStageMask = waitStages;
-            submitInfo.commandBufferCount = 1;
-            submitInfo.pCommandBuffers = &commandBuffers[currentFrame];
-            // This draw would let the signalSemaphore sign when it finishes
-            submitInfo.signalSemaphoreCount = 1;
-            submitInfo.pSignalSemaphores = &renderFinishedSemaphores[currentFrame];
-        }
-        VK_CHECK(vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]));
+        app.GfxCmdBufferFrameSubmitAndPresent();
 
-        // Put the swapchain into the present info and wait for the graphics queue previously before presenting.
-        VkPresentInfoKHR presentInfo{};
-        {
-            presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-            presentInfo.waitSemaphoreCount = 1;
-            presentInfo.pWaitSemaphores = &renderFinishedSemaphores[currentFrame];
-            presentInfo.swapchainCount = 1;
-            presentInfo.pSwapchains = &swapchain;
-            presentInfo.pImageIndices = &imageIndex;
-        }
-        result = vkQueuePresentKHR(presentQueue, &presentInfo);
-
-        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized)
-        {
-            framebufferResized = false;
-            RecreateSwapchain();
-        }
-        else if (result != VK_SUCCESS)
-        {
-            throw std::runtime_error("failed to present swap chain image!");
-        }
-
-        currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+        app.FrameEnd();
     }
 
     vkDeviceWaitIdle(device);
