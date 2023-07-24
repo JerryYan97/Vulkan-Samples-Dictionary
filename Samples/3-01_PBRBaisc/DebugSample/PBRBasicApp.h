@@ -1,6 +1,5 @@
 #pragma once
 #include "../../3-00_SharedLibrary/Application.h"
-#include "hdrloader.h"
 
 VK_DEFINE_HANDLE(VmaAllocation);
 
@@ -9,62 +8,59 @@ namespace SharedLib
     class Camera;
 }
 
-class PBREnivBasicApp : public SharedLib::GlfwApplication
+namespace tinyobj
+{
+    class ObjReader;
+}
+
+class PBRBasicApp : public SharedLib::GlfwApplication
 {
 public:
-    PBREnivBasicApp();
-    ~PBREnivBasicApp();
+    PBRBasicApp();
+    ~PBRBasicApp();
 
     virtual void AppInit() override;
 
     void UpdateCameraAndGpuBuffer();
 
-    VkDeviceSize GetHdrByteNum();
-    void* GetHdrDataPointer() { return m_hdrLoaderResult.cols; }
-    VkImage GetCubeMapImage() { return m_hdrCubeMapImage; }
-    VkExtent2D GetHdrImgExtent() 
-        { return VkExtent2D{ (uint32_t)m_hdrLoaderResult.width, (uint32_t)m_hdrLoaderResult.height}; }
-
     VkFence GetFence(uint32_t i) { return m_inFlightFences[i]; }
 
-    VkPipelineLayout GetSkyboxPipelineLayout() { return m_skyboxPipelineLayout; }
+    VkPipelineLayout GetPipelineLayout() { return m_pipelineLayout; }
 
-    VkDescriptorSet GetSkyboxCurrentFrameDescriptorSet0() 
-        { return m_skyboxPipelineDescriptorSet0s[m_currentFrame]; }
+    VkDescriptorSet GetCurrentFrameDescriptorSet0() 
+        { return m_pipelineDescriptorSet0s[m_currentFrame]; }
 
-    VkPipeline GetSkyboxPipeline() { return m_skyboxPipeline; }
+    VkPipeline GetPipeline() { return m_pipeline; }
 
     void GetCameraData(float* pBuffer);
 
     void SendCameraDataToBuffer(uint32_t i);
 
 private:
-    void InitSkyboxPipeline();
-    void InitSkyboxPipelineDescriptorSetLayout();
-    void InitSkyboxPipelineLayout();
-    void InitSkyboxShaderModules();
-    void InitSkyboxPipelineDescriptorSets();
+    void InitPipeline();
+    void InitPipelineDescriptorSetLayout();
+    void InitPipelineLayout();
+    void InitShaderModules();
+    void InitPipelineDescriptorSets();
 
-    void InitHdrRenderObjects();
+    void InitSphereUboObjects(); // Create buffers and put data into the buffer.
+    void ReadInSphereData();
+    void DestroySphereUboObjects();
+
     void InitCameraUboObjects();
-
-    void DestroyHdrRenderObjs();
     void DestroyCameraUboObjects();
-
-    VkImage         m_hdrCubeMapImage;
-    VkImageView     m_hdrCubeMapView;
-    VkSampler       m_hdrSampler;
-    VmaAllocation   m_hdrCubeMapAlloc;
-    HDRLoaderResult m_hdrLoaderResult;
 
     SharedLib::Camera*           m_pCamera;
     std::vector<VkBuffer>        m_cameraParaBuffers;
     std::vector<VmaAllocation>   m_cameraParaBufferAllocs;
-    std::vector<VkDescriptorSet> m_skyboxPipelineDescriptorSet0s;
 
-    VkShaderModule        m_vsSkyboxShaderModule;
-    VkShaderModule        m_psSkyboxShaderModule;
-    VkDescriptorSetLayout m_skyboxPipelineDesSet0Layout;
-    VkPipelineLayout      m_skyboxPipelineLayout;
-    VkPipeline            m_skyboxPipeline;
+    tinyobj::ObjReader m_sphereObj;
+
+    std::vector<VkDescriptorSet> m_pipelineDescriptorSet0s;
+
+    VkShaderModule        m_vsShaderModule;
+    VkShaderModule        m_psShaderModule;
+    VkDescriptorSetLayout m_pipelineDesSet0Layout;
+    VkPipelineLayout      m_pipelineLayout;
+    VkPipeline            m_pipeline;
 };

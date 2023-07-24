@@ -1,7 +1,7 @@
 // #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
 
-#include "PBREnivBasicApp.h"
+#include "PBRBasicApp.h"
 #include "../../3-00_SharedLibrary/VulkanDbgUtils.h"
 
 #include <vulkan/vulkan.h>
@@ -10,7 +10,7 @@
 
 int main()
 {
-    PBREnivBasicApp app;
+    PBRBasicApp app;
     app.AppInit();
 
     VkImageSubresourceRange swapchainPresentSubResRange{};

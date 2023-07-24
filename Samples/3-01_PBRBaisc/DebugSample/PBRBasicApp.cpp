@@ -1,8 +1,9 @@
-#include "PBREnivBasicApp.h"
+#include "PBRBasicApp.h"
 #include <glfw3.h>
 #include "../../3-00_SharedLibrary/VulkanDbgUtils.h"
 #include "../../3-00_SharedLibrary/Camera.h"
 #include "../../3-00_SharedLibrary/Event.h"
+#include "tiny_obj_loader.h"
 
 #include "vk_mem_alloc.h"
 
@@ -22,54 +23,41 @@ static void MouseButtonCallback(GLFWwindow* window, int button, int action, int 
 }
 
 // ================================================================================================================
-PBREnivBasicApp::PBREnivBasicApp() : 
+PBRBasicApp::PBRBasicApp() : 
     GlfwApplication(),
-    m_hdrCubeMapImage(VK_NULL_HANDLE),
-    m_hdrCubeMapView(VK_NULL_HANDLE),
-    m_hdrSampler(VK_NULL_HANDLE),
-    m_hdrCubeMapAlloc(VK_NULL_HANDLE),
-    m_vsSkyboxShaderModule(VK_NULL_HANDLE),
-    m_psSkyboxShaderModule(VK_NULL_HANDLE),
-    m_skyboxPipelineDesSet0Layout(VK_NULL_HANDLE),
-    m_skyboxPipelineLayout(VK_NULL_HANDLE),
-    m_skyboxPipeline(VK_NULL_HANDLE)
+    m_vsShaderModule(VK_NULL_HANDLE),
+    m_psShaderModule(VK_NULL_HANDLE),
+    m_pipelineDesSet0Layout(VK_NULL_HANDLE),
+    m_pipelineLayout(VK_NULL_HANDLE),
+    m_pipeline(VK_NULL_HANDLE)
 {
     m_pCamera = new SharedLib::Camera();
 }
 
 // ================================================================================================================
-PBREnivBasicApp::~PBREnivBasicApp()
+PBRBasicApp::~PBRBasicApp()
 {
     vkDeviceWaitIdle(m_device);
     delete m_pCamera;
 
-    DestroyHdrRenderObjs();
     DestroyCameraUboObjects();
 
     // Destroy shader modules
-    vkDestroyShaderModule(m_device, m_vsSkyboxShaderModule, nullptr);
-    vkDestroyShaderModule(m_device, m_psSkyboxShaderModule, nullptr);
+    vkDestroyShaderModule(m_device, m_vsShaderModule, nullptr);
+    vkDestroyShaderModule(m_device, m_psShaderModule, nullptr);
 
     // Destroy the pipeline
-    vkDestroyPipeline(m_device, m_skyboxPipeline, nullptr);
+    vkDestroyPipeline(m_device, m_pipeline, nullptr);
 
     // Destroy the pipeline layout
-    vkDestroyPipelineLayout(m_device, m_skyboxPipelineLayout, nullptr);
+    vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
 
     // Destroy the descriptor set layout
-    vkDestroyDescriptorSetLayout(m_device, m_skyboxPipelineDesSet0Layout, nullptr);
+    vkDestroyDescriptorSetLayout(m_device, m_pipelineDesSet0Layout, nullptr);
 }
 
 // ================================================================================================================
-void PBREnivBasicApp::DestroyHdrRenderObjs()
-{
-    vmaDestroyImage(*m_pAllocator, m_hdrCubeMapImage, m_hdrCubeMapAlloc);
-    vkDestroyImageView(m_device, m_hdrCubeMapView, nullptr);
-    vkDestroySampler(m_device, m_hdrSampler, nullptr);
-}
-
-// ================================================================================================================
-void PBREnivBasicApp::DestroyCameraUboObjects()
+void PBRBasicApp::DestroyCameraUboObjects()
 {
     for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
     {
@@ -78,20 +66,14 @@ void PBREnivBasicApp::DestroyCameraUboObjects()
 }
 
 // ================================================================================================================
-VkDeviceSize PBREnivBasicApp::GetHdrByteNum()
-{
-    return 3 * sizeof(float) * m_hdrLoaderResult.width * m_hdrLoaderResult.height;
-}
-
-// ================================================================================================================
-void PBREnivBasicApp::GetCameraData(
+void PBRBasicApp::GetCameraData(
     float* pBuffer)
 {
     
 }
 
 // ================================================================================================================
-void PBREnivBasicApp::SendCameraDataToBuffer(
+void PBRBasicApp::SendCameraDataToBuffer(
     uint32_t i)
 {
     float cameraData[16] = {};
@@ -104,7 +86,7 @@ void PBREnivBasicApp::SendCameraDataToBuffer(
 }
 
 // ================================================================================================================
-void PBREnivBasicApp::UpdateCameraAndGpuBuffer()
+void PBRBasicApp::UpdateCameraAndGpuBuffer()
 {
     SharedLib::HEvent midMouseDownEvent = CreateMiddleMouseEvent(g_isDown);
     m_pCamera->OnEvent(midMouseDownEvent);
@@ -112,78 +94,7 @@ void PBREnivBasicApp::UpdateCameraAndGpuBuffer()
 }
 
 // ================================================================================================================
-void PBREnivBasicApp::InitHdrRenderObjects()
-{
-    // Load the HDRI image into RAM
-    std::string hdriFilePath = SOURCE_PATH;
-    hdriFilePath += "/../data/output_skybox.hdr";
-    bool ret = HDRLoader::load(hdriFilePath.c_str(), m_hdrLoaderResult);
-
-    VmaAllocationCreateInfo hdrAllocInfo{};
-    {
-        hdrAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        hdrAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
-    }
-
-    VkExtent3D extent{};
-    {
-        extent.width = m_hdrLoaderResult.width / 6;
-        extent.height = m_hdrLoaderResult.height;
-        extent.depth = 1;
-    }
-
-    VkImageCreateInfo cubeMapImgInfo{};
-    {
-        cubeMapImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-        cubeMapImgInfo.imageType = VK_IMAGE_TYPE_2D;
-        cubeMapImgInfo.format = VK_FORMAT_R32G32B32_SFLOAT;
-        cubeMapImgInfo.extent = extent;
-        cubeMapImgInfo.mipLevels = 1;
-        cubeMapImgInfo.arrayLayers = 6;
-        cubeMapImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-        cubeMapImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
-        cubeMapImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-        cubeMapImgInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-        cubeMapImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    }
-
-    VK_CHECK(vmaCreateImage(*m_pAllocator,
-                            &cubeMapImgInfo,
-                            &hdrAllocInfo,
-                            &m_hdrCubeMapImage,
-                            &m_hdrCubeMapAlloc,
-                            nullptr));
-
-    VkImageViewCreateInfo info{};
-    {
-        info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        info.image = m_hdrCubeMapImage;
-        info.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
-        info.format = VK_FORMAT_R32G32B32_SFLOAT;
-        info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        info.subresourceRange.levelCount = 1;
-        info.subresourceRange.layerCount = 6;
-    }
-    VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_hdrCubeMapView));
-
-    VkSamplerCreateInfo sampler_info{};
-    {
-        sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-        sampler_info.magFilter = VK_FILTER_LINEAR;
-        sampler_info.minFilter = VK_FILTER_LINEAR;
-        sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-        sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT; // outside image bounds just use border color
-        sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        sampler_info.minLod = -1000;
-        sampler_info.maxLod = 1000;
-        sampler_info.maxAnisotropy = 1.0f;
-    }
-    VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_hdrSampler));
-}
-
-// ================================================================================================================
-void PBREnivBasicApp::InitCameraUboObjects()
+void PBRBasicApp::InitCameraUboObjects()
 {
     // The alignment of a vec3 is 4 floats and the element alignment of a struct is the largest element alignment,
     // which is also the 4 float. Therefore, we need 16 floats as the buffer to store the Camera's parameters.
@@ -217,19 +128,37 @@ void PBREnivBasicApp::InitCameraUboObjects()
 }
 
 // ================================================================================================================
+void PBRBasicApp::ReadInSphereData()
+{
+
+}
+
+// ================================================================================================================
+void PBRBasicApp::InitSphereUboObjects()
+{
+
+}
+
+// ================================================================================================================
+void PBRBasicApp::DestroySphereUboObjects()
+{
+
+}
+
+// ================================================================================================================
 // TODO: I may need to put most the content in this function to CreateXXXX(...) in the parent class.
-void PBREnivBasicApp::InitSkyboxPipelineDescriptorSets()
+void PBRBasicApp::InitPipelineDescriptorSets()
 {
     // Create pipeline descirptor
     VkDescriptorSetAllocateInfo skyboxPipelineDesSet0AllocInfo{};
     {
         skyboxPipelineDesSet0AllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
         skyboxPipelineDesSet0AllocInfo.descriptorPool = m_descriptorPool;
-        skyboxPipelineDesSet0AllocInfo.pSetLayouts = &m_skyboxPipelineDesSet0Layout;
+        skyboxPipelineDesSet0AllocInfo.pSetLayouts = &m_pipelineDesSet0Layout;
         skyboxPipelineDesSet0AllocInfo.descriptorSetCount = 1;
     }
     
-    m_skyboxPipelineDescriptorSet0s.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
+    m_pipelineDescriptorSet0s.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
     for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
     {
         VK_CHECK(vkAllocateDescriptorSets(m_device,
@@ -282,7 +211,7 @@ void PBREnivBasicApp::InitSkyboxPipelineDescriptorSets()
 }
 
 // ================================================================================================================
-void PBREnivBasicApp::InitSkyboxPipelineLayout()
+void PBRBasicApp::InitPipelineLayout()
 {
     // Create pipeline layout
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
@@ -297,16 +226,16 @@ void PBREnivBasicApp::InitSkyboxPipelineLayout()
 }
 
 // ================================================================================================================
-void PBREnivBasicApp::InitSkyboxShaderModules()
+void PBRBasicApp::InitShaderModules()
 {
     // Create Shader Modules.
-    m_vsSkyboxShaderModule = CreateShaderModule("./skybox_vert.spv");
-    m_psSkyboxShaderModule = CreateShaderModule("./skybox_frag.spv");
+    m_vsShaderModule = CreateShaderModule("./sphere_vert.spv");
+    m_psShaderModule = CreateShaderModule("./sphere_frag.spv");
 }
 
 
 // ================================================================================================================
-void PBREnivBasicApp::InitSkyboxPipelineDescriptorSetLayout()
+void PBRBasicApp::InitPipelineDescriptorSetLayout()
 {
     // Create pipeline binding and descriptor objects for the camera parameters
     VkDescriptorSetLayoutBinding cameraUboBinding{};
@@ -342,7 +271,7 @@ void PBREnivBasicApp::InitSkyboxPipelineDescriptorSetLayout()
 }
 
 // ================================================================================================================
-void PBREnivBasicApp::InitSkyboxPipeline()
+void PBRBasicApp::InitPipeline()
 {
     VkPipelineRenderingCreateInfoKHR pipelineRenderCreateInfo{};
     {
@@ -358,7 +287,7 @@ void PBREnivBasicApp::InitSkyboxPipeline()
 }
 
 // ================================================================================================================
-void PBREnivBasicApp::AppInit()
+void PBRBasicApp::AppInit()
 {
     glfwInit();
     uint32_t glfwExtensionCount = 0;
