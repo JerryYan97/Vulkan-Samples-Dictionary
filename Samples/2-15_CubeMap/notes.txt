@@ -14,4 +14,4 @@ https://github.com/dariomanesku/cmftStudio
 
 Other blogs:
 https://ourcodeworld.com/articles/read/1477/how-to-convert-a-panoramic-picture-to-cubemap-tiles-with-javascript
-
+https://learnopengl.com/Advanced-OpenGL/Cubemaps

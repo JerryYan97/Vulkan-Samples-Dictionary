@@ -1,0 +1,18 @@
+Plans:
+
+-- Camera + HDRI
+-- 
+
+
+Environment Map PBR:
+https://learnopengl.com/PBR/IBL/Specular-IBL
+https://learnopengl.com/PBR/Theory
+
+
+http://graphicrants.blogspot.com/2013/08/specular-brdf-reference.html
+
+Reading list:
+LearnOpenGL PBR x3
+Unreal4 note x1
+Disney BRDF x1
+PBS Physics math note x1

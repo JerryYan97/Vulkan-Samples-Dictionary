@@ -9,10 +9,6 @@ include_directories("$ENV{VULKAN_SDK}/Include" "../../../ThirdPartyLibs/VMA")
 include_directories(../../../ThirdPartyLibs/glfw/include/GLFW)
 include_directories(../../../ThirdPartyLibs/glfw/include)
 
-set(DearImGUIPath ../../../ThirdPartyLibs/ImGUIExplore/import/imgui)
-include_directories(${DearImGUIPath})
-include_directories(${DearImGUIPath}/backends)
-
 set(HDRILoaderPath ../../../ThirdPartyLibs/hdrloader)
 include_directories(${HDRILoaderPath})
 
@@ -26,13 +22,6 @@ add_definitions(-DSOURCE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}\")
 add_executable(${MY_APP_NAME} "main.cpp"
                               ${CMAKE_CURRENT_SOURCE_DIR}/PBREnivBasicApp.h
                               ${CMAKE_CURRENT_SOURCE_DIR}/PBREnivBasicApp.cpp
-                              ${DearImGUIPath}/imgui.cpp
-                              ${DearImGUIPath}/imgui_draw.cpp
-                              ${DearImGUIPath}/imgui_demo.cpp
-                              ${DearImGUIPath}/imgui_tables.cpp
-                              ${DearImGUIPath}/imgui_widgets.cpp
-                              ${DearImGUIPath}/backends/imgui_impl_vulkan.cpp
-                              ${DearImGUIPath}/backends/imgui_impl_glfw.cpp
                               ${HDRILoaderPath}/hdrloader.cpp)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../3-00_SharedLibrary
@@ -40,9 +29,6 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../3-00_SharedLibrary
 
 get_target_property(APP_SRC_LIST ${MY_APP_NAME} SOURCES)
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/../../../ FILES ${APP_SRC_LIST})
-
-# add_dependencies(${MY_APP_NAME} SharedLibrary)
-# set_target_properties(SharedLibrary FOLDER "SharedLibrary")
 
 target_compile_features(${MY_APP_NAME} PRIVATE cxx_std_17)
 

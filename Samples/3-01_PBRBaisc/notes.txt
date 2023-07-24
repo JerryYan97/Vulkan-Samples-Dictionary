@@ -1,0 +1,15 @@
+Plans:
+
+-- Camera + PBR 4 lights sphere.
+-- 
+
+
+PBR:
+https://learnopengl.com/PBR/IBL/Specular-IBL
+https://learnopengl.com/PBR/Theory
+
+Reading list:
+LearnOpenGL PBR x3
+Unreal4 note x1
+Disney BRDF x1
+PBS Physics math note x1
