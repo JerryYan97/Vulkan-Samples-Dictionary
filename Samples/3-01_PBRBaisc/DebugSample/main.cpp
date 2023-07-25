@@ -13,6 +13,8 @@ int main()
     PBRBasicApp app;
     app.AppInit();
 
+    /*
+    
     VkImageSubresourceRange swapchainPresentSubResRange{};
     {
         swapchainPresentSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -47,7 +49,7 @@ int main()
         // Copy the RAM data to the staging buffer
         app.CopyRamDataToGpuBuffer(app.GetHdrDataPointer(), stagingBuffer, stagingBufAlloc, app.GetHdrByteNum());
 
-        /* Send staging buffer data to the GPU image. */
+        // Send staging buffer data to the GPU image.
         VkCommandBufferBeginInfo beginInfo{};
         {
             beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -300,4 +302,5 @@ int main()
 
         app.FrameEnd();
     }
+    */
 }

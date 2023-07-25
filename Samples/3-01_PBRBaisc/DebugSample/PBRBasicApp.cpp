@@ -3,6 +3,8 @@
 #include "../../3-00_SharedLibrary/VulkanDbgUtils.h"
 #include "../../3-00_SharedLibrary/Camera.h"
 #include "../../3-00_SharedLibrary/Event.h"
+
+#define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
 
 #include "vk_mem_alloc.h"
@@ -130,7 +132,17 @@ void PBRBasicApp::InitCameraUboObjects()
 // ================================================================================================================
 void PBRBasicApp::ReadInSphereData()
 {
+    std::string inputfile = SOURCE_PATH;
+    inputfile += "/../data/uvSphere.obj";
+    
+    tinyobj::ObjReaderConfig readerConfig;
+    tinyobj::ObjReader sphereObjReader;
 
+    sphereObjReader.ParseFromFile(inputfile, readerConfig);
+
+    auto& shapes = sphereObjReader.GetShapes();
+    auto& attrib = sphereObjReader.GetAttrib();
+    std::cout << "Total number of shapes: " << shapes.size() << std::endl;
 }
 
 // ================================================================================================================
@@ -149,6 +161,7 @@ void PBRBasicApp::DestroySphereUboObjects()
 // TODO: I may need to put most the content in this function to CreateXXXX(...) in the parent class.
 void PBRBasicApp::InitPipelineDescriptorSets()
 {
+    /*
     // Create pipeline descirptor
     VkDescriptorSetAllocateInfo skyboxPipelineDesSet0AllocInfo{};
     {
@@ -208,11 +221,13 @@ void PBRBasicApp::InitPipelineDescriptorSets()
         VkWriteDescriptorSet writeSkyboxPipelineDescriptors[2] = { writeHdrDesSet, writeCameraBufDesSet };
         vkUpdateDescriptorSets(m_device, 2, writeSkyboxPipelineDescriptors, 0, NULL);
     }
+    */
 }
 
 // ================================================================================================================
 void PBRBasicApp::InitPipelineLayout()
 {
+    /*
     // Create pipeline layout
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     {
@@ -223,6 +238,7 @@ void PBRBasicApp::InitPipelineLayout()
     }
     
     VK_CHECK(vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_skyboxPipelineLayout));
+    */
 }
 
 // ================================================================================================================
@@ -237,6 +253,7 @@ void PBRBasicApp::InitShaderModules()
 // ================================================================================================================
 void PBRBasicApp::InitPipelineDescriptorSetLayout()
 {
+    /*
     // Create pipeline binding and descriptor objects for the camera parameters
     VkDescriptorSetLayoutBinding cameraUboBinding{};
     {
@@ -268,11 +285,13 @@ void PBRBasicApp::InitPipelineDescriptorSetLayout()
                                          &skyboxPipelineDesSet0LayoutInfo,
                                          nullptr,
                                          &m_skyboxPipelineDesSet0Layout));
+    */
 }
 
 // ================================================================================================================
 void PBRBasicApp::InitPipeline()
 {
+    /*
     VkPipelineRenderingCreateInfoKHR pipelineRenderCreateInfo{};
     {
         pipelineRenderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
@@ -284,6 +303,7 @@ void PBRBasicApp::InitPipeline()
                                          m_psSkyboxShaderModule,
                                          pipelineRenderCreateInfo,
                                          m_skyboxPipelineLayout);
+    */
 }
 
 // ================================================================================================================
@@ -334,6 +354,8 @@ void PBRBasicApp::AppInit()
     InitSwapchain();
     
     // Create the graphics pipeline
+    ReadInSphereData();
+    /*
     InitSkyboxShaderModules();
     InitSkyboxPipelineDescriptorSetLayout();
     InitSkyboxPipelineLayout();
@@ -343,4 +365,5 @@ void PBRBasicApp::AppInit()
     InitCameraUboObjects();
     InitSkyboxPipelineDescriptorSets();
     InitSwapchainSyncObjects();
+    */
 }

@@ -8,11 +8,6 @@ namespace SharedLib
     class Camera;
 }
 
-namespace tinyobj
-{
-    class ObjReader;
-}
-
 class PBRBasicApp : public SharedLib::GlfwApplication
 {
 public:
@@ -53,8 +48,6 @@ private:
     SharedLib::Camera*           m_pCamera;
     std::vector<VkBuffer>        m_cameraParaBuffers;
     std::vector<VmaAllocation>   m_cameraParaBufferAllocs;
-
-    tinyobj::ObjReader m_sphereObj;
 
     std::vector<VkDescriptorSet> m_pipelineDescriptorSet0s;
 
