@@ -51,6 +51,9 @@ private:
 
     std::vector<VkDescriptorSet> m_pipelineDescriptorSet0s;
 
+    float*    m_pVertData;
+    uint32_t* m_pIdxData;
+
     VkShaderModule        m_vsShaderModule;
     VkShaderModule        m_psShaderModule;
     VkDescriptorSetLayout m_pipelineDesSet0Layout;

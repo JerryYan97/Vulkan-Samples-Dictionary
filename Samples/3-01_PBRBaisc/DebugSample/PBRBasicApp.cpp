@@ -133,7 +133,7 @@ void PBRBasicApp::InitCameraUboObjects()
 void PBRBasicApp::ReadInSphereData()
 {
     std::string inputfile = SOURCE_PATH;
-    inputfile += "/../data/uvSphere.obj";
+    inputfile += "/../data/uvNormalSphere.obj";
     
     tinyobj::ObjReaderConfig readerConfig;
     tinyobj::ObjReader sphereObjReader;
@@ -143,6 +143,41 @@ void PBRBasicApp::ReadInSphereData()
     auto& shapes = sphereObjReader.GetShapes();
     auto& attrib = sphereObjReader.GetAttrib();
     std::cout << "Total number of shapes: " << shapes.size() << std::endl;
+
+    m_pVertData = static_cast<float*>(malloc(sizeof(float) * (attrib.vertices.size() + attrib.normals.size())));
+    m_pIdxData = static_cast<uint32_t*>(malloc(sizeof(uint32_t) * (attrib.normals.size())));
+
+    for (uint32_t s = 0; s < shapes.size(); s++)
+    {
+        // Loop over faces(polygon)
+        uint32_t index_offset = 0;
+        for (uint32_t f = 0; f < shapes[s].mesh.num_face_vertices.size(); f++)
+        {
+            uint32_t fv = shapes[s].mesh.num_face_vertices[f];
+
+            // Loop over vertices in the face.
+            for (uint32_t v = 0; v < fv; v++)
+            {
+                // Access to vertex
+                tinyobj::index_t idx = shapes[s].mesh.indices[index_offset + v];
+
+                uint32_t vx = attrib.vertices[3 * size_t(idx.vertex_index) + 0];
+                uint32_t vy = attrib.vertices[3 * size_t(idx.vertex_index) + 1];
+                uint32_t vz = attrib.vertices[3 * size_t(idx.vertex_index) + 2];
+
+                // Check if `normal_index` is zero or positive. negative = no normal data
+                if (idx.normal_index >= 0) 
+                {
+                    uint32_t nx = attrib.normals[3 * size_t(idx.normal_index) + 0];
+                    uint32_t ny = attrib.normals[3 * size_t(idx.normal_index) + 1];
+                    uint32_t nz = attrib.normals[3 * size_t(idx.normal_index) + 2];
+                }
+            }
+            index_offset += fv;
+        }
+    }
+
+
 }
 
 // ================================================================================================================
@@ -355,6 +390,16 @@ void PBRBasicApp::AppInit()
     
     // Create the graphics pipeline
     ReadInSphereData();
+
+    if (m_pVertData != nullptr)
+    {
+        free(m_pVertData);
+    }
+
+    if (m_pIdxData != nullptr)
+    {
+        free(m_pIdxData);
+    }
     /*
     InitSkyboxShaderModules();
     InitSkyboxPipelineDescriptorSetLayout();
