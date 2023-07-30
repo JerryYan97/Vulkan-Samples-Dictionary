@@ -127,6 +127,12 @@ void PBRBasicApp::InitCameraUboObjects()
                         &m_cameraParaBufferAllocs[i],
                         nullptr);
     }
+
+    // Copy camera data to ubo buffer
+    for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        SendCameraDataToBuffer(i);
+    }
 }
 
 // ================================================================================================================
@@ -142,10 +148,12 @@ void PBRBasicApp::ReadInSphereData()
 
     auto& shapes = sphereObjReader.GetShapes();
     auto& attrib = sphereObjReader.GetAttrib();
-    std::cout << "Total number of shapes: " << shapes.size() << std::endl;
 
-    m_pVertData = static_cast<float*>(malloc(sizeof(float) * (attrib.vertices.size() + attrib.normals.size())));
-    m_pIdxData = static_cast<uint32_t*>(malloc(sizeof(uint32_t) * (attrib.normals.size())));
+    m_pVertData = static_cast<float*>(malloc(sizeof(float) * attrib.vertices.size() * 2));
+
+    // We assume that this test only has one shape
+    assert(shapes.size() == 1, "This application only accepts one shape!");
+    m_pIdxData = static_cast<uint32_t*>(malloc(sizeof(uint32_t) * (shapes[0].mesh.indices.size())));
 
     for (uint32_t s = 0; s < shapes.size(); s++)
     {
@@ -161,33 +169,41 @@ void PBRBasicApp::ReadInSphereData()
                 // Access to vertex
                 tinyobj::index_t idx = shapes[s].mesh.indices[index_offset + v];
 
+                // We use the vertex index of the tinyObj as our vertex buffer's vertex index.
+                m_pIdxData[index_offset + v] = uint32_t(idx.vertex_index);
+
                 uint32_t vx = attrib.vertices[3 * size_t(idx.vertex_index) + 0];
                 uint32_t vy = attrib.vertices[3 * size_t(idx.vertex_index) + 1];
                 uint32_t vz = attrib.vertices[3 * size_t(idx.vertex_index) + 2];
 
+                // Transfer the vertex buffer's vertex index to the element index -- 6 * vertex index + xxx;
+                m_pVertData[6 * size_t(idx.vertex_index) + 0] = vx;
+                m_pVertData[6 * size_t(idx.vertex_index) + 1] = vy;
+                m_pVertData[6 * size_t(idx.vertex_index) + 2] = vz;
+
                 // Check if `normal_index` is zero or positive. negative = no normal data
-                if (idx.normal_index >= 0) 
-                {
-                    uint32_t nx = attrib.normals[3 * size_t(idx.normal_index) + 0];
-                    uint32_t ny = attrib.normals[3 * size_t(idx.normal_index) + 1];
-                    uint32_t nz = attrib.normals[3 * size_t(idx.normal_index) + 2];
-                }
+                assert(idx.normal_index >= 0, "The model doesn't have normal information but it is necessary.");
+                uint32_t nx = attrib.normals[3 * size_t(idx.normal_index) + 0];
+                uint32_t ny = attrib.normals[3 * size_t(idx.normal_index) + 1];
+                uint32_t nz = attrib.normals[3 * size_t(idx.normal_index) + 2];
+
+                m_pVertData[6 * size_t(idx.vertex_index) + 3] = nx;
+                m_pVertData[6 * size_t(idx.vertex_index) + 4] = ny;
+                m_pVertData[6 * size_t(idx.vertex_index) + 5] = nz;
             }
             index_offset += fv;
         }
     }
-
-
 }
 
 // ================================================================================================================
-void PBRBasicApp::InitSphereUboObjects()
+void PBRBasicApp::InitSphereVertexIndexBuffers()
 {
 
 }
 
 // ================================================================================================================
-void PBRBasicApp::DestroySphereUboObjects()
+void PBRBasicApp::DestroySphereVertexIndexBuffers()
 {
 
 }
@@ -394,12 +410,23 @@ void PBRBasicApp::AppInit()
     if (m_pVertData != nullptr)
     {
         free(m_pVertData);
+        m_pVertData = nullptr;
     }
 
     if (m_pIdxData != nullptr)
     {
         free(m_pIdxData);
+        m_pIdxData = nullptr;
     }
+
+    InitShaderModules();
+    InitPipelineDescriptorSetLayout();
+    InitPipelineLayout();
+    InitPipeline();
+
+    InitCameraUboObjects();
+
+
     /*
     InitSkyboxShaderModules();
     InitSkyboxPipelineDescriptorSetLayout();
@@ -407,7 +434,7 @@ void PBRBasicApp::AppInit()
     InitSkyboxPipeline();
 
     InitHdrRenderObjects();
-    InitCameraUboObjects();
+    
     InitSkyboxPipelineDescriptorSets();
     InitSwapchainSyncObjects();
     */

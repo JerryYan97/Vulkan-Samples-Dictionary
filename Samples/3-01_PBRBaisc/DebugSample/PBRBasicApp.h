@@ -37,12 +37,13 @@ private:
     void InitPipelineLayout();
     void InitShaderModules();
     void InitPipelineDescriptorSets();
-
-    void InitSphereUboObjects(); // Create buffers and put data into the buffer.
+    
+    void InitSphereVertexIndexBuffers(); // Read in sphere data, create Sphere's GPU buffer objects and transfer data 
+                                         // to the GPU buffers.
     void ReadInSphereData();
-    void DestroySphereUboObjects();
+    void DestroySphereVertexIndexBuffers();
 
-    void InitCameraUboObjects();
+    void InitCameraUboObjects(); // Create camera's GPU buffer objects and transfer data to the GPU buffers.
     void DestroyCameraUboObjects();
 
     SharedLib::Camera*           m_pCamera;

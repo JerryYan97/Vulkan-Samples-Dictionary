@@ -349,6 +349,23 @@ namespace SharedLib
     }
 
     // ================================================================================================================
+    VkPipelineShaderStageCreateInfo Application::CreateDefaultShaderStgCreateInfo(
+        const VkShaderModule& shaderModule)
+    {
+        VkPipelineShaderStageCreateInfo info;
+        {
+            info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            info.pNext = nullptr;
+            info.flags = 0;
+            info.stage = VK_SHADER_STAGE_VERTEX_BIT;
+            info.module = shaderModule;
+            info.pName = "main";
+            info.pSpecializationInfo = nullptr;
+        }
+        return info;
+    }
+
+    // ================================================================================================================
     VkPipeline Application::CreateGfxPipeline(
         const VkShaderModule&                   vsShaderModule,
         const VkShaderModule&                   psShaderModule,

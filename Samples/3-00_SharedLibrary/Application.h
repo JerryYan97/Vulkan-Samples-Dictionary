@@ -93,6 +93,8 @@ namespace SharedLib
                                                                const VkPipelineRenderingCreateInfoKHR& pipelineRenderCreateInfo,
                                                                const VkPipelineLayout& pipelineLayout);
 
+        VkPipelineShaderStageCreateInfo CreateDefaultShaderStgCreateInfo(const VkShaderModule& vsShaderModule);
+
         // The class manages both of the creation and destruction of the objects below.
         VkInstance       m_instance;
         VkPhysicalDevice m_physicalDevice;
