@@ -1,5 +1,6 @@
 #pragma once
 #include "../../3-00_SharedLibrary/Application.h"
+#include "../../3-00_SharedLibrary/Pipeline.h"
 #include "hdrloader.h"
 
 VK_DEFINE_HANDLE(VmaAllocation);
@@ -32,7 +33,7 @@ public:
     VkDescriptorSet GetSkyboxCurrentFrameDescriptorSet0() 
         { return m_skyboxPipelineDescriptorSet0s[m_currentFrame]; }
 
-    VkPipeline GetSkyboxPipeline() { return m_skyboxPipeline; }
+    VkPipeline GetSkyboxPipeline() { return m_skyboxPipeline.GetVkPipeline(); }
 
     void GetCameraData(float* pBuffer);
 
@@ -66,5 +67,6 @@ private:
     VkShaderModule        m_psSkyboxShaderModule;
     VkDescriptorSetLayout m_skyboxPipelineDesSet0Layout;
     VkPipelineLayout      m_skyboxPipelineLayout;
-    VkPipeline            m_skyboxPipeline;
+    // VkPipeline            m_skyboxPipeline;
+    SharedLib::Pipeline   m_skyboxPipeline;
 };

@@ -1,11 +1,26 @@
 #pragma once
 
+#include <vector>
 #include <vulkan/vulkan.h>
 
 // The design philosophy of the pipeline is to set the pipeline states or infos along the way and record what we set.
 // When we create the pipeline, if we find out that some infos are not fed before, we'll just use the default settings.
+//
+// In addition, we always use the dynamic rendering.
 namespace SharedLib
 {
+    struct PipelineColorBlendInfo
+    {
+        VkPipelineColorBlendAttachmentState colorBlendAttachment;
+        VkPipelineColorBlendStateCreateInfo colorBlending;
+    };
+
+    struct PipelineDynamicStatesInfo
+    {
+        std::vector<VkDynamicState> dynamicStates;
+        VkPipelineDynamicStateCreateInfo dynamicStateCreateInfo;
+    };
+
     class Pipeline
     {
     public:
@@ -14,19 +29,45 @@ namespace SharedLib
 
         VkPipeline GetVkPipeline() { return m_pipeline; }
 
-        void CreatePipeline();
+        void CreatePipeline(VkDevice device);
 
         void SetShaderStageInfo(VkPipelineShaderStageCreateInfo* shaderStgInfo, uint32_t cnt);
+        void SetPNext(void* pNext) { m_pNext = pNext; }
+
+        void SetVertexInputInfo(VkPipelineVertexInputStateCreateInfo* pVertexInputInfo)
+            { m_pVertexInputInfo = pVertexInputInfo; }
+
+        void SetPipelineLayout(VkPipelineLayout pipelineLayout) { m_pipelineLayout = pipelineLayout; }
 
     protected:
 
     private:
         
-        VkPipelineShaderStageCreateInfo* m_shaderStgInfo;
+        VkPipelineShaderStageCreateInfo* m_pShaderStgInfos;
         uint32_t                         m_stgCnt;
-        bool                             m_isVsPsShaderMoodulesSet; // It must be set before calling the CreatePipeline().
 
+        void* m_pNext;
 
-        VkPipeline m_pipeline;
+        VkPipelineVertexInputStateCreateInfo*   m_pVertexInputInfo;
+        VkPipelineInputAssemblyStateCreateInfo* m_pInputAssembly;
+        VkPipelineViewportStateCreateInfo*      m_pViewportState;
+        VkPipelineRasterizationStateCreateInfo* m_pRasterizer;
+        VkPipelineMultisampleStateCreateInfo*   m_pMultisampling;
+        PipelineColorBlendInfo*                 m_pColorBlending;
+        PipelineDynamicStatesInfo*              m_pDynamicState;
+
+        bool m_isVertexInputInfoDefault;
+
+        void SetDefaultVertexInputInfo();
+        void SetDefaultInputAssemblyInfo();
+        void SetDefaultViewportStateInfo();
+        void SetDefaultRasterizerInfo();
+        void SetDefaultMultisamplingInfo();
+        void SetDefaultColorBlendingInfo();
+        void SetDefaultDynamicStateInfo();
+
+        VkPipeline       m_pipeline;
+        VkPipelineLayout m_pipelineLayout;
+        VkDevice         m_device;
     };
 }

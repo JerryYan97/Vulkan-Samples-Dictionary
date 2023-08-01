@@ -60,7 +60,6 @@ namespace SharedLib
         VkCommandBuffer GetGfxCmdBuffer(uint32_t i) { return m_gfxCmdBufs[i]; }
         VkDevice GetVkDevice() { return m_device; }
 
-
     protected:
         // VkInstance, VkPhysicalDevice, VkDevice, gfxFamilyQueueIdx, presentFamilyQueueIdx,
         // computeFamilyQueueIdx (TODO), descriptor pool, vmaAllocator.
@@ -88,12 +87,13 @@ namespace SharedLib
         // CreateXXX(...) cannot initialize any member objects. They have to return objects.
         VkShaderModule                       CreateShaderModule(const std::string& spvName);
         std::vector<VkDeviceQueueCreateInfo> CreateDeviceQueueInfos(const std::set<uint32_t>& uniqueQueueFamilies);
+        /*
         VkPipeline                           CreateGfxPipeline(const VkShaderModule& vsShaderModule,
                                                                const VkShaderModule& psShaderModule,
                                                                const VkPipelineRenderingCreateInfoKHR& pipelineRenderCreateInfo,
                                                                const VkPipelineLayout& pipelineLayout);
-
-        VkPipelineShaderStageCreateInfo CreateDefaultShaderStgCreateInfo(const VkShaderModule& vsShaderModule);
+        */
+        VkPipelineShaderStageCreateInfo CreateDefaultShaderStgCreateInfo(const VkShaderModule& shaderModule, const VkShaderStageFlagBits stg);
 
         // The class manages both of the creation and destruction of the objects below.
         VkInstance       m_instance;
@@ -155,7 +155,6 @@ namespace SharedLib
         VkQueue                  m_presentQueue;
         std::vector<VkImageView> m_swapchainImageViews;
         std::vector<VkImage>     m_swapchainImages;
-
 
         std::vector<VkSemaphore> m_imageAvailableSemaphores;
         std::vector<VkSemaphore> m_renderFinishedSemaphores;

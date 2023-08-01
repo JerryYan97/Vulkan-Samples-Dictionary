@@ -336,7 +336,8 @@ namespace SharedLib
     {
         std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
         float queuePriority = 1.0f;
-        for (uint32_t queueFamily : uniqueQueueFamilies) {
+        for (uint32_t queueFamily : uniqueQueueFamilies) 
+        {
             VkDeviceQueueCreateInfo queueCreateInfo{};
             queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
             queueCreateInfo.queueFamilyIndex = queueFamily;
@@ -350,14 +351,15 @@ namespace SharedLib
 
     // ================================================================================================================
     VkPipelineShaderStageCreateInfo Application::CreateDefaultShaderStgCreateInfo(
-        const VkShaderModule& shaderModule)
+        const VkShaderModule& shaderModule,
+        const VkShaderStageFlagBits stg)
     {
-        VkPipelineShaderStageCreateInfo info;
+        VkPipelineShaderStageCreateInfo info{};
         {
             info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
             info.pNext = nullptr;
             info.flags = 0;
-            info.stage = VK_SHADER_STAGE_VERTEX_BIT;
+            info.stage = stg;
             info.module = shaderModule;
             info.pName = "main";
             info.pSpecializationInfo = nullptr;
@@ -365,6 +367,7 @@ namespace SharedLib
         return info;
     }
 
+    /*
     // ================================================================================================================
     VkPipeline Application::CreateGfxPipeline(
         const VkShaderModule&                   vsShaderModule,
@@ -490,6 +493,7 @@ namespace SharedLib
 
         return graphicsPipeline;
     }
+    */
 
     // ================================================================================================================
     void Application::CreateVmaVkBuffer(

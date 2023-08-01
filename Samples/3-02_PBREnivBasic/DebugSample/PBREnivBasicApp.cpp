@@ -32,7 +32,7 @@ PBREnivBasicApp::PBREnivBasicApp() :
     m_psSkyboxShaderModule(VK_NULL_HANDLE),
     m_skyboxPipelineDesSet0Layout(VK_NULL_HANDLE),
     m_skyboxPipelineLayout(VK_NULL_HANDLE),
-    m_skyboxPipeline(VK_NULL_HANDLE)
+    m_skyboxPipeline()
 {
     m_pCamera = new SharedLib::Camera();
 }
@@ -49,9 +49,6 @@ PBREnivBasicApp::~PBREnivBasicApp()
     // Destroy shader modules
     vkDestroyShaderModule(m_device, m_vsSkyboxShaderModule, nullptr);
     vkDestroyShaderModule(m_device, m_psSkyboxShaderModule, nullptr);
-
-    // Destroy the pipeline
-    vkDestroyPipeline(m_device, m_skyboxPipeline, nullptr);
 
     // Destroy the pipeline layout
     vkDestroyPipelineLayout(m_device, m_skyboxPipelineLayout, nullptr);
@@ -351,10 +348,15 @@ void PBREnivBasicApp::InitSkyboxPipeline()
         pipelineRenderCreateInfo.pColorAttachmentFormats = &m_choisenSurfaceFormat.format;
     }
 
-    m_skyboxPipeline = CreateGfxPipeline(m_vsSkyboxShaderModule,
-                                         m_psSkyboxShaderModule,
-                                         pipelineRenderCreateInfo,
-                                         m_skyboxPipelineLayout);
+    m_skyboxPipeline.SetPNext(&pipelineRenderCreateInfo);
+    
+    VkPipelineShaderStageCreateInfo shaderStgsInfo[2] = {};
+    shaderStgsInfo[0] = CreateDefaultShaderStgCreateInfo(m_vsSkyboxShaderModule, VK_SHADER_STAGE_VERTEX_BIT);
+    shaderStgsInfo[1] = CreateDefaultShaderStgCreateInfo(m_psSkyboxShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT);
+
+    m_skyboxPipeline.SetShaderStageInfo(shaderStgsInfo, 2);
+    m_skyboxPipeline.SetPipelineLayout(m_skyboxPipelineLayout);
+    m_skyboxPipeline.CreatePipeline(m_device);
 }
 
 // ================================================================================================================
