@@ -67,6 +67,5 @@ private:
     VkShaderModule        m_psSkyboxShaderModule;
     VkDescriptorSetLayout m_skyboxPipelineDesSet0Layout;
     VkPipelineLayout      m_skyboxPipelineLayout;
-    // VkPipeline            m_skyboxPipeline;
     SharedLib::Pipeline   m_skyboxPipeline;
 };

@@ -301,7 +301,6 @@ void PBREnivBasicApp::InitSkyboxShaderModules()
     m_psSkyboxShaderModule = CreateShaderModule("./skybox_frag.spv");
 }
 
-
 // ================================================================================================================
 void PBREnivBasicApp::InitSkyboxPipelineDescriptorSetLayout()
 {

@@ -342,14 +342,15 @@ void PBRBasicApp::InitPipelineDescriptorSetLayout()
 // ================================================================================================================
 void PBRBasicApp::InitPipeline()
 {
-    /*
+    
     VkPipelineRenderingCreateInfoKHR pipelineRenderCreateInfo{};
     {
         pipelineRenderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
         pipelineRenderCreateInfo.colorAttachmentCount = 1;
         pipelineRenderCreateInfo.pColorAttachmentFormats = &m_choisenSurfaceFormat.format;
+        pipelineRenderCreateInfo.depthAttachmentFormat = VK_FORMAT_R8_UNORM;
     }
-
+    /*
     m_skyboxPipeline = CreateGfxPipeline(m_vsSkyboxShaderModule,
                                          m_psSkyboxShaderModule,
                                          pipelineRenderCreateInfo,

@@ -87,12 +87,7 @@ namespace SharedLib
         // CreateXXX(...) cannot initialize any member objects. They have to return objects.
         VkShaderModule                       CreateShaderModule(const std::string& spvName);
         std::vector<VkDeviceQueueCreateInfo> CreateDeviceQueueInfos(const std::set<uint32_t>& uniqueQueueFamilies);
-        /*
-        VkPipeline                           CreateGfxPipeline(const VkShaderModule& vsShaderModule,
-                                                               const VkShaderModule& psShaderModule,
-                                                               const VkPipelineRenderingCreateInfoKHR& pipelineRenderCreateInfo,
-                                                               const VkPipelineLayout& pipelineLayout);
-        */
+        
         VkPipelineShaderStageCreateInfo CreateDefaultShaderStgCreateInfo(const VkShaderModule& shaderModule, const VkShaderStageFlagBits stg);
 
         // The class manages both of the creation and destruction of the objects below.
