@@ -38,6 +38,8 @@ namespace SharedLib
             { m_pVertexInputInfo = pVertexInputInfo; }
 
         void SetPipelineLayout(VkPipelineLayout pipelineLayout) { m_pipelineLayout = pipelineLayout; }
+        void SetDepthStencilStateInfo(VkPipelineDepthStencilStateCreateInfo* pDepthStencilInfo) 
+            { m_pDepthStencilState = pDepthStencilInfo; }
 
     protected:
 
@@ -54,6 +56,7 @@ namespace SharedLib
         VkPipelineMultisampleStateCreateInfo*   m_pMultisampling;
         PipelineColorBlendInfo*                 m_pColorBlending;
         PipelineDynamicStatesInfo*              m_pDynamicState;
+        VkPipelineDepthStencilStateCreateInfo*  m_pDepthStencilState;
 
         bool m_isVertexInputInfoDefault;
 

@@ -51,6 +51,7 @@ private:
     void DestroyLightsUboObjects();
 
     VkPipelineVertexInputStateCreateInfo CreatePipelineVertexInputInfo();
+    VkPipelineDepthStencilStateCreateInfo CreateDepthStencilStateInfo();
 
     SharedLib::Camera*           m_pCamera;
     std::vector<VkBuffer>        m_cameraParaBuffers;

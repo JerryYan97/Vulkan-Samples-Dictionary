@@ -1,6 +1,6 @@
 #version 450
 
-layout(binding = 0) uniform Lights
+layout(binding = 1) uniform Lights
 {
 	vec3 lightPositions[4];
 } i_lights;

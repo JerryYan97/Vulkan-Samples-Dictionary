@@ -18,7 +18,8 @@ namespace SharedLib
         m_pDynamicState(nullptr),
         m_pipelineLayout(VK_NULL_HANDLE),
         m_isVertexInputInfoDefault(false),
-        m_device(VK_NULL_HANDLE)
+        m_device(VK_NULL_HANDLE),
+        m_pDepthStencilState(nullptr)
     {}
 
     Pipeline::~Pipeline()
@@ -222,6 +223,7 @@ namespace SharedLib
             pipelineInfo.layout = m_pipelineLayout;
             pipelineInfo.renderPass = nullptr;
             pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+            pipelineInfo.pDepthStencilState = m_pDepthStencilState;
         }
 
         VK_CHECK(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_pipeline));

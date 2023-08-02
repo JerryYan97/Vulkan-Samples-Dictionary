@@ -304,9 +304,9 @@ void PBRBasicApp::InitPipelineDescriptorSets()
         VkWriteDescriptorSet writeLightsDesSet{};
         {
             writeLightsDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            writeLightsDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            writeLightsDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
             writeLightsDesSet.dstSet = m_pipelineDescriptorSet0s[i];
-            writeLightsDesSet.dstBinding = 0;
+            writeLightsDesSet.dstBinding = 1;
             writeLightsDesSet.descriptorCount = 1;
             writeLightsDesSet.pBufferInfo = &desLightsBufInfo;
         }
@@ -356,13 +356,16 @@ void PBRBasicApp::InitPipelineDescriptorSetLayout()
     // Binding for the lights
     VkDescriptorSetLayoutBinding lightsUboBinding{};
     {
-        cameraUboBinding.binding = 0;
-        cameraUboBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        cameraUboBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        cameraUboBinding.descriptorCount = 1;
+        lightsUboBinding.binding = 1;
+        lightsUboBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        lightsUboBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        lightsUboBinding.descriptorCount = 1;
     }
 
     // Create pipeline's descriptors layout
+    // The Vulkan spec states: The VkDescriptorSetLayoutBinding::binding members of the elements of the pBindings array 
+    // must each have different values 
+    // (https://vulkan.lunarg.com/doc/view/1.3.236.0/windows/1.3-extensions/vkspec.html#VUID-VkDescriptorSetLayoutCreateInfo-binding-00279)
     VkDescriptorSetLayoutBinding pipelineDesSetLayoutBindings[2] = { cameraUboBinding, lightsUboBinding };
     VkDescriptorSetLayoutCreateInfo pipelineDesSetLayoutInfo{};
     {
@@ -421,9 +424,24 @@ VkPipelineVertexInputStateCreateInfo PBRBasicApp::CreatePipelineVertexInputInfo(
 }
 
 // ================================================================================================================
+VkPipelineDepthStencilStateCreateInfo PBRBasicApp::CreateDepthStencilStateInfo()
+{
+    VkPipelineDepthStencilStateCreateInfo depthStencilInfo{};
+    {
+        depthStencilInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+        depthStencilInfo.depthTestEnable = VK_TRUE;
+        depthStencilInfo.depthWriteEnable = VK_TRUE;
+        depthStencilInfo.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+        depthStencilInfo.depthBoundsTestEnable = VK_FALSE;
+        depthStencilInfo.stencilTestEnable = VK_FALSE;
+    }
+
+    return depthStencilInfo;
+}
+
+// ================================================================================================================
 void PBRBasicApp::InitPipeline()
 {
-    
     VkPipelineRenderingCreateInfoKHR pipelineRenderCreateInfo{};
     {
         pipelineRenderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
@@ -437,6 +455,9 @@ void PBRBasicApp::InitPipeline()
 
     VkPipelineVertexInputStateCreateInfo vertInputInfo = CreatePipelineVertexInputInfo();
     m_pipeline.SetVertexInputInfo(&vertInputInfo);
+
+    VkPipelineDepthStencilStateCreateInfo depthStencilInfo = CreateDepthStencilStateInfo();
+    m_pipeline.SetDepthStencilStateInfo(&depthStencilInfo);
 
     VkPipelineShaderStageCreateInfo shaderStgsInfo[2] = {};
     shaderStgsInfo[0] = CreateDefaultShaderStgCreateInfo(m_vsShaderModule, VK_SHADER_STAGE_VERTEX_BIT);
