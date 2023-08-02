@@ -1,5 +1,6 @@
 #pragma once
 #include "../../3-00_SharedLibrary/Application.h"
+#include "../../3-00_SharedLibrary/Pipeline.h"
 
 VK_DEFINE_HANDLE(VmaAllocation);
 
@@ -25,7 +26,7 @@ public:
     VkDescriptorSet GetCurrentFrameDescriptorSet0() 
         { return m_pipelineDescriptorSet0s[m_currentFrame]; }
 
-    VkPipeline GetPipeline() { return m_pipeline; }
+    VkPipeline GetPipeline() { return m_pipeline.GetVkPipeline(); }
 
     void GetCameraData(float* pBuffer);
 
@@ -46,9 +47,17 @@ private:
     void InitCameraUboObjects(); // Create camera's GPU buffer objects and transfer data to the GPU buffers.
     void DestroyCameraUboObjects();
 
+    void InitLightsUboObjects();
+    void DestroyLightsUboObjects();
+
+    VkPipelineVertexInputStateCreateInfo CreatePipelineVertexInputInfo();
+
     SharedLib::Camera*           m_pCamera;
     std::vector<VkBuffer>        m_cameraParaBuffers;
     std::vector<VmaAllocation>   m_cameraParaBufferAllocs;
+
+    VkBuffer      m_lightPosBuffer;
+    VmaAllocation m_lightPosBufferAlloc;
 
     std::vector<VkDescriptorSet> m_pipelineDescriptorSet0s;
 
@@ -57,7 +66,7 @@ private:
 
     VkShaderModule        m_vsShaderModule;
     VkShaderModule        m_psShaderModule;
-    VkDescriptorSetLayout m_pipelineDesSet0Layout;
+    VkDescriptorSetLayout m_pipelineDesSetLayout;
     VkPipelineLayout      m_pipelineLayout;
-    VkPipeline            m_pipeline;
+    SharedLib::Pipeline   m_pipeline;
 };

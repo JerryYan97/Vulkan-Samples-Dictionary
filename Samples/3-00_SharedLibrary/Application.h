@@ -102,6 +102,9 @@ namespace SharedLib
         VkDebugUtilsMessengerEXT     m_debugMessenger;
         VmaAllocator*                m_pAllocator;
         std::vector<VkCommandBuffer> m_gfxCmdBufs;
+
+        std::vector<void*> m_heapMemPtrVec; // Manage heap memory -- Auto delete at the end.
+        std::vector<void*> m_heapArrayMemPtrVec;
     };
 
     // Vulkan application with a swapchain and glfwWindow.

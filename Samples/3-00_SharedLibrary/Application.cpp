@@ -60,6 +60,17 @@ namespace SharedLib
 
         // Destroy instance
         vkDestroyInstance(m_instance, nullptr);
+
+        // Release all temp used memory
+        for (void* ptr : m_heapMemPtrVec)
+        {
+            delete ptr;
+        }
+
+        for (void* ptr : m_heapArrayMemPtrVec)
+        {
+            delete[] ptr;
+        }
     }
 
     // ================================================================================================================

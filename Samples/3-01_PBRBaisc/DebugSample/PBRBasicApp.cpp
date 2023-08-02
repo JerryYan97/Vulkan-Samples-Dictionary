@@ -29,9 +29,11 @@ PBRBasicApp::PBRBasicApp() :
     GlfwApplication(),
     m_vsShaderModule(VK_NULL_HANDLE),
     m_psShaderModule(VK_NULL_HANDLE),
-    m_pipelineDesSet0Layout(VK_NULL_HANDLE),
+    m_pipelineDesSetLayout(VK_NULL_HANDLE),
     m_pipelineLayout(VK_NULL_HANDLE),
-    m_pipeline(VK_NULL_HANDLE)
+    m_pipeline(),
+    m_lightPosBuffer(VK_NULL_HANDLE),
+    m_lightPosBufferAlloc(VK_NULL_HANDLE)
 {
     m_pCamera = new SharedLib::Camera();
 }
@@ -43,19 +45,17 @@ PBRBasicApp::~PBRBasicApp()
     delete m_pCamera;
 
     DestroyCameraUboObjects();
+    DestroyLightsUboObjects();
 
     // Destroy shader modules
     vkDestroyShaderModule(m_device, m_vsShaderModule, nullptr);
     vkDestroyShaderModule(m_device, m_psShaderModule, nullptr);
 
-    // Destroy the pipeline
-    vkDestroyPipeline(m_device, m_pipeline, nullptr);
-
     // Destroy the pipeline layout
     vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
 
     // Destroy the descriptor set layout
-    vkDestroyDescriptorSetLayout(m_device, m_pipelineDesSet0Layout, nullptr);
+    vkDestroyDescriptorSetLayout(m_device, m_pipelineDesSetLayout, nullptr);
 }
 
 // ================================================================================================================
@@ -209,33 +209,77 @@ void PBRBasicApp::DestroySphereVertexIndexBuffers()
 }
 
 // ================================================================================================================
+void PBRBasicApp::InitLightsUboObjects()
+{
+    // The alignment of a vec3 is 4 floats and the element alignment of a struct is the largest element alignment,
+    // which is also the 4 float. Therefore, we need 16 floats as the buffer to store the Camera's parameters.
+    VkBufferCreateInfo bufferInfo{};
+    {
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = 16 * sizeof(float);
+        bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    }
+
+    VmaAllocationCreateInfo bufferAllocInfo{};
+    {
+        bufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        bufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
+                                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    }
+
+    vmaCreateBuffer(
+        *m_pAllocator,
+        &bufferInfo,
+        &bufferAllocInfo,
+        &m_lightPosBuffer,
+        &m_lightPosBufferAlloc,
+        nullptr);
+
+    // Copy lights data to ubo buffer
+    // The last element of each lines is a padding float
+    float lightPos[16] = {
+        -1.f,  1.f, -1.f, 0.f,
+        -1.f,  1.f,  1.f, 0.f,
+        -1.f, -1.f, -1.f, 0.f,
+        -1.f, -1.f,  1.f, 0.f
+    };
+
+    CopyRamDataToGpuBuffer(lightPos, m_lightPosBuffer, m_lightPosBufferAlloc, sizeof(lightPos));
+}
+
+// ================================================================================================================
+void PBRBasicApp::DestroyLightsUboObjects()
+{
+    vmaDestroyBuffer(*m_pAllocator, m_lightPosBuffer, m_lightPosBufferAlloc);
+}
+
+// ================================================================================================================
 // TODO: I may need to put most the content in this function to CreateXXXX(...) in the parent class.
 void PBRBasicApp::InitPipelineDescriptorSets()
 {
-    /*
     // Create pipeline descirptor
-    VkDescriptorSetAllocateInfo skyboxPipelineDesSet0AllocInfo{};
+    VkDescriptorSetAllocateInfo pipelineDesSet0AllocInfo{};
     {
-        skyboxPipelineDesSet0AllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        skyboxPipelineDesSet0AllocInfo.descriptorPool = m_descriptorPool;
-        skyboxPipelineDesSet0AllocInfo.pSetLayouts = &m_pipelineDesSet0Layout;
-        skyboxPipelineDesSet0AllocInfo.descriptorSetCount = 1;
+        pipelineDesSet0AllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        pipelineDesSet0AllocInfo.descriptorPool = m_descriptorPool;
+        pipelineDesSet0AllocInfo.pSetLayouts = &m_pipelineDesSetLayout;
+        pipelineDesSet0AllocInfo.descriptorSetCount = 1;
     }
-    
+
     m_pipelineDescriptorSet0s.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
     for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
     {
         VK_CHECK(vkAllocateDescriptorSets(m_device,
-                                          &skyboxPipelineDesSet0AllocInfo,
-                                          &m_skyboxPipelineDescriptorSet0s[i]));
+                                          &pipelineDesSet0AllocInfo,
+                                          &m_pipelineDescriptorSet0s[i]));
     }
 
-    // Link descriptors to the buffer and image
-    VkDescriptorImageInfo hdriDesImgInfo{};
+    VkDescriptorBufferInfo desLightsBufInfo{};
     {
-        hdriDesImgInfo.imageView = m_hdrCubeMapView;
-        hdriDesImgInfo.sampler = m_hdrSampler;
-        hdriDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        desLightsBufInfo.buffer = m_lightPosBuffer;
+        desLightsBufInfo.offset = 0;
+        desLightsBufInfo.range = sizeof(float) * 16;
     }
 
     for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
@@ -251,45 +295,42 @@ void PBRBasicApp::InitPipelineDescriptorSets()
         {
             writeCameraBufDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             writeCameraBufDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            writeCameraBufDesSet.dstSet = m_skyboxPipelineDescriptorSet0s[i];
-            writeCameraBufDesSet.dstBinding = 1;
+            writeCameraBufDesSet.dstSet = m_pipelineDescriptorSet0s[i];
+            writeCameraBufDesSet.dstBinding = 0;
             writeCameraBufDesSet.descriptorCount = 1;
             writeCameraBufDesSet.pBufferInfo = &desCameraParaBufInfo;
         }
 
-        VkWriteDescriptorSet writeHdrDesSet{};
+        VkWriteDescriptorSet writeLightsDesSet{};
         {
-            writeHdrDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            writeHdrDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            writeHdrDesSet.dstSet = m_skyboxPipelineDescriptorSet0s[i];
-            writeHdrDesSet.dstBinding = 0;
-            writeHdrDesSet.pImageInfo = &hdriDesImgInfo;
-            writeHdrDesSet.descriptorCount = 1;
+            writeLightsDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writeLightsDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            writeLightsDesSet.dstSet = m_pipelineDescriptorSet0s[i];
+            writeLightsDesSet.dstBinding = 0;
+            writeLightsDesSet.descriptorCount = 1;
+            writeLightsDesSet.pBufferInfo = &desLightsBufInfo;
         }
 
         // Linking skybox pipeline descriptors: skybox cubemap and camera buffer descriptors to their GPU memory
         // and info.
-        VkWriteDescriptorSet writeSkyboxPipelineDescriptors[2] = { writeHdrDesSet, writeCameraBufDesSet };
+        VkWriteDescriptorSet writeSkyboxPipelineDescriptors[2] = { writeLightsDesSet, writeCameraBufDesSet };
         vkUpdateDescriptorSets(m_device, 2, writeSkyboxPipelineDescriptors, 0, NULL);
     }
-    */
 }
 
 // ================================================================================================================
 void PBRBasicApp::InitPipelineLayout()
 {
-    /*
     // Create pipeline layout
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     {
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pipelineLayoutInfo.setLayoutCount = 1;
-        pipelineLayoutInfo.pSetLayouts = &m_skyboxPipelineDesSet0Layout;
+        pipelineLayoutInfo.pSetLayouts = &m_pipelineDesSetLayout;
         pipelineLayoutInfo.pushConstantRangeCount = 0;
     }
     
-    VK_CHECK(vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_skyboxPipelineLayout));
-    */
+    VK_CHECK(vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_pipelineLayout));
 }
 
 // ================================================================================================================
@@ -300,43 +341,83 @@ void PBRBasicApp::InitShaderModules()
     m_psShaderModule = CreateShaderModule("./sphere_frag.spv");
 }
 
-
 // ================================================================================================================
 void PBRBasicApp::InitPipelineDescriptorSetLayout()
 {
-    /*
     // Create pipeline binding and descriptor objects for the camera parameters
     VkDescriptorSetLayoutBinding cameraUboBinding{};
     {
-        cameraUboBinding.binding = 1;
+        cameraUboBinding.binding = 0;
+        cameraUboBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        cameraUboBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        cameraUboBinding.descriptorCount = 1;
+    }
+
+    // Binding for the lights
+    VkDescriptorSetLayoutBinding lightsUboBinding{};
+    {
+        cameraUboBinding.binding = 0;
         cameraUboBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
         cameraUboBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         cameraUboBinding.descriptorCount = 1;
     }
-    
-    // Create pipeline binding objects for the HDRI image
-    VkDescriptorSetLayoutBinding hdriSamplerBinding{};
-    {
-        hdriSamplerBinding.binding = 0;
-        hdriSamplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        hdriSamplerBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        hdriSamplerBinding.descriptorCount = 1;
-    }
-    
+
     // Create pipeline's descriptors layout
-    VkDescriptorSetLayoutBinding skyboxPipelineDesSet0LayoutBindings[2] = { hdriSamplerBinding, cameraUboBinding };
-    VkDescriptorSetLayoutCreateInfo skyboxPipelineDesSet0LayoutInfo{};
+    VkDescriptorSetLayoutBinding pipelineDesSetLayoutBindings[2] = { cameraUboBinding, lightsUboBinding };
+    VkDescriptorSetLayoutCreateInfo pipelineDesSetLayoutInfo{};
     {
-        skyboxPipelineDesSet0LayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        skyboxPipelineDesSet0LayoutInfo.bindingCount = 2;
-        skyboxPipelineDesSet0LayoutInfo.pBindings = skyboxPipelineDesSet0LayoutBindings;
+        pipelineDesSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        pipelineDesSetLayoutInfo.bindingCount = 2;
+        pipelineDesSetLayoutInfo.pBindings = pipelineDesSetLayoutBindings;
     }
-    
+
     VK_CHECK(vkCreateDescriptorSetLayout(m_device,
-                                         &skyboxPipelineDesSet0LayoutInfo,
+                                         &pipelineDesSetLayoutInfo,
                                          nullptr,
-                                         &m_skyboxPipelineDesSet0Layout));
-    */
+                                         &m_pipelineDesSetLayout));
+}
+
+// ================================================================================================================
+VkPipelineVertexInputStateCreateInfo PBRBasicApp::CreatePipelineVertexInputInfo()
+{
+    // Specifying all kinds of pipeline states
+    // Vertex input state
+    VkVertexInputBindingDescription* pVertBindingDesc = new VkVertexInputBindingDescription();
+    memset(pVertBindingDesc, 0, sizeof(VkVertexInputBindingDescription));
+    {
+        pVertBindingDesc->binding = 0;
+        pVertBindingDesc->stride = 6 * sizeof(float);
+        pVertBindingDesc->inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    }
+    m_heapMemPtrVec.push_back(pVertBindingDesc);
+
+    VkVertexInputAttributeDescription* pVertAttrDescs = new VkVertexInputAttributeDescription[2];
+    memset(pVertAttrDescs, 0, sizeof(VkVertexInputAttributeDescription) * 2);
+    {
+        // Position
+        pVertAttrDescs[0].location = 0;
+        pVertAttrDescs[0].binding = 0;
+        pVertAttrDescs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+        pVertAttrDescs[0].offset = 0;
+        // Normal
+        pVertAttrDescs[1].location = 1;
+        pVertAttrDescs[1].binding = 0;
+        pVertAttrDescs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+        pVertAttrDescs[1].offset = 3 * sizeof(float);
+    }
+    m_heapArrayMemPtrVec.push_back(pVertAttrDescs);
+
+    VkPipelineVertexInputStateCreateInfo vertInputInfo{};
+    {
+        vertInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        vertInputInfo.pNext = nullptr;
+        vertInputInfo.vertexBindingDescriptionCount = 1;
+        vertInputInfo.pVertexBindingDescriptions = pVertBindingDesc;
+        vertInputInfo.vertexAttributeDescriptionCount = 2;
+        vertInputInfo.pVertexAttributeDescriptions = pVertAttrDescs;
+    }
+
+    return vertInputInfo;
 }
 
 // ================================================================================================================
@@ -348,14 +429,21 @@ void PBRBasicApp::InitPipeline()
         pipelineRenderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
         pipelineRenderCreateInfo.colorAttachmentCount = 1;
         pipelineRenderCreateInfo.pColorAttachmentFormats = &m_choisenSurfaceFormat.format;
-        pipelineRenderCreateInfo.depthAttachmentFormat = VK_FORMAT_R8_UNORM;
+        pipelineRenderCreateInfo.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT;
     }
-    /*
-    m_skyboxPipeline = CreateGfxPipeline(m_vsSkyboxShaderModule,
-                                         m_psSkyboxShaderModule,
-                                         pipelineRenderCreateInfo,
-                                         m_skyboxPipelineLayout);
-    */
+
+    m_pipeline.SetPNext(&pipelineRenderCreateInfo);
+    m_pipeline.SetPipelineLayout(m_pipelineLayout);
+
+    VkPipelineVertexInputStateCreateInfo vertInputInfo = CreatePipelineVertexInputInfo();
+    m_pipeline.SetVertexInputInfo(&vertInputInfo);
+
+    VkPipelineShaderStageCreateInfo shaderStgsInfo[2] = {};
+    shaderStgsInfo[0] = CreateDefaultShaderStgCreateInfo(m_vsShaderModule, VK_SHADER_STAGE_VERTEX_BIT);
+    shaderStgsInfo[1] = CreateDefaultShaderStgCreateInfo(m_psShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT);
+    m_pipeline.SetShaderStageInfo(shaderStgsInfo, 2);
+
+    m_pipeline.CreatePipeline(m_device);
 }
 
 // ================================================================================================================
@@ -426,7 +514,8 @@ void PBRBasicApp::AppInit()
     InitPipeline();
 
     InitCameraUboObjects();
-
+    InitLightsUboObjects();
+    InitPipelineDescriptorSets();
 
     /*
     InitSkyboxShaderModules();

@@ -11,7 +11,8 @@ layout(location = 1) in vec3 i_normal;
 layout(location = 0) out vec3 o_worldPos;
 layout(location = 1) out vec3 o_worldNormal;
 
-void main() {
+void main() 
+{
     mat4 mvpMat = i_matrices.modelMat * i_matrices.vpMat;
 
     vec4 worldPos = i_matrices.modelMat * vec4(i_pos, 1.0);

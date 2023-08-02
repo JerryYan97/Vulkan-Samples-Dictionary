@@ -42,7 +42,6 @@ namespace SharedLib
     protected:
 
     private:
-        
         VkPipelineShaderStageCreateInfo* m_pShaderStgInfos;
         uint32_t                         m_stgCnt;
 
