@@ -44,8 +44,8 @@ private:
     void ReadInSphereData();
     void DestroySphereVertexIndexBuffers();
 
-    void InitCameraUboObjects(); // Create camera's GPU buffer objects and transfer data to the GPU buffers.
-    void DestroyCameraUboObjects();
+    void InitMvpUboObjects(); // Create MVP matrices's GPU buffer objects and transfer data to the GPU buffers.
+    void DestroyMvpUboObjects();
 
     void InitLightsUboObjects();
     void DestroyLightsUboObjects();
@@ -53,9 +53,9 @@ private:
     VkPipelineVertexInputStateCreateInfo CreatePipelineVertexInputInfo();
     VkPipelineDepthStencilStateCreateInfo CreateDepthStencilStateInfo();
 
-    SharedLib::Camera*           m_pCamera;
-    std::vector<VkBuffer>        m_cameraParaBuffers;
-    std::vector<VmaAllocation>   m_cameraParaBufferAllocs;
+    SharedLib::Camera* m_pCamera;
+    VkBuffer           m_mvpUboBuffer;
+    VmaAllocation      m_mvpUboAlloc;
 
     VkBuffer      m_lightPosBuffer;
     VmaAllocation m_lightPosBufferAlloc;

@@ -36,6 +36,8 @@ namespace SharedLib
         Application();
         ~Application();
 
+        void GpuWaitForIdle();
+
         // The InitXXX(...) should be called in it. It is expected to called after the constructor.
         virtual void AppInit() = 0;
 
@@ -151,8 +153,10 @@ namespace SharedLib
         VkSurfaceFormatKHR       m_choisenSurfaceFormat;
         VkExtent2D               m_swapchainImageExtent;
         VkQueue                  m_presentQueue;
-        std::vector<VkImageView> m_swapchainImageViews;
-        std::vector<VkImage>     m_swapchainImages;
+        std::vector<VkImageView> m_swapchainColorImageViews;
+        std::vector<VkImage>     m_swapchainColorImages;
+        std::vector<VkImageView> m_swapchainDepthImageViews;
+        std::vector<VkImage>     m_swapchainDepthImages;
 
         std::vector<VkSemaphore> m_imageAvailableSemaphores;
         std::vector<VkSemaphore> m_renderFinishedSemaphores;

@@ -33,7 +33,9 @@ PBRBasicApp::PBRBasicApp() :
     m_pipelineLayout(VK_NULL_HANDLE),
     m_pipeline(),
     m_lightPosBuffer(VK_NULL_HANDLE),
-    m_lightPosBufferAlloc(VK_NULL_HANDLE)
+    m_lightPosBufferAlloc(VK_NULL_HANDLE),
+    m_mvpUboBuffer(VK_NULL_HANDLE),
+    m_mvpUboAlloc(VK_NULL_HANDLE)
 {
     m_pCamera = new SharedLib::Camera();
 }
@@ -44,7 +46,7 @@ PBRBasicApp::~PBRBasicApp()
     vkDeviceWaitIdle(m_device);
     delete m_pCamera;
 
-    DestroyCameraUboObjects();
+    DestroyMvpUboObjects();
     DestroyLightsUboObjects();
 
     // Destroy shader modules
@@ -59,12 +61,9 @@ PBRBasicApp::~PBRBasicApp()
 }
 
 // ================================================================================================================
-void PBRBasicApp::DestroyCameraUboObjects()
+void PBRBasicApp::DestroyMvpUboObjects()
 {
-    for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
-    {
-        vmaDestroyBuffer(*m_pAllocator, m_cameraParaBuffers[i], m_cameraParaBufferAllocs[i]);
-    }
+    vmaDestroyBuffer(*m_pAllocator, m_mvpUboBuffer, m_mvpUboAlloc);
 }
 
 // ================================================================================================================
@@ -75,16 +74,11 @@ void PBRBasicApp::GetCameraData(
 }
 
 // ================================================================================================================
+/**/
 void PBRBasicApp::SendCameraDataToBuffer(
     uint32_t i)
 {
-    float cameraData[16] = {};
-    m_pCamera->GetView(cameraData);
-    m_pCamera->GetRight(&cameraData[4]);
-    m_pCamera->GetUp(&cameraData[8]);
-    m_pCamera->GetNearPlane(cameraData[12], cameraData[13], cameraData[14]);
-
-    CopyRamDataToGpuBuffer(cameraData, m_cameraParaBuffers[i], m_cameraParaBufferAllocs[i], sizeof(cameraData));
+    
 }
 
 // ================================================================================================================
@@ -96,14 +90,14 @@ void PBRBasicApp::UpdateCameraAndGpuBuffer()
 }
 
 // ================================================================================================================
-void PBRBasicApp::InitCameraUboObjects()
+void PBRBasicApp::InitMvpUboObjects()
 {
     // The alignment of a vec3 is 4 floats and the element alignment of a struct is the largest element alignment,
-    // which is also the 4 float. Therefore, we need 16 floats as the buffer to store the Camera's parameters.
+    // which is also the 4 float. Therefore, we need 32 floats as the buffer to store the MVP's parameters.
     VkBufferCreateInfo bufferInfo{};
     {
         bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = 16 * sizeof(float);
+        bufferInfo.size = 32 * sizeof(float);
         bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
         bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     }
@@ -112,27 +106,35 @@ void PBRBasicApp::InitCameraUboObjects()
     {
         bufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
         bufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
-            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+                                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
     }
 
-    m_cameraParaBuffers.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
-    m_cameraParaBufferAllocs.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
+    vmaCreateBuffer(*m_pAllocator,
+                    &bufferInfo,
+                    &bufferAllocInfo,
+                    &m_mvpUboBuffer,
+                    &m_mvpUboAlloc,
+                    nullptr);
 
-    for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
-    {
-        vmaCreateBuffer(*m_pAllocator,
-                        &bufferInfo,
-                        &bufferAllocInfo,
-                        &m_cameraParaBuffers[i],
-                        &m_cameraParaBufferAllocs[i],
-                        nullptr);
-    }
+    float mvpData[32] = {};
+    float vpMat[16]   = {};
+    float tmpMat[16]  = {};
+    m_pCamera->GenViewPerspectiveMatrices(tmpMat, tmpMat, vpMat);
+    SharedLib::MatTranspose(vpMat, 4);
 
-    // Copy camera data to ubo buffer
-    for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
-    {
-        SendCameraDataToBuffer(i);
-    }
+    // Camera's default view direction is [1.f, 0.f, 0.f].
+    float modelMat[16] = {
+        1.f, 0.f, 0.f, 2.f,
+        0.f, 1.f, 0.f, 0.f,
+        0.f, 0.f, 1.f, 0.f,
+        0.f, 0.f, 0.f, 1.f
+    };
+    SharedLib::MatTranspose(modelMat, 4);
+
+    memcpy(mvpData, vpMat, sizeof(float) * 16);
+    memcpy(&mvpData[16], modelMat, sizeof(float) * 16);
+
+    CopyRamDataToGpuBuffer(mvpData, m_mvpUboBuffer, m_mvpUboAlloc, 32 * sizeof(float));
 }
 
 // ================================================================================================================
@@ -282,23 +284,24 @@ void PBRBasicApp::InitPipelineDescriptorSets()
         desLightsBufInfo.range = sizeof(float) * 16;
     }
 
+    VkDescriptorBufferInfo desMvpParaBufInfo{};
+    {
+        desMvpParaBufInfo.buffer = m_mvpUboBuffer;
+        desMvpParaBufInfo.offset = 0;
+        desMvpParaBufInfo.range = sizeof(float) * 32;
+    }
+
+    // I believe we can use the same descriptor but I am a little bit lazy to change to that...
     for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
     {
-        VkDescriptorBufferInfo desCameraParaBufInfo{};
+        VkWriteDescriptorSet writeMvpBufDesSet{};
         {
-            desCameraParaBufInfo.buffer = m_cameraParaBuffers[i];
-            desCameraParaBufInfo.offset = 0;
-            desCameraParaBufInfo.range = sizeof(float) * 16;
-        }
-
-        VkWriteDescriptorSet writeCameraBufDesSet{};
-        {
-            writeCameraBufDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            writeCameraBufDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            writeCameraBufDesSet.dstSet = m_pipelineDescriptorSet0s[i];
-            writeCameraBufDesSet.dstBinding = 0;
-            writeCameraBufDesSet.descriptorCount = 1;
-            writeCameraBufDesSet.pBufferInfo = &desCameraParaBufInfo;
+            writeMvpBufDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writeMvpBufDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            writeMvpBufDesSet.dstSet = m_pipelineDescriptorSet0s[i];
+            writeMvpBufDesSet.dstBinding = 0;
+            writeMvpBufDesSet.descriptorCount = 1;
+            writeMvpBufDesSet.pBufferInfo = &desMvpParaBufInfo;
         }
 
         VkWriteDescriptorSet writeLightsDesSet{};
@@ -311,9 +314,8 @@ void PBRBasicApp::InitPipelineDescriptorSets()
             writeLightsDesSet.pBufferInfo = &desLightsBufInfo;
         }
 
-        // Linking skybox pipeline descriptors: skybox cubemap and camera buffer descriptors to their GPU memory
-        // and info.
-        VkWriteDescriptorSet writeSkyboxPipelineDescriptors[2] = { writeLightsDesSet, writeCameraBufDesSet };
+        // Linking pipeline descriptors: camera buffer descriptors to their GPU memory and info.
+        VkWriteDescriptorSet writeSkyboxPipelineDescriptors[2] = { writeLightsDesSet, writeMvpBufDesSet };
         vkUpdateDescriptorSets(m_device, 2, writeSkyboxPipelineDescriptors, 0, NULL);
     }
 }
@@ -534,7 +536,7 @@ void PBRBasicApp::AppInit()
     InitPipelineLayout();
     InitPipeline();
 
-    InitCameraUboObjects();
+    InitMvpUboObjects();
     InitLightsUboObjects();
     InitPipelineDescriptorSets();
 

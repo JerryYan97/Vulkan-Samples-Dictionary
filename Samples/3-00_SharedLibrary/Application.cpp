@@ -73,6 +73,11 @@ namespace SharedLib
         }
     }
 
+    void Application::GpuWaitForIdle()
+    {
+        VK_CHECK(vkDeviceWaitIdle(m_device));
+    }
+
     // ================================================================================================================
     void Application::InitInstance(
         const std::vector<const char*>& instanceExts,
