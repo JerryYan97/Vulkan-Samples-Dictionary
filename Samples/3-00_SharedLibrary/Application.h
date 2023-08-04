@@ -130,8 +130,8 @@ namespace SharedLib
         VkFence GetCurrentFrameFence() { return m_inFlightFences[m_currentFrame]; }
         VkCommandBuffer GetCurrentFrameGfxCmdBuffer() { return m_gfxCmdBufs[m_currentFrame]; }
         uint32_t GetCurrentFrame() { return m_currentFrame; }
-        VkImage GetSwapchainImage(uint32_t i) { return m_swapchainImages[i]; }
-        VkImageView GetSwapchainImageView(uint32_t i) { return m_swapchainImageViews[i]; }
+        VkImage GetSwapchainColorImage(uint32_t i) { return m_swapchainColorImages[i]; }
+        VkImageView GetSwapchainColorImageView(uint32_t i) { return m_swapchainColorImageViews[i]; }
         VkExtent2D GetSwapchainImageExtent() { return m_swapchainImageExtent; }
 
     protected:
@@ -153,10 +153,12 @@ namespace SharedLib
         VkSurfaceFormatKHR       m_choisenSurfaceFormat;
         VkExtent2D               m_swapchainImageExtent;
         VkQueue                  m_presentQueue;
-        std::vector<VkImageView> m_swapchainColorImageViews;
-        std::vector<VkImage>     m_swapchainColorImages;
-        std::vector<VkImageView> m_swapchainDepthImageViews;
-        std::vector<VkImage>     m_swapchainDepthImages;
+
+        std::vector<VkImageView>   m_swapchainColorImageViews;
+        std::vector<VkImage>       m_swapchainColorImages;
+        std::vector<VkImageView>   m_swapchainDepthImageViews;
+        std::vector<VkImage>       m_swapchainDepthImages;
+        std::vector<VmaAllocation> m_swapchainDepthImagesAllocs;
 
         std::vector<VkSemaphore> m_imageAvailableSemaphores;
         std::vector<VkSemaphore> m_renderFinishedSemaphores;
@@ -164,6 +166,7 @@ namespace SharedLib
 
     private:
         void CreateSwapchainImageViews();
+        void CreateSwapchainDepthImages(VkExtent3D extent);
         void CleanupSwapchain();
         void RecreateSwapchain();
     };

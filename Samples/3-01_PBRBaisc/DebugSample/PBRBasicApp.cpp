@@ -46,6 +46,8 @@ PBRBasicApp::~PBRBasicApp()
     vkDeviceWaitIdle(m_device);
     delete m_pCamera;
 
+    DestroySphereVertexIndexBuffers();
+
     DestroyMvpUboObjects();
     DestroyLightsUboObjects();
 
@@ -152,10 +154,13 @@ void PBRBasicApp::ReadInSphereData()
     auto& attrib = sphereObjReader.GetAttrib();
 
     m_pVertData = static_cast<float*>(malloc(sizeof(float) * attrib.vertices.size() * 2));
+    m_vertBufferByteCnt = sizeof(float) * attrib.vertices.size() * 2;
 
     // We assume that this test only has one shape
     assert(shapes.size() == 1, "This application only accepts one shape!");
     m_pIdxData = static_cast<uint32_t*>(malloc(sizeof(uint32_t) * (shapes[0].mesh.indices.size())));
+    m_idxCnt = shapes[0].mesh.indices.size();
+    m_idxBufferByteCnt = sizeof(uint32_t) * (shapes[0].mesh.indices.size());
 
     for (uint32_t s = 0; s < shapes.size(); s++)
     {
@@ -201,13 +206,60 @@ void PBRBasicApp::ReadInSphereData()
 // ================================================================================================================
 void PBRBasicApp::InitSphereVertexIndexBuffers()
 {
+    // Create sphere data GPU buffers
+    VkBufferCreateInfo vertBufferInfo{};
+    {
+        vertBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        vertBufferInfo.size = m_vertBufferByteCnt;
+        vertBufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        vertBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    }
+
+    VmaAllocationCreateInfo vertBufferAllocInfo{};
+    {
+        vertBufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        vertBufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
+                                    VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    }
+
+    vmaCreateBuffer(*m_pAllocator,
+        &vertBufferInfo,
+        &vertBufferAllocInfo,
+        &m_vertBuffer,
+        &m_vertBufferAlloc,
+        nullptr);
+
+    VkBufferCreateInfo idxBufferInfo{};
+    {
+        idxBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        idxBufferInfo.size = m_idxBufferByteCnt;
+        idxBufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+        idxBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    }
+
+    VmaAllocationCreateInfo idxBufferAllocInfo{};
+    {
+        idxBufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        idxBufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
+                                   VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    }
+
+    vmaCreateBuffer(*m_pAllocator,
+        &idxBufferInfo,
+        &idxBufferAllocInfo,
+        &m_idxBuffer,
+        &m_idxBufferAlloc,
+        nullptr);
+
+    // Send sphere data to the GPU buffers
 
 }
 
 // ================================================================================================================
 void PBRBasicApp::DestroySphereVertexIndexBuffers()
 {
-
+    vmaDestroyBuffer(*m_pAllocator, m_vertBuffer, m_vertBufferAlloc);
+    vmaDestroyBuffer(*m_pAllocator, m_idxBuffer, m_idxBufferAlloc);
 }
 
 // ================================================================================================================
@@ -518,6 +570,7 @@ void PBRBasicApp::AppInit()
     
     // Create the graphics pipeline
     ReadInSphereData();
+    InitSphereVertexIndexBuffers();
 
     if (m_pVertData != nullptr)
     {

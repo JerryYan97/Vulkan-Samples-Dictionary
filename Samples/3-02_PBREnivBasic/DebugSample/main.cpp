@@ -202,7 +202,7 @@ int main()
             swapchainRenderTargetTransBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
             swapchainRenderTargetTransBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
             swapchainRenderTargetTransBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            swapchainRenderTargetTransBarrier.image = app.GetSwapchainImage(imageIndex);
+            swapchainRenderTargetTransBarrier.image = app.GetSwapchainColorImage(imageIndex);
             swapchainRenderTargetTransBarrier.subresourceRange = swapchainPresentSubResRange;
         }
 
@@ -221,7 +221,7 @@ int main()
         VkRenderingAttachmentInfoKHR renderAttachmentInfo{};
         {
             renderAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-            renderAttachmentInfo.imageView = app.GetSwapchainImageView(imageIndex);
+            renderAttachmentInfo.imageView = app.GetSwapchainColorImageView(imageIndex);
             renderAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
             renderAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             renderAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -282,7 +282,7 @@ int main()
             swapchainPresentTransBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
             swapchainPresentTransBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
             swapchainPresentTransBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-            swapchainPresentTransBarrier.image = app.GetSwapchainImage(imageIndex);
+            swapchainPresentTransBarrier.image = app.GetSwapchainColorImage(imageIndex);
             swapchainPresentTransBarrier.subresourceRange = swapchainPresentSubResRange;
         }
 

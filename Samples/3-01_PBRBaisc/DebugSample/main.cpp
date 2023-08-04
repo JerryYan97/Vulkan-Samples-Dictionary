@@ -24,6 +24,7 @@ int main()
         swapchainPresentSubResRange.layerCount = 1;
     }
 
+    /*
     // Main Loop
     while (!app.WindowShouldClose())
     {
@@ -64,7 +65,7 @@ int main()
             swapchainRenderTargetTransBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
             swapchainRenderTargetTransBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
             swapchainRenderTargetTransBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            swapchainRenderTargetTransBarrier.image = app.GetSwapchainImage(imageIndex);
+            swapchainRenderTargetTransBarrier.image = app.GetSwapchainColorImage(imageIndex);
             swapchainRenderTargetTransBarrier.subresourceRange = swapchainPresentSubResRange;
         }
 
@@ -83,7 +84,7 @@ int main()
         VkRenderingAttachmentInfoKHR renderAttachmentInfo{};
         {
             renderAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-            renderAttachmentInfo.imageView = app.GetSwapchainImageView(imageIndex);
+            renderAttachmentInfo.imageView = app.GetSwapchainColorImageView(imageIndex);
             renderAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
             renderAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             renderAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -102,14 +103,14 @@ int main()
 
         vkCmdBeginRendering(currentCmdBuffer, &renderInfo);
 
-        // Bind the skybox pipeline descriptor sets
+        // Bind the pipeline descriptor sets
         vkCmdBindDescriptorSets(currentCmdBuffer,
                                 VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                app.GetSkyboxPipelineLayout(),
+                                app.GetPipelineLayout(),
                                 0, 1, &currentSkyboxPipelineDesSet0, 0, NULL);
 
         // Bind the graphics pipeline
-        vkCmdBindPipeline(currentCmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, app.GetSkyboxPipeline());
+        vkCmdBindPipeline(currentCmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, app.GetPipeline());
 
         // Set the viewport
         VkViewport viewport{};
@@ -131,7 +132,11 @@ int main()
             vkCmdSetScissor(currentCmdBuffer, 0, 1, &scissor);
         }
 
-        vkCmdDraw(currentCmdBuffer, 6, 1, 0, 0);
+        // Bind vertex and index buffer
+        VkDeviceSize vbOffset = 0;
+
+
+        vkCmdDrawIndexed(currentCmdBuffer, app.GetIdxCnt(), 1, 0, 0, 0);
 
         vkCmdEndRendering(currentCmdBuffer);
 
@@ -144,7 +149,7 @@ int main()
             swapchainPresentTransBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
             swapchainPresentTransBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
             swapchainPresentTransBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-            swapchainPresentTransBarrier.image = app.GetSwapchainImage(imageIndex);
+            swapchainPresentTransBarrier.image = app.GetSwapchainColorImage(imageIndex);
             swapchainPresentTransBarrier.subresourceRange = swapchainPresentSubResRange;
         }
 
@@ -162,6 +167,7 @@ int main()
 
         app.FrameEnd();
     }
+    */
     
     /*
     

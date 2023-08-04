@@ -28,6 +28,10 @@ public:
 
     VkPipeline GetPipeline() { return m_pipeline.GetVkPipeline(); }
 
+    uint32_t GetIdxCnt() { return m_idxCnt; }
+
+    // VkBuffer GetIdxBuffer() { return m_idx}
+
     void GetCameraData(float* pBuffer);
 
     void SendCameraDataToBuffer(uint32_t i);
@@ -63,7 +67,15 @@ private:
     std::vector<VkDescriptorSet> m_pipelineDescriptorSet0s;
 
     float*    m_pVertData;
+    uint32_t  m_vertBufferByteCnt;
     uint32_t* m_pIdxData;
+    uint32_t  m_idxCnt;
+    uint32_t  m_idxBufferByteCnt;
+
+    VkBuffer      m_vertBuffer;
+    VmaAllocation m_vertBufferAlloc;
+    VkBuffer      m_idxBuffer;
+    VmaAllocation m_idxBufferAlloc;
 
     VkShaderModule        m_vsShaderModule;
     VkShaderModule        m_psShaderModule;

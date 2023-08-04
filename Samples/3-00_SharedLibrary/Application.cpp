@@ -767,7 +767,54 @@ namespace SharedLib
         }
         VK_CHECK(vkCreateSwapchainKHR(m_device, &swapchainCreateInfo, nullptr, &m_swapchain));
 
+        VkExtent3D swapchainExtent{};
+        {
+            swapchainExtent.width = m_swapchainImageExtent.width;
+            swapchainExtent.height = m_swapchainImageExtent.height;
+            swapchainExtent.depth = 1;
+        }
+        CreateSwapchainDepthImages(swapchainExtent);
         CreateSwapchainImageViews();
+    }
+
+    // ================================================================================================================
+    void GlfwApplication::CreateSwapchainDepthImages(
+        VkExtent3D extent)
+    {
+        uint32_t swapchainImageCount;
+        vkGetSwapchainImagesKHR(m_device, m_swapchain, &swapchainImageCount, nullptr);
+
+        VkImageCreateInfo depthImgsInfo{};
+        {
+            depthImgsInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+            depthImgsInfo.imageType = VK_IMAGE_TYPE_2D;
+            depthImgsInfo.format = VK_FORMAT_D16_UNORM;
+            depthImgsInfo.extent = extent;
+            depthImgsInfo.mipLevels = 1;
+            depthImgsInfo.arrayLayers = 1;
+            depthImgsInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+            depthImgsInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+            depthImgsInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+            depthImgsInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        }
+
+        VmaAllocationCreateInfo depthImgsAllocInfo{};
+        {
+            depthImgsAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+            depthImgsAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+        }
+
+        m_swapchainDepthImages.resize(swapchainImageCount);
+        m_swapchainDepthImagesAllocs.resize(swapchainImageCount);
+        for (uint32_t i = 0; i < swapchainImageCount; i++)
+        {
+            vmaCreateImage(*m_pAllocator,
+                           &depthImgsInfo,
+                           &depthImgsAllocInfo,
+                           &m_swapchainDepthImages[i],
+                           &m_swapchainDepthImagesAllocs[i],
+                           nullptr);
+        }
     }
 
     // ================================================================================================================
@@ -776,27 +823,43 @@ namespace SharedLib
         // Create image views for the swapchain images
         uint32_t swapchainImageCount;
         vkGetSwapchainImagesKHR(m_device, m_swapchain, &swapchainImageCount, nullptr);
-        m_swapchainImages.resize(swapchainImageCount);
-        vkGetSwapchainImagesKHR(m_device, m_swapchain, &swapchainImageCount, m_swapchainImages.data());
+        m_swapchainColorImages.resize(swapchainImageCount);
+        vkGetSwapchainImagesKHR(m_device, m_swapchain, &swapchainImageCount, m_swapchainColorImages.data());
 
-        m_swapchainImageViews.resize(swapchainImageCount);
+        m_swapchainDepthImageViews.resize(swapchainImageCount);
+        m_swapchainColorImageViews.resize(swapchainImageCount);
         for (size_t i = 0; i < swapchainImageCount; i++)
         {
-            VkImageViewCreateInfo createInfo{};
-            createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            createInfo.image = m_swapchainImages[i];
-            createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-            createInfo.format = m_choisenSurfaceFormat.format;
-            createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-            createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-            createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-            createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-            createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            createInfo.subresourceRange.baseMipLevel = 0;
-            createInfo.subresourceRange.levelCount = 1;
-            createInfo.subresourceRange.baseArrayLayer = 0;
-            createInfo.subresourceRange.layerCount = 1;
-            VK_CHECK(vkCreateImageView(m_device, &createInfo, nullptr, &m_swapchainImageViews[i]));
+            // Create the image view for the color images
+            VkImageViewCreateInfo colorImgViewInfo{};
+            {
+                colorImgViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+                colorImgViewInfo.image = m_swapchainColorImages[i];
+                colorImgViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+                colorImgViewInfo.format = m_choisenSurfaceFormat.format;
+                colorImgViewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+                colorImgViewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+                colorImgViewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+                colorImgViewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+                colorImgViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                colorImgViewInfo.subresourceRange.baseMipLevel = 0;
+                colorImgViewInfo.subresourceRange.levelCount = 1;
+                colorImgViewInfo.subresourceRange.baseArrayLayer = 0;
+                colorImgViewInfo.subresourceRange.layerCount = 1;
+            }
+            VK_CHECK(vkCreateImageView(m_device, &colorImgViewInfo, nullptr, &m_swapchainColorImageViews[i]));
+            
+            // Create the depth images views
+            VkImageViewCreateInfo depthImgViewInfo{};
+            {
+                depthImgViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+                depthImgViewInfo.image = m_swapchainDepthImages[i];
+                depthImgViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+                depthImgViewInfo.format = VK_FORMAT_D16_UNORM;
+                depthImgViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+                depthImgViewInfo.subresourceRange.levelCount = 1;
+                depthImgViewInfo.subresourceRange.layerCount = 1;
+            }
         }
     }
 
@@ -805,9 +868,15 @@ namespace SharedLib
     {
         // Cleanup the swap chain
         // Clean the image views
-        for (auto imgView : m_swapchainImageViews)
+        for (auto imgView : m_swapchainColorImageViews)
         {
             vkDestroyImageView(m_device, imgView, nullptr);
+        }
+
+        for (uint32_t i = 0; i < m_swapchainDepthImageViews.size(); i++)
+        {
+            vkDestroyImageView(m_device, m_swapchainDepthImageViews[i], nullptr);
+            vmaDestroyImage(*m_pAllocator, m_swapchainDepthImages[i], m_swapchainDepthImagesAllocs[i]);
         }
 
         // Destroy the swapchain
@@ -828,6 +897,14 @@ namespace SharedLib
         vkDeviceWaitIdle(m_device);
         CleanupSwapchain();
         InitSwapchain();
+
+        VkExtent3D swapchainExtent{};
+        {
+            swapchainExtent.width = width;
+            swapchainExtent.height = height;
+            swapchainExtent.depth = 1;
+        }
+        CreateSwapchainDepthImages(swapchainExtent);
         CreateSwapchainImageViews();
     }
 
