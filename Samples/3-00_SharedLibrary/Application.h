@@ -132,6 +132,8 @@ namespace SharedLib
         uint32_t GetCurrentFrame() { return m_currentFrame; }
         VkImage GetSwapchainColorImage(uint32_t i) { return m_swapchainColorImages[i]; }
         VkImageView GetSwapchainColorImageView(uint32_t i) { return m_swapchainColorImageViews[i]; }
+        VkImage GetSwapchainDepthImage(uint32_t i) { return m_swapchainDepthImages[i]; }
+        VkImageView GetSwapchainDepthImageView(uint32_t i) { return m_swapchainDepthImageViews[i]; }
         VkExtent2D GetSwapchainImageExtent() { return m_swapchainImageExtent; }
 
     protected:

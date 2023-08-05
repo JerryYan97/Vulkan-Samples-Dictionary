@@ -24,7 +24,7 @@ int main()
         swapchainPresentSubResRange.layerCount = 1;
     }
 
-    /*
+
     // Main Loop
     while (!app.WindowShouldClose())
     {
@@ -81,14 +81,26 @@ int main()
         // Draw the scene
         VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
 
-        VkRenderingAttachmentInfoKHR renderAttachmentInfo{};
+        VkRenderingAttachmentInfoKHR colorAttachmentInfo{};
         {
-            renderAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-            renderAttachmentInfo.imageView = app.GetSwapchainColorImageView(imageIndex);
-            renderAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
-            renderAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            renderAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-            renderAttachmentInfo.clearValue = clearColor;
+            colorAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+            colorAttachmentInfo.imageView = app.GetSwapchainColorImageView(imageIndex);
+            colorAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
+            colorAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            colorAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            colorAttachmentInfo.clearValue = clearColor;
+        }
+
+        VkClearValue depthClearVal{};
+        depthClearVal.depthStencil.depth = 0.f;
+        VkRenderingAttachmentInfoKHR depthAttachmentInfo{};
+        {
+            depthAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+            depthAttachmentInfo.imageView = app.GetSwapchainDepthImageView(imageIndex);
+            depthAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
+            depthAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            depthAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            depthAttachmentInfo.clearValue = depthClearVal;
         }
 
         VkRenderingInfoKHR renderInfo{};
@@ -98,7 +110,8 @@ int main()
             renderInfo.renderArea.extent = swapchainImageExtent;
             renderInfo.layerCount = 1;
             renderInfo.colorAttachmentCount = 1;
-            renderInfo.pColorAttachments = &renderAttachmentInfo;
+            renderInfo.pColorAttachments = &colorAttachmentInfo;
+            renderInfo.pDepthAttachment = &depthAttachmentInfo;
         }
 
         vkCmdBeginRendering(currentCmdBuffer, &renderInfo);
@@ -134,7 +147,11 @@ int main()
 
         // Bind vertex and index buffer
         VkDeviceSize vbOffset = 0;
+        VkBuffer vertBuffer = app.GetVertBuffer();
+        VkBuffer idxBuffer = app.GetIdxBuffer();
 
+        vkCmdBindVertexBuffers(currentCmdBuffer, 0, 1, &vertBuffer, &vbOffset);
+        vkCmdBindIndexBuffer(currentCmdBuffer, idxBuffer, 0, VK_INDEX_TYPE_UINT32);
 
         vkCmdDrawIndexed(currentCmdBuffer, app.GetIdxCnt(), 1, 0, 0, 0);
 
@@ -167,8 +184,7 @@ int main()
 
         app.FrameEnd();
     }
-    */
-    
+
     /*
     
     VkImageSubresourceRange swapchainPresentSubResRange{};

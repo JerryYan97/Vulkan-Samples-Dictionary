@@ -60,35 +60,24 @@ PBRBasicApp::~PBRBasicApp()
 
     // Destroy the descriptor set layout
     vkDestroyDescriptorSetLayout(m_device, m_pipelineDesSetLayout, nullptr);
+
+    if (m_pVertData != nullptr)
+    {
+        free(m_pVertData);
+        m_pVertData = nullptr;
+    }
+
+    if (m_pIdxData != nullptr)
+    {
+        free(m_pIdxData);
+        m_pIdxData = nullptr;
+    }
 }
 
 // ================================================================================================================
 void PBRBasicApp::DestroyMvpUboObjects()
 {
     vmaDestroyBuffer(*m_pAllocator, m_mvpUboBuffer, m_mvpUboAlloc);
-}
-
-// ================================================================================================================
-void PBRBasicApp::GetCameraData(
-    float* pBuffer)
-{
-    
-}
-
-// ================================================================================================================
-/**/
-void PBRBasicApp::SendCameraDataToBuffer(
-    uint32_t i)
-{
-    
-}
-
-// ================================================================================================================
-void PBRBasicApp::UpdateCameraAndGpuBuffer()
-{
-    SharedLib::HEvent midMouseDownEvent = CreateMiddleMouseEvent(g_isDown);
-    m_pCamera->OnEvent(midMouseDownEvent);
-    SendCameraDataToBuffer(m_currentFrame);
 }
 
 // ================================================================================================================
@@ -120,13 +109,14 @@ void PBRBasicApp::InitMvpUboObjects()
 
     float mvpData[32] = {};
     float vpMat[16]   = {};
-    float tmpMat[16]  = {};
-    m_pCamera->GenViewPerspectiveMatrices(tmpMat, tmpMat, vpMat);
+    float tmpViewMat[16]  = {};
+    float tmpPersMat[16] = {};
+    m_pCamera->GenViewPerspectiveMatrices(tmpViewMat, tmpPersMat, vpMat);
     SharedLib::MatTranspose(vpMat, 4);
 
     // Camera's default view direction is [1.f, 0.f, 0.f].
     float modelMat[16] = {
-        1.f, 0.f, 0.f, 2.f,
+        1.f, 0.f, 0.f, 6.f,
         0.f, 1.f, 0.f, 0.f,
         0.f, 0.f, 1.f, 0.f,
         0.f, 0.f, 0.f, 1.f
@@ -179,9 +169,9 @@ void PBRBasicApp::ReadInSphereData()
                 // We use the vertex index of the tinyObj as our vertex buffer's vertex index.
                 m_pIdxData[index_offset + v] = uint32_t(idx.vertex_index);
 
-                uint32_t vx = attrib.vertices[3 * size_t(idx.vertex_index) + 0];
-                uint32_t vy = attrib.vertices[3 * size_t(idx.vertex_index) + 1];
-                uint32_t vz = attrib.vertices[3 * size_t(idx.vertex_index) + 2];
+                float vx = attrib.vertices[3 * size_t(idx.vertex_index) + 0];
+                float vy = attrib.vertices[3 * size_t(idx.vertex_index) + 1];
+                float vz = attrib.vertices[3 * size_t(idx.vertex_index) + 2];
 
                 // Transfer the vertex buffer's vertex index to the element index -- 6 * vertex index + xxx;
                 m_pVertData[6 * size_t(idx.vertex_index) + 0] = vx;
@@ -190,9 +180,9 @@ void PBRBasicApp::ReadInSphereData()
 
                 // Check if `normal_index` is zero or positive. negative = no normal data
                 assert(idx.normal_index >= 0, "The model doesn't have normal information but it is necessary.");
-                uint32_t nx = attrib.normals[3 * size_t(idx.normal_index) + 0];
-                uint32_t ny = attrib.normals[3 * size_t(idx.normal_index) + 1];
-                uint32_t nz = attrib.normals[3 * size_t(idx.normal_index) + 2];
+                float nx = attrib.normals[3 * size_t(idx.normal_index) + 0];
+                float ny = attrib.normals[3 * size_t(idx.normal_index) + 1];
+                float nz = attrib.normals[3 * size_t(idx.normal_index) + 2];
 
                 m_pVertData[6 * size_t(idx.vertex_index) + 3] = nx;
                 m_pVertData[6 * size_t(idx.vertex_index) + 4] = ny;
@@ -252,7 +242,8 @@ void PBRBasicApp::InitSphereVertexIndexBuffers()
         nullptr);
 
     // Send sphere data to the GPU buffers
-
+    CopyRamDataToGpuBuffer(m_pVertData, m_vertBuffer, m_vertBufferAlloc, m_vertBufferByteCnt);
+    CopyRamDataToGpuBuffer(m_pIdxData, m_idxBuffer, m_idxBufferAlloc, m_idxBufferByteCnt);
 }
 
 // ================================================================================================================
@@ -572,6 +563,7 @@ void PBRBasicApp::AppInit()
     ReadInSphereData();
     InitSphereVertexIndexBuffers();
 
+    /*
     if (m_pVertData != nullptr)
     {
         free(m_pVertData);
@@ -583,6 +575,7 @@ void PBRBasicApp::AppInit()
         free(m_pIdxData);
         m_pIdxData = nullptr;
     }
+    */
 
     InitShaderModules();
     InitPipelineDescriptorSetLayout();
@@ -592,6 +585,7 @@ void PBRBasicApp::AppInit()
     InitMvpUboObjects();
     InitLightsUboObjects();
     InitPipelineDescriptorSets();
+    InitSwapchainSyncObjects();
 
     /*
     InitSkyboxShaderModules();

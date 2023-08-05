@@ -13,13 +13,11 @@ layout(location = 1) out vec3 o_worldNormal;
 
 void main() 
 {
-    mat4 mvpMat = i_matrices.modelMat * i_matrices.vpMat;
-
     vec4 worldPos = i_matrices.modelMat * vec4(i_pos, 1.0);
     vec4 worldNormal = i_matrices.modelMat * vec4(i_normal, 0.0);
 
     o_worldPos = worldPos.xyz;
-    o_worldNormal = worldNormal.xyz;
+    o_worldNormal = normalize(worldNormal.xyz);
 
-    gl_Position = i_matrices.modelMat * i_matrices.vpMat * vec4(i_pos, 1.0);
+    gl_Position = i_matrices.vpMat * i_matrices.modelMat * vec4(i_pos, 1.0);
 }

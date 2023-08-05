@@ -17,8 +17,6 @@ public:
 
     virtual void AppInit() override;
 
-    void UpdateCameraAndGpuBuffer();
-
     VkFence GetFence(uint32_t i) { return m_inFlightFences[i]; }
 
     VkPipelineLayout GetPipelineLayout() { return m_pipelineLayout; }
@@ -30,11 +28,9 @@ public:
 
     uint32_t GetIdxCnt() { return m_idxCnt; }
 
-    // VkBuffer GetIdxBuffer() { return m_idx}
+    VkBuffer GetIdxBuffer() { return m_idxBuffer; }
+    VkBuffer GetVertBuffer() { return m_vertBuffer; }
 
-    void GetCameraData(float* pBuffer);
-
-    void SendCameraDataToBuffer(uint32_t i);
 
 private:
     void InitPipeline();

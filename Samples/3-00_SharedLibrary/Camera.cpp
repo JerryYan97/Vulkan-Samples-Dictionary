@@ -3,6 +3,7 @@
 #include <math.h>
 #include "Event.h"
 #include <cstring>
+#include <cassert>
 
 namespace SharedLib
 {
@@ -16,9 +17,9 @@ namespace SharedLib
 
         m_isHold = false;
 
-        m_view[0] = 0.8f;
+        m_view[0] = 1.0f;
         m_view[1] = 0.0f;
-        m_view[2] = 0.1f;
+        m_view[2] = 0.0f;
         NormalizeVec(m_view, 3);
 
         m_up[0] = 0.f;
@@ -109,11 +110,13 @@ namespace SharedLib
         m_isHold = isDown;
     }
 
+    // NOTE: viewMat and perspectiveMat cannot be same!
     void Camera::GenViewPerspectiveMatrices(
         float* viewMat, 
         float* perspectiveMat, 
         float* vpMat)
     {
+        assert(viewMat != perspectiveMat, "vMat cannot be same as persMat!");
         GenViewMat(m_view, m_pos, m_up, viewMat);
         GenPerspectiveProjMat(m_near, m_far, m_fov, m_aspect, perspectiveMat);
         MatrixMul4x4(perspectiveMat, viewMat, vpMat);
