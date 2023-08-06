@@ -35,6 +35,8 @@ int main()
         VkDescriptorSet currentSkyboxPipelineDesSet0 = app.GetCurrentFrameDescriptorSet0();
         VkExtent2D swapchainImageExtent = app.GetSwapchainImageExtent();
 
+        std::cout << "swapchain width: " << swapchainImageExtent.width << "; swapchain height: " << swapchainImageExtent.height << std::endl;
+
         app.FrameStart();
 
         // Wait for the resources from the possible on flight frame
@@ -153,7 +155,7 @@ int main()
         vkCmdBindVertexBuffers(currentCmdBuffer, 0, 1, &vertBuffer, &vbOffset);
         vkCmdBindIndexBuffer(currentCmdBuffer, idxBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-        vkCmdDrawIndexed(currentCmdBuffer, app.GetIdxCnt(), 1, 0, 0, 0);
+        vkCmdDrawIndexed(currentCmdBuffer, app.GetIdxCnt(), 4, 0, 0, 0);
 
         vkCmdEndRendering(currentCmdBuffer);
 

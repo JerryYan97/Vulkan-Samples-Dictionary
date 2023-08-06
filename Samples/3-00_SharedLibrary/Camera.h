@@ -21,6 +21,8 @@ namespace SharedLib
         void GetRight(float* oVec);
         void GetNearPlane(float& width, float& height, float& near);
 
+        void GetPos(float* oVec) { memcpy(oVec, m_pos, sizeof(float) * 3); };
+
     private:
         void OnMiddleMouseButtonEvent(HEvent& ievent);
 

@@ -58,7 +58,7 @@ PBRBasicApp::~PBRBasicApp()
     DestroySphereVertexIndexBuffers();
 
     DestroyVpUboObjects();
-    DestroyLightsUboObjects();
+    DestroyFragUboObjects();
 
     // Destroy shader modules
     vkDestroyShaderModule(m_device, m_vsShaderModule, nullptr);
@@ -250,14 +250,14 @@ void PBRBasicApp::DestroySphereVertexIndexBuffers()
 }
 
 // ================================================================================================================
-void PBRBasicApp::InitLightsUboObjects()
+void PBRBasicApp::InitFragUboObjects()
 {
     // The alignment of a vec3 is 4 floats and the element alignment of a struct is the largest element alignment,
     // which is also the 4 float. Therefore, we need 16 floats as the buffer to store the Camera's parameters.
     VkBufferCreateInfo bufferInfo{};
     {
         bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = 16 * sizeof(float);
+        bufferInfo.size = 20 * sizeof(float);
         bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
         bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     }
@@ -277,20 +277,24 @@ void PBRBasicApp::InitLightsUboObjects()
         &m_lightPosBufferAlloc,
         nullptr);
 
-    // Copy lights data to ubo buffer
+    float cameraPos[3] = {};
+    m_pCamera->GetPos(cameraPos);
+
+    // Copy light and camera data to ubo buffer
     // The last element of each lines is a padding float
-    float lightPos[16] = {
-        -1.f,  1.f, -1.f, 0.f,
-        -1.f,  1.f,  1.f, 0.f,
-        -1.f, -1.f, -1.f, 0.f,
-        -1.f, -1.f,  1.f, 0.f
+    float lightPos[20] = {
+        14.f,  1.f, -1.f, 0.f,
+        14.f,  1.f,  1.f, 0.f,
+        14.f, -1.f, -1.f, 0.f,
+        14.f, -1.f,  1.f, 0.f,
+        cameraPos[0], cameraPos[1], cameraPos[2], 0.f
     };
 
     CopyRamDataToGpuBuffer(lightPos, m_lightPosBuffer, m_lightPosBufferAlloc, sizeof(lightPos));
 }
 
 // ================================================================================================================
-void PBRBasicApp::DestroyLightsUboObjects()
+void PBRBasicApp::DestroyFragUboObjects()
 {
     vmaDestroyBuffer(*m_pAllocator, m_lightPosBuffer, m_lightPosBufferAlloc);
 }
@@ -579,7 +583,7 @@ void PBRBasicApp::AppInit()
     InitPipeline();
 
     InitVpUboObjects();
-    InitLightsUboObjects();
+    InitFragUboObjects();
     InitPipelineDescriptorSets();
     InitSwapchainSyncObjects();
 

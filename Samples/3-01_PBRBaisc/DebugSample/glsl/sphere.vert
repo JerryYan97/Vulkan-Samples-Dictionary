@@ -9,12 +9,13 @@ layout(location = 1) in vec3 i_normal;
 
 layout(location = 0) out vec3 o_worldPos;
 layout(location = 1) out vec3 o_worldNormal;
+layout(location = 2) flat out vec2 o_params; // [Metalic, roughness].
 
 vec3 g_sphereWorldPos[4] = {
-    vec3(3.0, 0.0, 0.0),
-    vec3(8.0, 0.0, 0.0),
-    vec3(10.0, 0.0, 0.0),
-    vec3(12.0, 0.0, 0.0)
+    vec3(15.0, 4.5, -8.0),
+    vec3(15.0, 1.5, -8.0),
+    vec3(15.0, -1.5, -8.0),
+    vec3(15.0, -4.5, -8.0)
 };
 
 mat4 PosToModelMat(vec3 pos)
@@ -31,6 +32,9 @@ mat4 PosToModelMat(vec3 pos)
 void main()
 {
     mat4 modelMat = PosToModelMat(g_sphereWorldPos[gl_InstanceIndex]);
+
+    o_params.x = 1.0;
+    o_params.y = 0.5;
 
     vec4 worldPos = modelMat * vec4(i_pos, 1.0);
     vec4 worldNormal = modelMat * vec4(i_normal, 0.0);

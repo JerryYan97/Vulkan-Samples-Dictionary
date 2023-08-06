@@ -47,8 +47,8 @@ private:
     void InitVpUboObjects(); // Create MVP matrices's GPU buffer objects and transfer data to the GPU buffers.
     void DestroyVpUboObjects();
 
-    void InitLightsUboObjects();
-    void DestroyLightsUboObjects();
+    void InitFragUboObjects();
+    void DestroyFragUboObjects();
 
     VkPipelineVertexInputStateCreateInfo CreatePipelineVertexInputInfo();
     VkPipelineDepthStencilStateCreateInfo CreateDepthStencilStateInfo();
