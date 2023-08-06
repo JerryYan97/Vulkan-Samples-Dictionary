@@ -860,6 +860,7 @@ namespace SharedLib
                 depthImgViewInfo.subresourceRange.levelCount = 1;
                 depthImgViewInfo.subresourceRange.layerCount = 1;
             }
+            VK_CHECK(vkCreateImageView(m_device, &depthImgViewInfo, nullptr, &m_swapchainDepthImageViews[i]));
         }
     }
 

@@ -113,9 +113,10 @@ void main()
     color = color / (color + vec3(1.0));
     color = pow(color, vec3(1.0/2.2));  
 
-	tempColor = vec3(viewNormalCosTheta);
-
-	// outColor = vec4(i_worldNormal, 0.0);
+	// tempColor = vec3(viewNormalCosTheta);
+	tempColor = normalize(i_worldNormal + vec3(1.0));
+	
+	outColor = vec4(tempColor, 1.0);
 	// outColor = vec4(i_sceneInfo.lightPositions[0], 0.0);
-	outColor = vec4(wo, 0.0);
+	// outColor = vec4(tempColor, 0.0);
 }

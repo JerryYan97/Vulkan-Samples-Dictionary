@@ -129,7 +129,8 @@ void PBRBasicApp::InitVpUboObjects()
 void PBRBasicApp::ReadInSphereData()
 {
     std::string inputfile = SOURCE_PATH;
-    inputfile += "/../data/uvNormalSphere.obj";
+    // inputfile += "/../data/uvNormalSphere.obj";
+    inputfile += "/../data/normalCube.obj";
     
     tinyobj::ObjReaderConfig readerConfig;
     tinyobj::ObjReader sphereObjReader;
@@ -476,7 +477,7 @@ VkPipelineDepthStencilStateCreateInfo PBRBasicApp::CreateDepthStencilStateInfo()
         depthStencilInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
         depthStencilInfo.depthTestEnable = VK_TRUE;
         depthStencilInfo.depthWriteEnable = VK_TRUE;
-        depthStencilInfo.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+        depthStencilInfo.depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL; // Reverse depth for higher precision. 
         depthStencilInfo.depthBoundsTestEnable = VK_FALSE;
         depthStencilInfo.stencilTestEnable = VK_FALSE;
     }
@@ -492,7 +493,7 @@ void PBRBasicApp::InitPipeline()
         pipelineRenderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
         pipelineRenderCreateInfo.colorAttachmentCount = 1;
         pipelineRenderCreateInfo.pColorAttachmentFormats = &m_choisenSurfaceFormat.format;
-        pipelineRenderCreateInfo.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT;
+        pipelineRenderCreateInfo.depthAttachmentFormat = VK_FORMAT_D16_UNORM;
     }
 
     m_pipeline.SetPNext(&pipelineRenderCreateInfo);

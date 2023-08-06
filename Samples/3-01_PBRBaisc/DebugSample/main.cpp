@@ -35,7 +35,7 @@ int main()
         VkDescriptorSet currentSkyboxPipelineDesSet0 = app.GetCurrentFrameDescriptorSet0();
         VkExtent2D swapchainImageExtent = app.GetSwapchainImageExtent();
 
-        std::cout << "swapchain width: " << swapchainImageExtent.width << "; swapchain height: " << swapchainImageExtent.height << std::endl;
+        // std::cout << "swapchain width: " << swapchainImageExtent.width << "; swapchain height: " << swapchainImageExtent.height << std::endl;
 
         app.FrameStart();
 

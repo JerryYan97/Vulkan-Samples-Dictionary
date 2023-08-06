@@ -110,8 +110,11 @@ namespace SharedLib
             m_pRasterizer->rasterizerDiscardEnable = VK_FALSE;
             m_pRasterizer->polygonMode = VK_POLYGON_MODE_FILL;
             m_pRasterizer->lineWidth = 1.0f;
-            m_pRasterizer->cullMode = VK_CULL_MODE_BACK_BIT;
-            m_pRasterizer->frontFace = VK_FRONT_FACE_CLOCKWISE;
+            // m_pRasterizer->cullMode = VK_CULL_MODE_BACK_BIT;
+            m_pRasterizer->cullMode = VK_CULL_MODE_NONE;
+            // NOTE: We reverse the depth so the faces' winding is also reversed.
+            // m_pRasterizer->frontFace = VK_FRONT_FACE_CLOCKWISE;
+            m_pRasterizer->frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
             m_pRasterizer->depthBiasEnable = VK_FALSE;
         }
     }

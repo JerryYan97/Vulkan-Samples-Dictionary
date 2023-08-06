@@ -33,7 +33,7 @@ namespace SharedLib
         // m_aspect = 960.f / 680.f;
         m_aspect = 1280.f / 640.f;
 
-        m_far = 10000.f;
+        m_far = 100.f;
         m_near = 0.1f;
     }
 
