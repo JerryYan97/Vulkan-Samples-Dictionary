@@ -26,11 +26,10 @@ public:
 
     VkPipeline GetPipeline() { return m_pipeline.GetVkPipeline(); }
 
-    uint32_t GetIdxCnt() { return m_idxCnt; }
+    uint32_t GetIdxCnt() { return m_idxData.size(); }
 
     VkBuffer GetIdxBuffer() { return m_idxBuffer; }
     VkBuffer GetVertBuffer() { return m_vertBuffer; }
-
 
 private:
     void InitPipeline();
@@ -62,11 +61,11 @@ private:
 
     std::vector<VkDescriptorSet> m_pipelineDescriptorSet0s;
 
-    float*    m_pVertData;
     uint32_t  m_vertBufferByteCnt;
-    uint32_t* m_pIdxData;
-    uint32_t  m_idxCnt;
     uint32_t  m_idxBufferByteCnt;
+
+    std::vector<float> m_vertData;
+    std::vector<uint32_t> m_idxData;
 
     VkBuffer      m_vertBuffer;
     VmaAllocation m_vertBufferAlloc;

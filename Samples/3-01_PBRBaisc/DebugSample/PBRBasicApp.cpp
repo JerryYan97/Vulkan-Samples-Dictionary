@@ -9,21 +9,6 @@
 
 #include "vk_mem_alloc.h"
 
-static bool g_isDown = false;
-
-static void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
-{
-    if (button == GLFW_MOUSE_BUTTON_MIDDLE && action == GLFW_PRESS)
-    {
-        g_isDown = true;
-    }
-
-    if (button == GLFW_MOUSE_BUTTON_MIDDLE && action == GLFW_RELEASE)
-    {
-        g_isDown = false;
-    }
-}
-
 // ================================================================================================================
 PBRBasicApp::PBRBasicApp() : 
     GlfwApplication(),
@@ -38,13 +23,10 @@ PBRBasicApp::PBRBasicApp() :
     m_vpUboAlloc(VK_NULL_HANDLE),
     m_idxBuffer(VK_NULL_HANDLE),
     m_idxBufferAlloc(VK_NULL_HANDLE),
-    m_idxBufferByteCnt(0),
-    m_idxCnt(0),
-    m_pIdxData(nullptr),
-    m_pVertData(nullptr),
     m_vertBuffer(VK_NULL_HANDLE),
     m_vertBufferAlloc(VK_NULL_HANDLE),
-    m_vertBufferByteCnt(0)
+    m_vertBufferByteCnt(0),
+    m_idxBufferByteCnt(0)
 {
     m_pCamera = new SharedLib::Camera();
 }
@@ -69,18 +51,6 @@ PBRBasicApp::~PBRBasicApp()
 
     // Destroy the descriptor set layout
     vkDestroyDescriptorSetLayout(m_device, m_pipelineDesSetLayout, nullptr);
-
-    if (m_pVertData != nullptr)
-    {
-        free(m_pVertData);
-        m_pVertData = nullptr;
-    }
-
-    if (m_pIdxData != nullptr)
-    {
-        free(m_pIdxData);
-        m_pIdxData = nullptr;
-    }
 }
 
 // ================================================================================================================
@@ -126,11 +96,12 @@ void PBRBasicApp::InitVpUboObjects()
 }
 
 // ================================================================================================================
+// NOTE: A vert = pos + normal + uv.
 void PBRBasicApp::ReadInSphereData()
 {
     std::string inputfile = SOURCE_PATH;
-    // inputfile += "/../data/uvNormalSphere.obj";
-    inputfile += "/../data/normalCube.obj";
+    inputfile += "/../data/uvNormalSphere.obj";
+    // inputfile += "/../data/normalCube.obj";
     
     tinyobj::ObjReaderConfig readerConfig;
     tinyobj::ObjReader sphereObjReader;
@@ -140,19 +111,14 @@ void PBRBasicApp::ReadInSphereData()
     auto& shapes = sphereObjReader.GetShapes();
     auto& attrib = sphereObjReader.GetAttrib();
 
-    m_pVertData = static_cast<float*>(malloc(sizeof(float) * attrib.vertices.size() * 2));
-    m_vertBufferByteCnt = sizeof(float) * attrib.vertices.size() * 2;
-
     // We assume that this test only has one shape
     assert(shapes.size() == 1, "This application only accepts one shape!");
-    m_pIdxData = static_cast<uint32_t*>(malloc(sizeof(uint32_t) * (shapes[0].mesh.indices.size())));
-    m_idxCnt = shapes[0].mesh.indices.size();
-    m_idxBufferByteCnt = sizeof(uint32_t) * (shapes[0].mesh.indices.size());
 
     for (uint32_t s = 0; s < shapes.size(); s++)
     {
         // Loop over faces(polygon)
         uint32_t index_offset = 0;
+        uint32_t idxBufIdx = 0;
         for (uint32_t f = 0; f < shapes[s].mesh.num_face_vertices.size(); f++)
         {
             uint32_t fv = shapes[s].mesh.num_face_vertices[f];
@@ -163,17 +129,14 @@ void PBRBasicApp::ReadInSphereData()
                 // Access to vertex
                 tinyobj::index_t idx = shapes[s].mesh.indices[index_offset + v];
 
-                // We use the vertex index of the tinyObj as our vertex buffer's vertex index.
-                m_pIdxData[index_offset + v] = uint32_t(idx.vertex_index);
-
                 float vx = attrib.vertices[3 * size_t(idx.vertex_index) + 0];
                 float vy = attrib.vertices[3 * size_t(idx.vertex_index) + 1];
                 float vz = attrib.vertices[3 * size_t(idx.vertex_index) + 2];
 
                 // Transfer the vertex buffer's vertex index to the element index -- 6 * vertex index + xxx;
-                m_pVertData[6 * size_t(idx.vertex_index) + 0] = vx;
-                m_pVertData[6 * size_t(idx.vertex_index) + 1] = vy;
-                m_pVertData[6 * size_t(idx.vertex_index) + 2] = vz;
+                m_vertData.push_back(vx);
+                m_vertData.push_back(vy);
+                m_vertData.push_back(vz);
 
                 // Check if `normal_index` is zero or positive. negative = no normal data
                 assert(idx.normal_index >= 0, "The model doesn't have normal information but it is necessary.");
@@ -181,13 +144,19 @@ void PBRBasicApp::ReadInSphereData()
                 float ny = attrib.normals[3 * size_t(idx.normal_index) + 1];
                 float nz = attrib.normals[3 * size_t(idx.normal_index) + 2];
 
-                m_pVertData[6 * size_t(idx.vertex_index) + 3] = nx;
-                m_pVertData[6 * size_t(idx.vertex_index) + 4] = ny;
-                m_pVertData[6 * size_t(idx.vertex_index) + 5] = nz;
+                m_vertData.push_back(nx);
+                m_vertData.push_back(ny);
+                m_vertData.push_back(nz);
+
+                m_idxData.push_back(idxBufIdx);
+                idxBufIdx++;
             }
             index_offset += fv;
         }
     }
+
+    m_vertBufferByteCnt = m_vertData.size() * sizeof(float);
+    m_idxBufferByteCnt = m_idxData.size() * sizeof(uint32_t);
 }
 
 // ================================================================================================================
@@ -239,8 +208,8 @@ void PBRBasicApp::InitSphereVertexIndexBuffers()
         nullptr);
 
     // Send sphere data to the GPU buffers
-    CopyRamDataToGpuBuffer(m_pVertData, m_vertBuffer, m_vertBufferAlloc, m_vertBufferByteCnt);
-    CopyRamDataToGpuBuffer(m_pIdxData, m_idxBuffer, m_idxBufferAlloc, m_idxBufferByteCnt);
+    CopyRamDataToGpuBuffer(m_vertData.data(), m_vertBuffer, m_vertBufferAlloc, m_vertBufferByteCnt);
+    CopyRamDataToGpuBuffer(m_idxData.data(), m_idxBuffer, m_idxBufferAlloc, m_idxBufferByteCnt);
 }
 
 // ================================================================================================================
@@ -284,10 +253,10 @@ void PBRBasicApp::InitFragUboObjects()
     // Copy light and camera data to ubo buffer
     // The last element of each lines is a padding float
     float lightPos[20] = {
-        14.f,  1.f, -1.f, 0.f,
-        14.f,  1.f,  1.f, 0.f,
-        14.f, -1.f, -1.f, 0.f,
-        14.f, -1.f,  1.f, 0.f,
+        10.f,  3.f, -8.f, 0.f,
+        10.f,  3.f,  8.f, 0.f,
+        10.f, -3.f, -8.f, 0.f,
+        10.f, -3.f,  8.f, 0.f,
         cameraPos[0], cameraPos[1], cameraPos[2], 0.f
     };
 
@@ -526,7 +495,6 @@ void PBRBasicApp::AppInit()
 
     // Init glfw window.
     InitGlfwWindowAndCallbacks();
-    glfwSetMouseButtonCallback(m_pWindow, MouseButtonCallback);
 
     // Create vulkan surface from the glfw window.
     VK_CHECK(glfwCreateWindowSurface(m_instance, m_pWindow, nullptr, &m_surface));

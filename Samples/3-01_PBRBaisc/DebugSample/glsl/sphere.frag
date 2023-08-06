@@ -56,9 +56,11 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
 
 void main()
 {
-	vec3 lightColor = vec3(23.47, 21.31, 20.79);
-	vec3 sphereRefAlbedo = vec3(1.0, 0.3, 0.3);
-	vec3 sphereDifAlbedo = vec3(1.0, 0.3, 0.3);
+	vec3 lightColor = vec3(24.0, 24.0, 24.0);
+
+	// Gold
+	vec3 sphereRefAlbedo = vec3(1.00, 0.71, 0.09);
+	vec3 sphereDifAlbedo = vec3(1.00, 0.71, 0.09);
 
 	vec3 wo = normalize(i_sceneInfo.cameraPosition - i_worldPos);
 	
@@ -68,8 +70,6 @@ void main()
 
 	float metallic = i_params.x;
 	float roughness = i_params.y;
-
-	vec3 tempColor;
 
 	vec3 Lo = vec3(0.0); // Output light values to the view direction.
 	for(int i = 0; i < 4; i++)
@@ -81,8 +81,6 @@ void main()
 
 		float attenuation = 1.0 / (distance * distance);
 		vec3 radiance     = lightColor * attenuation; 
-
-		tempColor = radiance;
 
 		float lightNormalCosTheta = max(dot(worldNormal, wi), 0.0);
 
@@ -99,24 +97,17 @@ void main()
 		
 		vec3 specular = NFG / denominator;
 
-		// tempColor = vec3(viewNormalCosTheta);
-
 		vec3 kD = vec3(1.0) - F; // The amount of light goes into the material.
 		kD *= (1.0 - metallic);
 
 		Lo += (kD * (sphereDifAlbedo / PI) + specular) * radiance * lightNormalCosTheta;
 	}
 
-	vec3 ambient = vec3(0.03) * sphereRefAlbedo;
+	vec3 ambient = vec3(0.0001) * sphereRefAlbedo;
     vec3 color = ambient + Lo;
 	
     color = color / (color + vec3(1.0));
     color = pow(color, vec3(1.0/2.2));  
 
-	// tempColor = vec3(viewNormalCosTheta);
-	tempColor = normalize(i_worldNormal + vec3(1.0));
-	
-	outColor = vec4(tempColor, 1.0);
-	// outColor = vec4(i_sceneInfo.lightPositions[0], 0.0);
-	// outColor = vec4(tempColor, 0.0);
+	outColor = vec4(color, 1.0);
 }
