@@ -13,3 +13,8 @@ LearnOpenGL PBR x3
 Unreal4 note x1
 Disney BRDF x1
 PBS Physics math note x1
+
+
+Download data:
+https://www.geeksforgeeks.org/downloading-files-web-using-python/
+https://help.dropbox.com/share/force-download
