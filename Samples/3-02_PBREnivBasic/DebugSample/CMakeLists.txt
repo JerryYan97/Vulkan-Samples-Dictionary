@@ -9,8 +9,8 @@ include_directories("$ENV{VULKAN_SDK}/Include" "../../../ThirdPartyLibs/VMA")
 include_directories(../../../ThirdPartyLibs/glfw/include/GLFW)
 include_directories(../../../ThirdPartyLibs/glfw/include)
 
-set(HDRILoaderPath ../../../ThirdPartyLibs/hdrloader)
-include_directories(${HDRILoaderPath})
+set(StbImagePath ../../../ThirdPartyLibs/stb)
+include_directories(${StbImagePath})
 
 set(TinyObjPath ../../../ThirdPartyLibs/TinyObj)
 include_directories(${TinyObjPath})
@@ -21,8 +21,7 @@ link_directories("../../../ThirdPartyLibs/glfw/build/src/Debug/")
 add_definitions(-DSOURCE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}\")
 add_executable(${MY_APP_NAME} "main.cpp"
                               ${CMAKE_CURRENT_SOURCE_DIR}/PBREnivBasicApp.h
-                              ${CMAKE_CURRENT_SOURCE_DIR}/PBREnivBasicApp.cpp
-                              ${HDRILoaderPath}/hdrloader.cpp)
+                              ${CMAKE_CURRENT_SOURCE_DIR}/PBREnivBasicApp.cpp)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../3-00_SharedLibrary
                  ${CMAKE_CURRENT_SOURCE_DIR}/build/SharedLibrary)

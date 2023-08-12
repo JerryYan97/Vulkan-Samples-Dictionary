@@ -4,6 +4,9 @@
 #include "../../3-00_SharedLibrary/Camera.h"
 #include "../../3-00_SharedLibrary/Event.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 #include "vk_mem_alloc.h"
 
 static bool g_isDown = false;
@@ -77,7 +80,7 @@ void PBREnivBasicApp::DestroyCameraUboObjects()
 // ================================================================================================================
 VkDeviceSize PBREnivBasicApp::GetHdrByteNum()
 {
-    return 3 * sizeof(float) * m_hdrLoaderResult.width * m_hdrLoaderResult.height;
+    return 3 * sizeof(float) * m_hdrImgWidth * m_hdrImgHeight;
 }
 
 // ================================================================================================================
@@ -114,7 +117,12 @@ void PBREnivBasicApp::InitHdrRenderObjects()
     // Load the HDRI image into RAM
     std::string hdriFilePath = SOURCE_PATH;
     hdriFilePath += "/../data/output_skybox.hdr";
-    bool ret = HDRLoader::load(hdriFilePath.c_str(), m_hdrLoaderResult);
+
+    int width, height, nrComponents;
+    m_hdrImgData = stbi_loadf(hdriFilePath.c_str(), &width, &height, &nrComponents, 0);
+
+    m_hdrImgWidth = (uint32_t)width;
+    m_hdrImgHeight = (uint32_t)height;
 
     VmaAllocationCreateInfo hdrAllocInfo{};
     {
@@ -124,8 +132,8 @@ void PBREnivBasicApp::InitHdrRenderObjects()
 
     VkExtent3D extent{};
     {
-        extent.width = m_hdrLoaderResult.width / 6;
-        extent.height = m_hdrLoaderResult.height;
+        extent.width = m_hdrImgWidth / 6;
+        extent.height = m_hdrImgHeight;
         extent.depth = 1;
     }
 

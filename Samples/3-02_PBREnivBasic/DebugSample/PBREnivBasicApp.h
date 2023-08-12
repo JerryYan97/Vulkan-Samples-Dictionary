@@ -1,7 +1,6 @@
 #pragma once
 #include "../../3-00_SharedLibrary/Application.h"
 #include "../../3-00_SharedLibrary/Pipeline.h"
-#include "hdrloader.h"
 
 VK_DEFINE_HANDLE(VmaAllocation);
 
@@ -21,10 +20,10 @@ public:
     void UpdateCameraAndGpuBuffer();
 
     VkDeviceSize GetHdrByteNum();
-    void* GetHdrDataPointer() { return m_hdrLoaderResult.cols; }
+    void* GetHdrDataPointer() { return m_hdrImgData; }
     VkImage GetCubeMapImage() { return m_hdrCubeMapImage; }
     VkExtent2D GetHdrImgExtent() 
-        { return VkExtent2D{ (uint32_t)m_hdrLoaderResult.width, (uint32_t)m_hdrLoaderResult.height}; }
+        { return VkExtent2D{ m_hdrImgWidth, m_hdrImgHeight }; }
 
     VkFence GetFence(uint32_t i) { return m_inFlightFences[i]; }
 
@@ -56,7 +55,10 @@ private:
     VkImageView     m_hdrCubeMapView;
     VkSampler       m_hdrSampler;
     VmaAllocation   m_hdrCubeMapAlloc;
-    HDRLoaderResult m_hdrLoaderResult;
+
+    uint32_t m_hdrImgWidth;
+    uint32_t m_hdrImgHeight;
+    float*   m_hdrImgData;
 
     SharedLib::Camera*           m_pCamera;
     std::vector<VkBuffer>        m_cameraParaBuffers;
