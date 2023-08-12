@@ -555,16 +555,4 @@ void PBRBasicApp::AppInit()
     InitFragUboObjects();
     InitPipelineDescriptorSets();
     InitSwapchainSyncObjects();
-
-    /*
-    InitSkyboxShaderModules();
-    InitSkyboxPipelineDescriptorSetLayout();
-    InitSkyboxPipelineLayout();
-    InitSkyboxPipeline();
-
-    InitHdrRenderObjects();
-    
-    InitSkyboxPipelineDescriptorSets();
-    InitSwapchainSyncObjects();
-    */
 }
