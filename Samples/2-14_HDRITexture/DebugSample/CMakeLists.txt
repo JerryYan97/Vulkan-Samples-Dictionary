@@ -13,8 +13,8 @@ set(DearImGUIPath ../../../ThirdPartyLibs/ImGUIExplore/import/imgui)
 include_directories(${DearImGUIPath})
 include_directories(${DearImGUIPath}/backends)
 
-set(HDRILoaderPath ../../../ThirdPartyLibs/hdrloader)
-include_directories(${HDRILoaderPath})
+set(StbImagePath ../../../ThirdPartyLibs/stb)
+include_directories(${StbImagePath})
 
 link_directories("$ENV{VULKAN_SDK}/lib")
 link_directories("../../../ThirdPartyLibs/glfw/build/src/Debug/")
@@ -27,8 +27,7 @@ add_executable(${MY_APP_NAME} "main.cpp"
                               ${DearImGUIPath}/imgui_tables.cpp
                               ${DearImGUIPath}/imgui_widgets.cpp
                               ${DearImGUIPath}/backends/imgui_impl_vulkan.cpp
-                              ${DearImGUIPath}/backends/imgui_impl_glfw.cpp
-                              ${HDRILoaderPath}/hdrloader.cpp)
+                              ${DearImGUIPath}/backends/imgui_impl_glfw.cpp)
 
 target_compile_features(${MY_APP_NAME} PRIVATE cxx_std_17)
 

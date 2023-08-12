@@ -16,4 +16,6 @@ target_sources(
     ${CMAKE_CURRENT_SOURCE_DIR}/Pipeline.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Pipeline.h
     ${CMAKE_CURRENT_SOURCE_DIR}/VulkanDbgUtils.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/DataGenUtils.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/DataGenUtils.cpp
 )

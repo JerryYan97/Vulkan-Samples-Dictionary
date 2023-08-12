@@ -1,13 +1,11 @@
-#define IMGUI_DEFINE_MATH_OPERATORS
-#include "imgui_impl_glfw.h"
-#include "imgui_impl_vulkan.h"
-
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
 
 #include <vulkan/vulkan.h>
 #include <glfw3.h>
-#include "hdrloader.h"
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 #include <vector>
 #include <set>
@@ -146,7 +144,8 @@ VmaAllocator allocator;
 
 // Create HDR releted objects
 void CreateHdrRenderObjects(
-    const HDRLoaderResult& hdrLoadRes)
+    uint32_t width,
+    uint32_t height)
 {
     VmaAllocationCreateInfo hdrAllocInfo{};
     {
@@ -156,8 +155,8 @@ void CreateHdrRenderObjects(
 
     VkExtent3D extent{};
     {
-        extent.width = hdrLoadRes.width;
-        extent.height = hdrLoadRes.height;
+        extent.width = width;
+        extent.height = height;
         extent.depth = 1;
     }
 
@@ -709,11 +708,12 @@ int main()
     // Load the HDRI image into RAM
     std::string hdriFilePath = SOURCE_PATH;
     hdriFilePath += "/../data/little_paris_eiffel_tower_4k.hdr";
-    HDRLoaderResult hdrLdRes;
-    bool ret = HDRLoader::load(hdriFilePath.c_str(), hdrLdRes);
+
+    int width, height, nrComponents;
+    float* data = stbi_loadf(hdriFilePath.c_str(), &width, &height, &nrComponents, 0);
 
     // Create GPU resources for the HDRI image
-    CreateHdrRenderObjects(hdrLdRes);
+    CreateHdrRenderObjects(width, height);
 
     // Create pipeline binding objects for the HDRI image
     VkDescriptorSetLayoutBinding hdriSamplerBinding{};
@@ -851,13 +851,6 @@ int main()
         subResRange.layerCount = 1;
     }
 
-    // Setup Dear ImGui context
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
-
-    ImGui_ImplGlfw_InitForVulkan(window, true);
-
     // Send the HDR image to GPU:
     // - Copy RAM to GPU staging buffer;
     // - Copy buffer to image;
@@ -877,7 +870,7 @@ int main()
             stgBufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
             stgBufInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
             stgBufInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-            stgBufInfo.size = 3 * sizeof(float) * hdrLdRes.width * hdrLdRes.height;
+            stgBufInfo.size = 3 * sizeof(float) * width * height;
         }
 
         VK_CHECK(vmaCreateBuffer(allocator, &stgBufInfo, &stagingBufAllocInfo, &stagingBuffer, &stagingBufAlloc, nullptr));
@@ -885,7 +878,7 @@ int main()
         // Copy the RAM data to the staging buffer
         void* pStgBufMem;
         VK_CHECK(vmaMapMemory(allocator, stagingBufAlloc, &pStgBufMem));
-        memcpy(pStgBufMem, hdrLdRes.cols, 3 * sizeof(float) * hdrLdRes.width * hdrLdRes.height);
+        memcpy(pStgBufMem, data, 3 * sizeof(float) * width * height);
         vmaUnmapMemory(allocator, stagingBufAlloc);
 
         /* Send staging buffer data to the GPU image. */ 
@@ -921,8 +914,8 @@ int main()
         {
             VkExtent3D extent{};
             {
-                extent.width = hdrLdRes.width;
-                extent.height = hdrLdRes.height;
+                extent.width = width;
+                extent.height = height;
                 extent.depth = 1;
             }
 
@@ -1009,10 +1002,6 @@ int main()
             // Not success or usable.
             throw std::runtime_error("failed to acquire swap chain image!");
         }
-
-        // Prepare the Dear ImGUI frame data
-        ImGui_ImplGlfw_NewFrame();
-        // ImGui::NewFrame();
 
         // Reset unused previous frame's resource
         vkResetFences(device, 1, &inFlightFences[currentFrame]);
@@ -1165,8 +1154,8 @@ int main()
     }
 
     vkDeviceWaitIdle(device);
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
+
+    stbi_image_free(data);
 
     // Cleanup
     // Cleanup Swapchain
