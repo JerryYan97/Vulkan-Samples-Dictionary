@@ -1,7 +1,7 @@
 #include "SphericalToCubemap.h"
 #include <glfw3.h>
-#include "../../Samples/3-00_SharedLibrary/VulkanDbgUtils.h"
-#include "../../Samples/3-00_SharedLibrary/Camera.h"
+#include "../../SharedLibrary/Utils/VulkanDbgUtils.h"
+#include "../../SharedLibrary/Camera/Camera.h"
 
 #include "vk_mem_alloc.h"
 

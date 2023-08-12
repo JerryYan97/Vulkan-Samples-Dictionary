@@ -1,8 +1,8 @@
 #include "PBREnivBasicApp.h"
 #include <glfw3.h>
-#include "../../3-00_SharedLibrary/VulkanDbgUtils.h"
-#include "../../3-00_SharedLibrary/Camera.h"
-#include "../../3-00_SharedLibrary/Event.h"
+#include "../../../SharedLibrary/Utils/VulkanDbgUtils.h"
+#include "../../../SharedLibrary/Camera/Camera.h"
+#include "../../../SharedLibrary/Event/Event.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"

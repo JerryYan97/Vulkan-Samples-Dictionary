@@ -1,6 +1,6 @@
 #pragma once
-#include "../../Samples/3-00_SharedLibrary/Application.h"
-#include "../../Samples/3-00_SharedLibrary/Pipeline.h"
+#include "../../SharedLibrary/Application/Application.h"
+#include "../../SharedLibrary/Pipeline/Pipeline.h"
 
 namespace SharedLib
 {
