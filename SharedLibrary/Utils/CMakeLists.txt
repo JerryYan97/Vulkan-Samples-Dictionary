@@ -1,0 +1,12 @@
+# add_library(SharedLibrary STATIC)
+
+target_sources(
+    SharedLibrary PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/CmdBufUtils.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CmdBufUtils.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/VulkanDbgUtils.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/DataGenUtils.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/DataGenUtils.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/MathUtils.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/MathUtils.cpp
+)

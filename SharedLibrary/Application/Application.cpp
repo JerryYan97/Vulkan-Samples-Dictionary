@@ -3,8 +3,8 @@
 
 #include "Application.h"
 #include "VulkanDbgUtils.h"
-#include "../3-00_SharedLibrary/Event.h"
-#include "../3-00_SharedLibrary/MathUtils.h"
+#include "../Event/Event.h"
+#include "../Utils/MathUtils.h"
 #include <cassert>
 #include <glfw3.h>
 

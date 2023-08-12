@@ -1,7 +1,7 @@
 #include "Camera.h"
 #define _USE_MATH_DEFINES
 #include <math.h>
-#include "Event.h"
+#include "../Event/Event.h"
 #include <cstring>
 #include <cassert>
 

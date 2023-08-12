@@ -1,6 +1,6 @@
 #pragma once
-#include "../../3-00_SharedLibrary/Application.h"
-#include "../../3-00_SharedLibrary/Pipeline.h"
+#include "../../../SharedLibrary/Application/Application.h"
+#include "../../../SharedLibrary/Pipeline/Pipeline.h"
 
 VK_DEFINE_HANDLE(VmaAllocation);
 
