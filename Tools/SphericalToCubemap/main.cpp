@@ -37,7 +37,7 @@ int main(
     SphericalToCubemap app;
     app.AppInit();
 
-    app.ReadInHdri(inputPath.Get());
+    app.ReadInHdri("C:\\JiaruiYan\\Projects\\OneFileVulkans\\Tools\\SphericalToCubemap\\data\\little_paris_eiffel_tower_4k.hdr");
     app.CreateHdriGpuObjects();
 
     // Just get a command buffer from 

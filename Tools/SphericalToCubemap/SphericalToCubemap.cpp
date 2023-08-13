@@ -12,7 +12,7 @@
 
 // ================================================================================================================
 SphericalToCubemap::SphericalToCubemap() :
-    GlfwApplication(),
+    Application(),
     m_pCamera(nullptr),
     m_uboBuffer(VK_NULL_HANDLE),
     m_uboAlloc(VK_NULL_HANDLE),
@@ -93,7 +93,6 @@ void SphericalToCubemap::CreateHdriGpuObjects()
         hdriImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
         hdriImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
         hdriImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-        hdriImgInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
         hdriImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     }
 
@@ -118,7 +117,7 @@ void SphericalToCubemap::CreateHdriGpuObjects()
     
     VkExtent3D outputCubemapExtent{};
     {
-        outputCubemapExtent.width  = (m_height / 2) * 6;
+        outputCubemapExtent.width  = m_height / 2;
         outputCubemapExtent.height = m_height / 2;
         outputCubemapExtent.depth  = 1;
     }
@@ -127,16 +126,20 @@ void SphericalToCubemap::CreateHdriGpuObjects()
     {
         cubeMapImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         cubeMapImgInfo.imageType = VK_IMAGE_TYPE_2D;
-        cubeMapImgInfo.format = VK_FORMAT_R32G32B32_SFLOAT;
+        // cubeMapImgInfo.format = VK_FORMAT_R32G32B32_SFLOAT; // The color attachment format must has an 'A' element
+        cubeMapImgInfo.format = VK_FORMAT_R32G32B32A32_SFLOAT;
         cubeMapImgInfo.extent = outputCubemapExtent;
         cubeMapImgInfo.mipLevels = 1;
         cubeMapImgInfo.arrayLayers = 6;
         cubeMapImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
         cubeMapImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
         cubeMapImgInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-        cubeMapImgInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+        // cubeMapImgInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT; // It's just an output. We don't need a cubemap sampler.
         cubeMapImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     }
+
+    // CheckVkImageSupport(m_physicalDevice, cubeMapImgInfo);
+    // PrintFormatForColorRenderTarget(m_physicalDevice);
 
     VK_CHECK(vmaCreateImage(*m_pAllocator,
                             &cubeMapImgInfo,
@@ -149,11 +152,15 @@ void SphericalToCubemap::CreateHdriGpuObjects()
     {
         outputCubemapInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         outputCubemapInfo.image = m_outputCubemap;
-        outputCubemapInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
-        outputCubemapInfo.format = VK_FORMAT_R32G32B32_SFLOAT;
+        outputCubemapInfo.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+        outputCubemapInfo.format = VK_FORMAT_R32G32B32A32_SFLOAT;
         outputCubemapInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         outputCubemapInfo.subresourceRange.levelCount = 1;
         outputCubemapInfo.subresourceRange.layerCount = 6;
+        outputCubemapInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+        outputCubemapInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+        outputCubemapInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+        outputCubemapInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
     }
     VK_CHECK(vkCreateImageView(m_device, &outputCubemapInfo, nullptr, &m_outputCubemapImageView));
 }
@@ -161,31 +168,17 @@ void SphericalToCubemap::CreateHdriGpuObjects()
 // ================================================================================================================
 void SphericalToCubemap::AppInit()
 {
-    glfwInit();
-    uint32_t glfwExtensionCount = 0;
-    const char** glfwExtensions;
-    glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-    std::vector<const char*> instExtensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
-
-    InitInstance(instExtensions, glfwExtensionCount);
-
-    // Init glfw window.
-    InitGlfwWindowAndCallbacks();
-
-    // Create vulkan surface from the glfw window.
-    VK_CHECK(glfwCreateWindowSurface(m_instance, m_pWindow, nullptr, &m_surface));
+    std::vector<const char*> instExtensions;
+    InitInstance(instExtensions, 0);
 
     InitPhysicalDevice();
     InitGfxQueueFamilyIdx();
-    InitPresentQueueFamilyIdx();
 
     // Queue family index should be unique in vk1.2:
     // https://vulkan.lunarg.com/doc/view/1.2.198.0/windows/1.2-extensions/vkspec.html#VUID-VkDeviceCreateInfo-queueFamilyIndex-02802
-    std::vector<VkDeviceQueueCreateInfo> deviceQueueInfos = CreateDeviceQueueInfos({ m_graphicsQueueFamilyIdx,
-                                                                                     m_presentQueueFamilyIdx });
+    std::vector<VkDeviceQueueCreateInfo> deviceQueueInfos = CreateDeviceQueueInfos({ m_graphicsQueueFamilyIdx });
     // We need the swap chain device extension and the dynamic rendering extension.
-    const std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-                                                        VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME };
+    const std::vector<const char*> deviceExtensions = { VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME };
 
     VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeature{};
     {
@@ -193,14 +186,12 @@ void SphericalToCubemap::AppInit()
         dynamicRenderingFeature.dynamicRendering = VK_TRUE;
     }
 
-    InitDevice(deviceExtensions, 2, deviceQueueInfos, &dynamicRenderingFeature);
+    InitDevice(deviceExtensions, deviceExtensions.size(), deviceQueueInfos, &dynamicRenderingFeature);
     InitVmaAllocator();
     InitGraphicsQueue();
-    InitPresentQueue();
     InitDescriptorPool();
 
     InitGfxCommandPool();
     InitGfxCommandBuffers(SharedLib::MAX_FRAMES_IN_FLIGHT);
 
-    InitSwapchain();
 }

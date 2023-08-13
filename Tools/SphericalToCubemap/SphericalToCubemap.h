@@ -7,7 +7,7 @@ namespace SharedLib
     class Camera;
 }
 
-class SphericalToCubemap : public SharedLib::GlfwApplication
+class SphericalToCubemap : public SharedLib::Application
 {
 public:
     SphericalToCubemap();

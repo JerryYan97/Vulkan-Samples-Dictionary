@@ -18,7 +18,7 @@ add_executable(${MY_APP_NAME} "main.cpp"
                               ${CMAKE_CURRENT_SOURCE_DIR}/SphericalToCubemap.h
                               ${CMAKE_CURRENT_SOURCE_DIR}/SphericalToCubemap.cpp)
 # Load the shared library.
-set(SHARED_LIB_GLFW TRUE)
+set(SHARED_LIB_APP TRUE)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../SharedLibrary ${CMAKE_CURRENT_BINARY_DIR}/SharedLibrary)
 
 get_target_property(APP_SRC_LIST ${MY_APP_NAME} SOURCES)

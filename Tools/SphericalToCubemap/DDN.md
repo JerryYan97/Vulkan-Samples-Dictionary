@@ -24,6 +24,15 @@ Besides, according to Vulkan Spec:
 
 Therefore, the driver has already helped us link the right color attachment layer to ps shader output. The only thing that we need to note is that our projection matrices' sequence has to obey the [cubemap tradition](https://registry.khronos.org/vulkan/specs/1.3/html/chap16.html#_cube_map_face_selection).
 
+/*
+Due to the fact that AMD 6800XT doesn't support sFloat color render target, I'll normalize the hdri before put it into the gpu and cache the normalized factor and apply it back after finish, because UINT fomart color render target may means the the value clamp to [0, 1] at the shader output stage, which introduces precision lose and make HDR become LDR... Thus, it looks like compute shader is a better idea from the persepctive of performace but that will require more code and we don't care about performace :). Besides, it would only used in the game editor so it's not a big deal.
+*/
+
+We may need a normalize or not. It's still hard to tell from the spec so experiments are necessary. The first thing to check is that whether the input texture has values that are bigger than 1.0. The next thing to check is that whether the output render image has values that are bigger than 1.0.
+
+I guess we don't need to normalize since why the sfloat exists?
+
+
 ## Reference
 
 * [3D space vector to cubemap](http://paulbourke.net/panorama/cubemaps/cubemapinfo.pdf)

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <iostream>
+#include <vulkan/vulkan.h>
+#include <vulkan/vk_enum_string_helper.h>
 
 #define STR(r)    \
 	case r:       \
@@ -73,4 +75,62 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debug_utils_messenger_callback(
 static void CheckVkResult(VkResult err)
 {
     VK_CHECK(err);
+}
+
+static void PrintAllVkFormatFeatureFlagsBits(VkFormatFeatureFlags printFlags)
+{
+    uint32_t checkEnum = 0;
+    do {
+        if (checkEnum & printFlags)
+        {
+            std::cout << string_VkFormatFeatureFlagBits((VkFormatFeatureFlagBits)checkEnum) << std::endl;
+        }
+
+        if (checkEnum == 0)
+        {
+            checkEnum = 1;
+        }
+        else
+        {
+            checkEnum = checkEnum << 1;
+        }
+    } while (checkEnum <= (uint32_t)printFlags);
+}
+
+static void CheckVkImageSupport(VkPhysicalDevice device, VkImageCreateInfo dbgImgInfo)
+{
+    VkFormatProperties properties;
+    vkGetPhysicalDeviceFormatProperties(device, dbgImgInfo.format, &properties);
+    std::cout << "linearTilingFeatures:  " << properties.linearTilingFeatures << std::endl;
+    PrintAllVkFormatFeatureFlagsBits(properties.linearTilingFeatures);
+    std::cout << std::endl;
+
+    std::cout << "optimalTilingFeatures: " << properties.optimalTilingFeatures << std::endl;
+    PrintAllVkFormatFeatureFlagsBits(properties.optimalTilingFeatures);
+    std::cout << std::endl;
+
+    std::cout << "bufferFeatures:        " << properties.bufferFeatures << std::endl;
+    PrintAllVkFormatFeatureFlagsBits(properties.bufferFeatures);
+    std::cout << std::endl << std::endl;
+}
+
+static void PrintFormatForColorRenderTarget(VkPhysicalDevice device)
+{
+    uint32_t checkEnum = 0;
+    do {
+        VkFormatProperties properties;
+        vkGetPhysicalDeviceFormatProperties(device, (VkFormat)checkEnum, &properties);
+
+        if (properties.linearTilingFeatures & VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT)
+        {
+            std::cout << string_VkFormat((VkFormat)checkEnum) << " supports linear tiling color attachment." << std::endl;
+        }
+
+        if (properties.optimalTilingFeatures & VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT)
+        {
+            std::cout << string_VkFormat((VkFormat)checkEnum) << " supports optimal tiling color attachment." << std::endl;
+        }
+
+        checkEnum++;
+    } while (checkEnum <= VK_FORMAT_ASTC_12x12_SRGB_BLOCK);
 }
