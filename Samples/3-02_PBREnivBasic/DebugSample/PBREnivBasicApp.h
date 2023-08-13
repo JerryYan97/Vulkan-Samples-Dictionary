@@ -1,5 +1,5 @@
 #pragma once
-#include "../../../SharedLibrary/Application/Application.h"
+#include "../../../SharedLibrary/Application/GlfwApplication.h"
 #include "../../../SharedLibrary/Pipeline/Pipeline.h"
 
 VK_DEFINE_HANDLE(VmaAllocation);
