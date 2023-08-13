@@ -15,6 +15,11 @@ public:
 
     virtual void AppInit() override;
 
+    void ReadInHdri(const std::string& namePath);
+
+    void CreateHdriGpuObjects();
+    void DestroyHdriGpuObjects();
+
 private:
     SharedLib::Camera* m_pCamera;
 
@@ -24,6 +29,10 @@ private:
     VkImage       m_inputHdri;
     VmaAllocation m_inputHdriAlloc;
     VkImageView   m_inputHdriImageView;
+
+    uint32_t m_width;
+    uint32_t m_height;
+    float*   m_hdriData;
 
     VkImage       m_outputCubemap;
     VmaAllocation m_outputCubemapAlloc;

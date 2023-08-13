@@ -54,6 +54,10 @@ else()
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/Pipeline)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/Utils)
 
+    if(NOT "../../ThirdPartyLibs/VMA" IN_LIST INCLUDE_DIRECTORIES)
+        include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../ThirdPartyLibs/VMA)
+    endif()
+
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/Camera)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/Event)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/Pipeline)

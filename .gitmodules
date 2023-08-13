@@ -16,3 +16,6 @@
 [submodule "ThirdPartyLibs/stb"]
 	path = ThirdPartyLibs/stb
 	url = https://github.com/nothings/stb.git
+[submodule "ThirdPartyLibs/args"]
+	path = ThirdPartyLibs/args
+	url = https://github.com/Taywee/args.git

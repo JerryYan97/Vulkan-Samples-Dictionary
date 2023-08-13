@@ -7,6 +7,8 @@ project(SphericalToCubemap VERSION 0.1 LANGUAGES CXX)
 include_directories("$ENV{VULKAN_SDK}/Include" "../../ThirdPartyLibs/VMA")
 include_directories(../../ThirdPartyLibs/glfw/include/GLFW)
 include_directories(../../ThirdPartyLibs/glfw/include)
+include_directories(../../ThirdPartyLibs/args)
+include_directories(../../ThirdPartyLibs/stb)
 
 link_directories("$ENV{VULKAN_SDK}/lib")
 link_directories("../../ThirdPartyLibs/glfw/build/src/Debug/")
