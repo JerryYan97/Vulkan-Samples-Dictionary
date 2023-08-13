@@ -1,5 +1,6 @@
 #include "SphericalToCubemap.h"
 #include "args.hxx"
+#include "../../SharedLibrary/Utils/CmdBufUtils.h"
 
 int main(
     int argc, 
@@ -37,6 +38,13 @@ int main(
     app.AppInit();
 
     app.ReadInHdri(inputPath.Get());
+    app.CreateHdriGpuObjects();
 
+    // Just get a command buffer from 
+    // VkCommandBuffer cmdBuffer = app.GetCurrentFrameGfxCmdBuffer();
 
+    // Send hdri data to its gpu objects through a staging buffer.
+    {
+        // SharedLib::CmdSendImgDataToGpu(cmdBuffer, );
+    }
 }

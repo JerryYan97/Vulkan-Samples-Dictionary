@@ -2,7 +2,11 @@
 #include <glfw3.h>
 #include "../../SharedLibrary/Utils/VulkanDbgUtils.h"
 #include "../../SharedLibrary/Camera/Camera.h"
+
+#define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+
+#include <cassert>
 
 #include "vk_mem_alloc.h"
 
