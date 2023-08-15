@@ -9,6 +9,7 @@ include_directories(../../ThirdPartyLibs/glfw/include/GLFW)
 include_directories(../../ThirdPartyLibs/glfw/include)
 include_directories(../../ThirdPartyLibs/args)
 include_directories(../../ThirdPartyLibs/stb)
+include_directories(../../ThirdPartyLibs/RenderDoc/renderdoc/api/app)
 
 link_directories("$ENV{VULKAN_SDK}/lib")
 link_directories("../../ThirdPartyLibs/glfw/build/src/Debug/")

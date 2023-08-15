@@ -224,6 +224,7 @@ void SphericalToCubemap::InitPipeline()
     VkPipelineRenderingCreateInfoKHR pipelineRenderCreateInfo{};
     {
         pipelineRenderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+        pipelineRenderCreateInfo.viewMask = 0x3F;
         pipelineRenderCreateInfo.colorAttachmentCount = 1;
         pipelineRenderCreateInfo.pColorAttachmentFormats = &colorAttachmentFormat;
     }

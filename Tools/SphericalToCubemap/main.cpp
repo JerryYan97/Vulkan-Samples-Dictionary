@@ -3,6 +3,10 @@
 #include "../../SharedLibrary/Utils/CmdBufUtils.h"
 #include "../../SharedLibrary/Utils/VulkanDbgUtils.h"
 
+#include "renderdoc_app.h"
+#include <Windows.h>
+#include <cassert>
+
 bool CheckImgValAbove1(
     float* pData,
     uint32_t width,
@@ -48,6 +52,20 @@ int main(
         std::cerr << e.what() << std::endl;
         std::cerr << parser;
         return 1;
+    }
+
+    // RenderDoc debug starts
+    RENDERDOC_API_1_6_0* rdoc_api = NULL;
+    if (HMODULE mod = GetModuleHandleA("renderdoc.dll"))
+    {
+        pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
+        int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_6_0, (void**)&rdoc_api);
+        assert(ret == 1);
+    }
+
+    if (rdoc_api)
+    {
+        rdoc_api->StartFrameCapture(NULL, NULL);
     }
 
     SphericalToCubemap app;
@@ -144,6 +162,7 @@ int main(
             renderInfo.renderArea.extent = colorRenderTargetExtent;
             renderInfo.layerCount = 6;
             renderInfo.colorAttachmentCount = 1;
+            renderInfo.viewMask = 0x3F;
             renderInfo.pColorAttachments = &renderAttachmentInfo;
         }
 
@@ -196,6 +215,11 @@ int main(
         VK_CHECK(vkQueueSubmit(gfxQueue, 1, &submitInfo, submitFence));
         vkWaitForFences(device, 1, &submitFence, VK_TRUE, UINT64_MAX);
         vkDestroyFence(device, submitFence, nullptr);
+    }
+
+    if (rdoc_api)
+    {
+        rdoc_api->EndFrameCapture(NULL, NULL);
     }
     
     // Copy cubemap images out
