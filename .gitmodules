@@ -19,3 +19,6 @@
 [submodule "ThirdPartyLibs/args"]
 	path = ThirdPartyLibs/args
 	url = https://github.com/Taywee/args.git
+[submodule "ThirdPartyLibs/RenderDoc"]
+	path = ThirdPartyLibs/RenderDoc
+	url = https://github.com/baldurk/renderdoc.git
