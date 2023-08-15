@@ -474,15 +474,6 @@ namespace SharedLib
         vkDeviceWaitIdle(m_device);
         CleanupSwapchain();
         InitSwapchain();
-
-        VkExtent3D swapchainExtent{};
-        {
-            swapchainExtent.width = width;
-            swapchainExtent.height = height;
-            swapchainExtent.depth = 1;
-        }
-        CreateSwapchainDepthImages(swapchainExtent);
-        CreateSwapchainImageViews();
     }
 
     // ================================================================================================================

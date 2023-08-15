@@ -43,6 +43,12 @@ namespace SharedLib
 
         VK_CHECK(vmaCreateBuffer(allocator, &stgBufInfo, &stagingBufAllocInfo, &stagingBuffer, &stagingBufAlloc, nullptr));
 
+        // Send data to staging Buffer
+        void* pStgData;
+        vmaMapMemory(allocator, stagingBufAlloc, &pStgData);
+        memcpy(pStgData, pData, bytesCnt);
+        vmaUnmapMemory(allocator, stagingBufAlloc);
+
         /* Send staging buffer data to the GPU image. */
         VkCommandBufferBeginInfo beginInfo{};
         {

@@ -56,6 +56,7 @@ namespace SharedLib
         VmaAllocator* GetVmaAllocator() { return m_pAllocator; }
         VkCommandBuffer GetGfxCmdBuffer(uint32_t i) { return m_gfxCmdBufs[i]; }
         VkDevice GetVkDevice() { return m_device; }
+        VkQueue GetGfxQueue() { return m_graphicsQueue; }
 
     protected:
         // VkInstance, VkPhysicalDevice, VkDevice, gfxFamilyQueueIdx, presentFamilyQueueIdx,

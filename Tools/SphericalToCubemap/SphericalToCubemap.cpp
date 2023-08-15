@@ -25,12 +25,13 @@ SphericalToCubemap::SphericalToCubemap() :
     m_pipelineDescriptorSet0(VK_NULL_HANDLE),
     m_vsShaderModule(VK_NULL_HANDLE),
     m_psShaderModule(VK_NULL_HANDLE),
-    m_pipelineDesSetLayout(VK_NULL_HANDLE),
+    m_pipelineDesSet0Layout(VK_NULL_HANDLE),
     m_pipelineLayout(VK_NULL_HANDLE),
     m_pipeline(),
     m_hdriData(nullptr),
     m_width(0),
-    m_height(0)
+    m_height(0),
+    m_outputCubemapExtent()
 {
     m_pCamera = new SharedLib::Camera();
 }
@@ -42,6 +43,16 @@ SphericalToCubemap::~SphericalToCubemap()
     delete m_pCamera;
 
     DestroyHdriGpuObjects();
+
+    // Destroy shader modules
+    vkDestroyShaderModule(m_device, m_vsShaderModule, nullptr);
+    vkDestroyShaderModule(m_device, m_psShaderModule, nullptr);
+
+    // Destroy the pipeline layout
+    vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
+
+    // Destroy the descriptor set layout
+    vkDestroyDescriptorSetLayout(m_device, m_pipelineDesSet0Layout, nullptr);
 }
 
 // ================================================================================================================
@@ -115,11 +126,10 @@ void SphericalToCubemap::CreateHdriGpuObjects()
     }
     VK_CHECK(vkCreateImageView(m_device, &hdriImgViewInfo, nullptr, &m_inputHdriImageView));
     
-    VkExtent3D outputCubemapExtent{};
     {
-        outputCubemapExtent.width  = m_height / 2;
-        outputCubemapExtent.height = m_height / 2;
-        outputCubemapExtent.depth  = 1;
+        m_outputCubemapExtent.width  = m_height / 2;
+        m_outputCubemapExtent.height = m_height / 2;
+        m_outputCubemapExtent.depth  = 1;
     }
 
     VkImageCreateInfo cubeMapImgInfo{};
@@ -128,7 +138,7 @@ void SphericalToCubemap::CreateHdriGpuObjects()
         cubeMapImgInfo.imageType = VK_IMAGE_TYPE_2D;
         // cubeMapImgInfo.format = VK_FORMAT_R32G32B32_SFLOAT; // The color attachment format must has an 'A' element
         cubeMapImgInfo.format = VK_FORMAT_R32G32B32A32_SFLOAT;
-        cubeMapImgInfo.extent = outputCubemapExtent;
+        cubeMapImgInfo.extent = m_outputCubemapExtent;
         cubeMapImgInfo.mipLevels = 1;
         cubeMapImgInfo.arrayLayers = 6;
         cubeMapImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -166,6 +176,70 @@ void SphericalToCubemap::CreateHdriGpuObjects()
 }
 
 // ================================================================================================================
+void SphericalToCubemap::InitPipelineDescriptorSetLayout()
+{
+    VkDescriptorSetLayoutCreateInfo pipelineDesSet0LayoutInfo{};
+    {
+        pipelineDesSet0LayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    }
+
+    VK_CHECK(vkCreateDescriptorSetLayout(m_device,
+                                         &pipelineDesSet0LayoutInfo,
+                                         nullptr,
+                                         &m_pipelineDesSet0Layout));
+}
+
+// ================================================================================================================
+void SphericalToCubemap::InitPipelineLayout()
+{
+    // Create pipeline layout
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+    {
+        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        // pipelineLayoutInfo.setLayoutCount = 1;
+        // pipelineLayoutInfo.pSetLayouts = &m_skyboxPipelineDesSet0Layout;
+        // pipelineLayoutInfo.pushConstantRangeCount = 0;
+    }
+
+    VK_CHECK(vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_pipelineLayout));
+}
+
+// ================================================================================================================
+void SphericalToCubemap::InitShaderModules()
+{
+    m_vsShaderModule = CreateShaderModule("/ToCubeMap_vert.spv");
+    m_psShaderModule = CreateShaderModule("/ToCubeMap_frag.spv");
+}
+
+// ================================================================================================================
+void SphericalToCubemap::InitPipelineDescriptorSets()
+{
+
+}
+
+// ================================================================================================================
+void SphericalToCubemap::InitPipeline()
+{
+    VkFormat colorAttachmentFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+    VkPipelineRenderingCreateInfoKHR pipelineRenderCreateInfo{};
+    {
+        pipelineRenderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+        pipelineRenderCreateInfo.colorAttachmentCount = 1;
+        pipelineRenderCreateInfo.pColorAttachmentFormats = &colorAttachmentFormat;
+    }
+
+    m_pipeline.SetPNext(&pipelineRenderCreateInfo);
+
+    VkPipelineShaderStageCreateInfo shaderStgsInfo[2] = {};
+    shaderStgsInfo[0] = CreateDefaultShaderStgCreateInfo(m_vsShaderModule, VK_SHADER_STAGE_VERTEX_BIT);
+    shaderStgsInfo[1] = CreateDefaultShaderStgCreateInfo(m_psShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT);
+
+    m_pipeline.SetShaderStageInfo(shaderStgsInfo, 2);
+    m_pipeline.SetPipelineLayout(m_pipelineLayout);
+    m_pipeline.CreatePipeline(m_device);
+}
+
+// ================================================================================================================
 void SphericalToCubemap::AppInit()
 {
     std::vector<const char*> instExtensions;
@@ -178,13 +252,25 @@ void SphericalToCubemap::AppInit()
     // https://vulkan.lunarg.com/doc/view/1.2.198.0/windows/1.2-extensions/vkspec.html#VUID-VkDeviceCreateInfo-queueFamilyIndex-02802
     std::vector<VkDeviceQueueCreateInfo> deviceQueueInfos = CreateDeviceQueueInfos({ m_graphicsQueueFamilyIdx });
     // We need the swap chain device extension and the dynamic rendering extension.
-    const std::vector<const char*> deviceExtensions = { VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME };
+    const std::vector<const char*> deviceExtensions = { VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME, VK_KHR_MULTIVIEW_EXTENSION_NAME };
+
+    VkPhysicalDeviceVulkan11Features vulkan11Features{};
+    {
+        vulkan11Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+        vulkan11Features.multiview = VK_TRUE;
+    }
 
     VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeature{};
     {
         dynamicRenderingFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
+        dynamicRenderingFeature.pNext = &vulkan11Features;
         dynamicRenderingFeature.dynamicRendering = VK_TRUE;
     }
+
+    // sizeof(VkPhysicalDeviceDynamicRenderingFeaturesKHR);
+    // sizeof(VkPhysicalDeviceVulkan11Features);
+
+    // void* pNext[2] = { &dynamicRenderingFeature, &vulkan11Features };
 
     InitDevice(deviceExtensions, deviceExtensions.size(), deviceQueueInfos, &dynamicRenderingFeature);
     InitVmaAllocator();
@@ -192,6 +278,10 @@ void SphericalToCubemap::AppInit()
     InitDescriptorPool();
 
     InitGfxCommandPool();
-    InitGfxCommandBuffers(SharedLib::MAX_FRAMES_IN_FLIGHT);
+    InitGfxCommandBuffers(1);
 
+    InitShaderModules();
+    InitPipelineDescriptorSetLayout();
+    InitPipelineLayout();
+    InitPipeline();
 }

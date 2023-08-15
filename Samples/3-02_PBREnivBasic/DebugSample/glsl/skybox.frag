@@ -15,8 +15,8 @@ layout(location = 0) in vec2 i_screenUv;
 layout(location = 0) out vec4 outColor;
 
 void main() {
-    float halfHeight = i_cameraVecs.widthHeightNear[1];
-    float halfWidth  = i_cameraVecs.widthHeightNear[0];
+    float halfHeight = i_cameraVecs.widthHeightNear[1] / 2.0;
+    float halfWidth  = i_cameraVecs.widthHeightNear[0] / 2.0;
 
     vec3 viewHoriVec = i_cameraVecs.right * i_screenUv[0] * halfWidth;
     vec3 viewVertVec = i_cameraVecs.up    * i_screenUv[1] * halfHeight;

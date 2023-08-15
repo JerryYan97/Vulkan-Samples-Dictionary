@@ -1,5 +1,5 @@
 #pragma once
-#include "../../SharedLibrary/Application/GlfwApplication.h"
+#include "../../SharedLibrary/Application/Application.h"
 #include "../../SharedLibrary/Pipeline/Pipeline.h"
 
 namespace SharedLib
@@ -15,10 +15,24 @@ public:
 
     virtual void AppInit() override;
 
+    void InitPipeline();
+    void InitPipelineDescriptorSetLayout();
+    void InitPipelineLayout();
+    void InitShaderModules();
+    void InitPipelineDescriptorSets();
+
     void ReadInHdri(const std::string& namePath);
 
     void CreateHdriGpuObjects();
     void DestroyHdriGpuObjects();
+
+    float* GetInputHdriData() { return m_hdriData; }
+    uint32_t GetInputHdriWidth() { return m_width; }
+    uint32_t GetInputHdriHeight() { return m_height; }
+    VkImage GetHdriImg() { return m_inputHdri; }
+    VkImageView GetOutputCubemapImgView() { return m_outputCubemapImageView; }
+    VkPipeline GetPipeline() { return m_pipeline.GetVkPipeline(); }
+    VkExtent3D GetOutputCubemapExtent() { return m_outputCubemapExtent; }
 
 private:
     SharedLib::Camera* m_pCamera;
@@ -37,12 +51,13 @@ private:
     VkImage       m_outputCubemap;
     VmaAllocation m_outputCubemapAlloc;
     VkImageView   m_outputCubemapImageView;
+    VkExtent3D    m_outputCubemapExtent;
 
     VkDescriptorSet m_pipelineDescriptorSet0;
 
     VkShaderModule        m_vsShaderModule;
     VkShaderModule        m_psShaderModule;
-    VkDescriptorSetLayout m_pipelineDesSetLayout;
+    VkDescriptorSetLayout m_pipelineDesSet0Layout;
     VkPipelineLayout      m_pipelineLayout;
     SharedLib::Pipeline   m_pipeline;
 };
