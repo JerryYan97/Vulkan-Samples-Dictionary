@@ -128,8 +128,17 @@ int main(
                                        allocator);
     }
 
-    // Draw the 6 cubemap faces
+    // Draw the 6 cubemap faces and copy the images into a buffer
     {
+        VkImageSubresourceRange cubemapSubResRange{};
+        {
+            cubemapSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            cubemapSubResRange.baseMipLevel = 0;
+            cubemapSubResRange.levelCount = 1;
+            cubemapSubResRange.baseArrayLayer = 0;
+            cubemapSubResRange.layerCount = 6;
+        }
+
         // Fill the command buffer
         VkCommandBufferBeginInfo beginInfo{};
         {
@@ -137,13 +146,32 @@ int main(
         }
         VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &beginInfo));
 
-        VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
+        // Transform the layout of the swapchain from undefined to render target.
+        VkImageMemoryBarrier cubemapRenderTargetTransBarrier{};
+        {
+            cubemapRenderTargetTransBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            cubemapRenderTargetTransBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            cubemapRenderTargetTransBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            cubemapRenderTargetTransBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            cubemapRenderTargetTransBarrier.image = app.GetOutputCubemapImg();
+            cubemapRenderTargetTransBarrier.subresourceRange = cubemapSubResRange;
+        }
+
+        vkCmdPipelineBarrier(cmdBuffer,
+            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &cubemapRenderTargetTransBarrier);
+
+        VkClearValue clearColor = { {{1.0f, 0.0f, 0.0f, 1.0f}} };
 
         VkRenderingAttachmentInfoKHR renderAttachmentInfo{};
         {
             renderAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
             renderAttachmentInfo.imageView = app.GetOutputCubemapImgView();
-            renderAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
+            renderAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
             renderAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             renderAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
             renderAttachmentInfo.clearValue = clearColor;
@@ -194,9 +222,71 @@ int main(
         vkCmdDraw(cmdBuffer, 6, 1, 0, 0);
 
         vkCmdEndRendering(cmdBuffer);
-
-        VK_CHECK(vkEndCommandBuffer(cmdBuffer));
         
+        // Copy the rendered images to a buffer.
+        VkBuffer stagingBuffer;
+        VmaAllocation stagingBufferAlloc;
+
+        VmaAllocationCreateInfo stagingBufAllocInfo{};
+        {
+            stagingBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+            stagingBufAllocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        }
+
+        VkBufferCreateInfo stgBufInfo{};
+        {
+            stgBufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+            stgBufInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+            stgBufInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+            stgBufInfo.size = 4 * sizeof(float) * app.GetOutputCubemapExtent().width * app.GetOutputCubemapExtent().height * 6; // RGBA and 6 images blocks.
+        }
+
+        VK_CHECK(vmaCreateBuffer(allocator, &stgBufInfo, &stagingBufAllocInfo, &stagingBuffer, &stagingBufferAlloc, nullptr));
+
+        // Transfer cubemap's layout to copy source
+        VkImageMemoryBarrier cubemapColorAttToSrcBarrier{};
+        {
+            cubemapColorAttToSrcBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            cubemapColorAttToSrcBarrier.image = app.GetOutputCubemapImg();
+            cubemapColorAttToSrcBarrier.subresourceRange = cubemapSubResRange;
+            cubemapColorAttToSrcBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            cubemapColorAttToSrcBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+            cubemapColorAttToSrcBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            cubemapColorAttToSrcBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        }
+
+        vkCmdPipelineBarrier(
+            cmdBuffer,
+            VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &cubemapColorAttToSrcBarrier);
+
+        // Copy the data from buffer to the image
+        // The output cubemap will be vStrip for convenience.
+        // NOTE: Read the doc to check how do images' texel coordinates map to buffer's 1D index, which is not intuitive but mathmaically elegent.
+        VkBufferImageCopy cubemapToBufferCopy{};
+        {
+            cubemapToBufferCopy.bufferRowLength = app.GetOutputCubemapExtent().width;
+            cubemapToBufferCopy.bufferImageHeight = app.GetOutputCubemapExtent().height;
+            cubemapToBufferCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            cubemapToBufferCopy.imageSubresource.mipLevel = 0;
+            cubemapToBufferCopy.imageSubresource.baseArrayLayer = 0;
+            cubemapToBufferCopy.imageSubresource.layerCount = 6;
+            cubemapToBufferCopy.imageExtent = app.GetOutputCubemapExtent();
+        }
+
+        vkCmdCopyImageToBuffer(cmdBuffer,
+            app.GetOutputCubemapImg(),
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            stagingBuffer,
+            1, &cubemapToBufferCopy);
+
+        // Submit all the works recorded before
+        VK_CHECK(vkEndCommandBuffer(cmdBuffer));
+
         VkFence submitFence;
         VkFenceCreateInfo fenceInfo{};
         {
@@ -214,16 +304,65 @@ int main(
         }
         VK_CHECK(vkQueueSubmit(gfxQueue, 1, &submitInfo, submitFence));
         vkWaitForFences(device, 1, &submitFence, VK_TRUE, UINT64_MAX);
+
+        // Copy the buffer data to RAM and save that on the disk.
+        float* pImgData = new float[4 * app.GetOutputCubemapExtent().width * app.GetOutputCubemapExtent().height * 6];
+
+        void* pBufferMapped;
+        vmaMapMemory(allocator, stagingBufferAlloc, &pBufferMapped);
+        memcpy(pImgData, pBufferMapped, 4 * sizeof(float) * app.GetOutputCubemapExtent().width * app.GetOutputCubemapExtent().height * 6);
+        vmaUnmapMemory(allocator, stagingBufferAlloc);
+
+        bool foundProperData = false;
+        for (int i = 0; i < 4 * app.GetOutputCubemapExtent().width * app.GetOutputCubemapExtent().height * 6; i++)
+        {
+            if (pImgData[i] > 0.f)
+            {
+                foundProperData = true;
+                break;
+            }
+        }
+        if (foundProperData)
+        {
+            std::cout << "Found proper output data." << std::endl;
+        }
+        else
+        {
+            std::cout << "Didn't find proper output data." << std::endl;
+        }
+
+        // Convert data from 4 elements to 3 elements data
+        float* pImgData3Ele = new float[3 * app.GetOutputCubemapExtent().width * app.GetOutputCubemapExtent().height * 6];
+        for (uint32_t i = 0; i < app.GetOutputCubemapExtent().width * app.GetOutputCubemapExtent().height * 6; i++)
+        {
+            uint32_t ele4Idx0 = i * 4;
+            uint32_t ele4Idx1 = i * 4 + 1;
+            uint32_t ele4Idx2 = i * 4 + 2;
+
+            uint32_t ele3Idx0 = i * 3;
+            uint32_t ele3Idx1 = i * 3 + 1;
+            uint32_t ele3Idx2 = i * 3 + 2;
+
+            pImgData3Ele[ele3Idx0] = pImgData[ele4Idx0];
+            pImgData3Ele[ele3Idx1] = pImgData[ele4Idx1];
+            pImgData3Ele[ele3Idx2] = pImgData[ele4Idx2];
+        }
+        app.SaveCubemap("C:\\JiaruiYan\\Projects\\OneFileVulkans\\Tools\\SphericalToCubemap\\data\\little_paris_eiffel_tower_4k_cubemap.hdr",
+                        app.GetOutputCubemapExtent().width,
+                        app.GetOutputCubemapExtent().height * 6,
+                        3,
+                        pImgData3Ele);
+        
+        // Cleanup resources
+        vkResetCommandBuffer(cmdBuffer, 0);
+        vmaDestroyBuffer(allocator, stagingBuffer, stagingBufferAlloc);
         vkDestroyFence(device, submitFence, nullptr);
+        delete pImgData;
+        delete pImgData3Ele;
     }
 
     if (rdoc_api)
     {
         rdoc_api->EndFrameCapture(NULL, NULL);
-    }
-    
-    // Copy cubemap images out
-    {
-
     }
 }

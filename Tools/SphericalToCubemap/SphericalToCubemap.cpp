@@ -6,6 +6,10 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+#define STBI_MSC_SECURE_CRT
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
 #include <cassert>
 
 #include "vk_mem_alloc.h"
@@ -72,6 +76,25 @@ void SphericalToCubemap::ReadInHdri(const std::string& namePath)
 
     m_width = (uint32_t)width;
     m_height = (uint32_t)height;
+}
+
+// ================================================================================================================
+void SphericalToCubemap::SaveCubemap(
+    const std::string& namePath, 
+    uint32_t width, 
+    uint32_t height, 
+    uint32_t components, 
+    float* pData)
+{
+    int res = stbi_write_hdr(namePath.c_str(), width, height, components, pData);
+    if (res > 0)
+    {
+        std::cout << "Cubemap saves successfully." << std::endl;
+    }
+    else
+    {
+        std::cout << "Cubemap fails to save." << std::endl;
+    }
 }
 
 // ================================================================================================================

@@ -22,6 +22,7 @@ public:
     void InitPipelineDescriptorSets();
 
     void ReadInHdri(const std::string& namePath);
+    void SaveCubemap(const std::string& namePath, uint32_t width, uint32_t height, uint32_t components, float* pData);
 
     void CreateHdriGpuObjects();
     void DestroyHdriGpuObjects();
@@ -33,6 +34,7 @@ public:
     VkImageView GetOutputCubemapImgView() { return m_outputCubemapImageView; }
     VkPipeline GetPipeline() { return m_pipeline.GetVkPipeline(); }
     VkExtent3D GetOutputCubemapExtent() { return m_outputCubemapExtent; }
+    VkImage GetOutputCubemapImg() { return m_outputCubemap; }
 
 private:
     SharedLib::Camera* m_pCamera;
