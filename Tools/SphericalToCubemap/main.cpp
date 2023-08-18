@@ -69,10 +69,8 @@ int main(
     }
 
     SphericalToCubemap app;
-    app.AppInit();
-
     app.ReadInHdri("C:\\JiaruiYan\\Projects\\OneFileVulkans\\Tools\\SphericalToCubemap\\data\\little_paris_eiffel_tower_4k.hdr");
-    app.CreateHdriGpuObjects();
+    app.AppInit();
 
     if (CheckImgValAbove1(app.GetInputHdriData(), app.GetInputHdriWidth(), app.GetInputHdriHeight()))
     {
@@ -83,11 +81,21 @@ int main(
         std::cout << "The image doesn't have elements that are larger than 1.f." << std::endl;
     }
 
-    // Just get a command buffer from 
+    // Common data used in the CmdBuffer filling process.
     VkCommandBuffer cmdBuffer = app.GetGfxCmdBuffer(0);
     VkQueue gfxQueue = app.GetGfxQueue();
     VkDevice device = app.GetVkDevice();
     VmaAllocator allocator = *app.GetVmaAllocator();
+    VkDescriptorSet pipelineDescriptorSet = app.GetDescriptorSet();
+
+    VkImageSubresourceRange cubemapSubResRange{};
+    {
+        cubemapSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        cubemapSubResRange.baseMipLevel = 0;
+        cubemapSubResRange.levelCount = 1;
+        cubemapSubResRange.baseArrayLayer = 0;
+        cubemapSubResRange.layerCount = 6;
+    }
 
     // Send hdri data to its gpu objects through a staging buffer.
     {
@@ -128,17 +136,8 @@ int main(
                                        allocator);
     }
 
-    // Draw the 6 cubemap faces and copy the images into a buffer
+    // Draw the Front, Back, Top, Bottom, Right, Left faces to the cubemap.
     {
-        VkImageSubresourceRange cubemapSubResRange{};
-        {
-            cubemapSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            cubemapSubResRange.baseMipLevel = 0;
-            cubemapSubResRange.levelCount = 1;
-            cubemapSubResRange.baseArrayLayer = 0;
-            cubemapSubResRange.layerCount = 6;
-        }
-
         // Fill the command buffer
         VkCommandBufferBeginInfo beginInfo{};
         {
@@ -197,6 +196,12 @@ int main(
         vkCmdBeginRendering(cmdBuffer, &renderInfo);
 
         // Bind the graphics pipeline
+        vkCmdBindDescriptorSets(cmdBuffer, 
+                                VK_PIPELINE_BIND_POINT_GRAPHICS, 
+                                app.GetPipelineLayout(),
+                                0, 1, &pipelineDescriptorSet,
+                                0, NULL);
+
         vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, app.GetPipeline());
 
         // Set the viewport
@@ -223,6 +228,43 @@ int main(
 
         vkCmdEndRendering(cmdBuffer);
         
+        // Submit all the works recorded before
+        VK_CHECK(vkEndCommandBuffer(cmdBuffer));
+
+        VkFence submitFence;
+        VkFenceCreateInfo fenceInfo{};
+        {
+            fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+            fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+        }
+        VK_CHECK(vkCreateFence(device, &fenceInfo, nullptr, &submitFence));
+        VK_CHECK(vkResetFences(device, 1, &submitFence));
+
+        VkSubmitInfo submitInfo{};
+        {
+            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            submitInfo.commandBufferCount = 1;
+            submitInfo.pCommandBuffers = &cmdBuffer;
+        }
+        VK_CHECK(vkQueueSubmit(gfxQueue, 1, &submitInfo, submitFence));
+        vkWaitForFences(device, 1, &submitFence, VK_TRUE, UINT64_MAX);
+    }
+
+    // Covert output 6 faces images to the Vulkan's cubemap's format
+    // From Front, Back, Top, ... To X+, X-, Y+,...
+    {
+        
+    }
+
+    // Save the vulkan format cubemap to the disk
+    {
+        // Fill the command buffer
+        VkCommandBufferBeginInfo beginInfo{};
+        {
+            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        }
+        VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &beginInfo));
+
         // Copy the rendered images to a buffer.
         VkBuffer stagingBuffer;
         VmaAllocation stagingBufferAlloc;
@@ -270,7 +312,7 @@ int main(
         VkBufferImageCopy cubemapToBufferCopy{};
         {
             cubemapToBufferCopy.bufferRowLength = app.GetOutputCubemapExtent().width;
-            cubemapToBufferCopy.bufferImageHeight = app.GetOutputCubemapExtent().height;
+            // cubemapToBufferCopy.bufferImageHeight = app.GetOutputCubemapExtent().height;
             cubemapToBufferCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             cubemapToBufferCopy.imageSubresource.mipLevel = 0;
             cubemapToBufferCopy.imageSubresource.baseArrayLayer = 0;
@@ -348,11 +390,11 @@ int main(
             pImgData3Ele[ele3Idx2] = pImgData[ele4Idx2];
         }
         app.SaveCubemap("C:\\JiaruiYan\\Projects\\OneFileVulkans\\Tools\\SphericalToCubemap\\data\\little_paris_eiffel_tower_4k_cubemap.hdr",
-                        app.GetOutputCubemapExtent().width,
-                        app.GetOutputCubemapExtent().height * 6,
-                        3,
-                        pImgData3Ele);
-        
+            app.GetOutputCubemapExtent().width,
+            app.GetOutputCubemapExtent().height * 6,
+            3,
+            pImgData3Ele);
+
         // Cleanup resources
         vkResetCommandBuffer(cmdBuffer, 0);
         vmaDestroyBuffer(allocator, stagingBuffer, stagingBufferAlloc);

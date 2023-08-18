@@ -2,6 +2,7 @@
 #include <glfw3.h>
 #include "../../SharedLibrary/Utils/VulkanDbgUtils.h"
 #include "../../SharedLibrary/Camera/Camera.h"
+#include "../../SharedLibrary/Utils/MathUtils.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -45,8 +46,11 @@ SphericalToCubemap::~SphericalToCubemap()
 {
     vkDeviceWaitIdle(m_device);
     delete m_pCamera;
+    delete m_hdriData;
 
     DestroyHdriGpuObjects();
+
+    vmaDestroyBuffer(*m_pAllocator, m_uboBuffer, m_uboAlloc);
 
     // Destroy shader modules
     vkDestroyShaderModule(m_device, m_vsShaderModule, nullptr);
@@ -62,6 +66,7 @@ SphericalToCubemap::~SphericalToCubemap()
 // ================================================================================================================
 void SphericalToCubemap::DestroyHdriGpuObjects()
 {
+    vkDestroySampler(m_device, m_inputHdriSampler, nullptr);
     vkDestroyImageView(m_device, m_inputHdriImageView, nullptr);
     vkDestroyImageView(m_device, m_outputCubemapImageView, nullptr);
     vmaDestroyImage(*m_pAllocator, m_inputHdri, m_inputHdriAlloc);
@@ -98,7 +103,7 @@ void SphericalToCubemap::SaveCubemap(
 }
 
 // ================================================================================================================
-void SphericalToCubemap::CreateHdriGpuObjects()
+void SphericalToCubemap::InitHdriGpuObjects()
 {
     assert(m_hdriData != nullptr);
     
@@ -196,14 +201,52 @@ void SphericalToCubemap::CreateHdriGpuObjects()
         outputCubemapInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
     }
     VK_CHECK(vkCreateImageView(m_device, &outputCubemapInfo, nullptr, &m_outputCubemapImageView));
+
+    VkSamplerCreateInfo sampler_info{};
+    {
+        sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        sampler_info.magFilter = VK_FILTER_LINEAR;
+        sampler_info.minFilter = VK_FILTER_LINEAR;
+        sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT; // outside image bounds just use border color
+        sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        sampler_info.minLod = -1000;
+        sampler_info.maxLod = 1000;
+        sampler_info.maxAnisotropy = 1.0f;
+    }
+    VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_inputHdriSampler));
 }
 
 // ================================================================================================================
 void SphericalToCubemap::InitPipelineDescriptorSetLayout()
 {
+    // Create pipeline binding and descriptor objects for the camera parameters
+    VkDescriptorSetLayoutBinding sceneInfoUboBinding{};
+    {
+        sceneInfoUboBinding.binding = 1;
+        sceneInfoUboBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        sceneInfoUboBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        sceneInfoUboBinding.descriptorCount = 1;
+    }
+    
+    // Create pipeline binding objects for the HDRI image
+    VkDescriptorSetLayoutBinding hdriSamplerBinding{};
+    {
+        hdriSamplerBinding.binding = 0;
+        hdriSamplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        hdriSamplerBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        hdriSamplerBinding.descriptorCount = 1;
+    }
+    
+    // Create pipeline's descriptors layout
+    VkDescriptorSetLayoutBinding pipelineDesSet0LayoutBindings[2] = { hdriSamplerBinding, sceneInfoUboBinding };
+
     VkDescriptorSetLayoutCreateInfo pipelineDesSet0LayoutInfo{};
     {
         pipelineDesSet0LayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        pipelineDesSet0LayoutInfo.bindingCount = 2;
+        pipelineDesSet0LayoutInfo.pBindings = pipelineDesSet0LayoutBindings;
     }
 
     VK_CHECK(vkCreateDescriptorSetLayout(m_device,
@@ -219,9 +262,9 @@ void SphericalToCubemap::InitPipelineLayout()
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     {
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        // pipelineLayoutInfo.setLayoutCount = 1;
-        // pipelineLayoutInfo.pSetLayouts = &m_skyboxPipelineDesSet0Layout;
-        // pipelineLayoutInfo.pushConstantRangeCount = 0;
+        pipelineLayoutInfo.setLayoutCount = 1;
+        pipelineLayoutInfo.pSetLayouts = &m_pipelineDesSet0Layout;
+        pipelineLayoutInfo.pushConstantRangeCount = 0;
     }
 
     VK_CHECK(vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_pipelineLayout));
@@ -234,10 +277,166 @@ void SphericalToCubemap::InitShaderModules()
     m_psShaderModule = CreateShaderModule("/ToCubeMap_frag.spv");
 }
 
-// ================================================================================================================
-void SphericalToCubemap::InitPipelineDescriptorSets()
+void SphericalToCubemap::InitSceneBufferInfo()
 {
+    VmaAllocationCreateInfo uboBufAllocInfo{};
+    {
+        uboBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        uboBufAllocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    }
 
+    VkDeviceSize bufferBytesCnt = sizeof(float) * ((4 * 4) * 6 + 4);
+    VkBufferCreateInfo uboBufInfo{};
+    {
+        uboBufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        uboBufInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        uboBufInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+        uboBufInfo.size = bufferBytesCnt; // 6 4x4 matrices and a vec4. 
+                                          // Note that the alignment is 4 floats.
+    }
+
+    VK_CHECK(vmaCreateBuffer(*m_pAllocator, &uboBufInfo, &uboBufAllocInfo, &m_uboBuffer, &m_uboAlloc, nullptr));
+
+    // Create the buffer in the RAM
+    float uboBufferData[((4 * 4) * 6 + 4)];
+    memset(uboBufferData, 0, sizeof(uboBufferData));
+
+    // Front
+    float matFront[9];
+    memset(matFront, 0, sizeof(float) * 9);
+    matFront[0] = 1.f;
+    matFront[4] = 1.f;
+    matFront[8] = 1.f;
+    
+    float matFront_4x4[16]{};
+    SharedLib::Mat3x3ToMat4x4(matFront, matFront_4x4);
+
+    // Left -- Pan by 90 degrees
+    float matLeft[9];
+    memset(matLeft, 0, sizeof(float) * 9);
+    SharedLib::GenRotationMatZ(M_PI / 2.f, matLeft);
+    
+    float matLeft_4x4[16]{};
+    SharedLib::Mat3x3ToMat4x4(matLeft, matLeft_4x4);
+    SharedLib::MatTranspose(matLeft_4x4, 4);
+
+
+    // Right -- Pan by -90 degrees
+    float matRight[9];
+    memset(matRight, 0, sizeof(float) * 9);
+    SharedLib::GenRotationMatZ(-M_PI / 2.f, matRight);
+
+    float vecY[3] = { 0.f, 1.f, 0.f };
+    float vecRes[3] = { 0.f, 0.f, 0.f };
+    SharedLib::MatMulVec(matRight, vecY, 3, vecRes);
+    
+    float matRight_4x4[16]{};
+    SharedLib::Mat3x3ToMat4x4(matRight, matRight_4x4);
+    SharedLib::MatTranspose(matRight_4x4, 4);
+
+
+    // Back -- Pan by 180 degrees
+    float matBack[9];
+    memset(matBack, 0, sizeof(float) * 9);
+    SharedLib::GenRotationMatZ(M_PI, matBack);
+
+    float matBack_4x4[16]{};
+    SharedLib::Mat3x3ToMat4x4(matBack, matBack_4x4);
+    SharedLib::MatTranspose(matBack_4x4, 4);
+
+
+    // Top -- Tilt by -90 degrees
+    float matTop[9];
+    memset(matTop, 0, sizeof(float) * 9);
+    SharedLib::GenRotationMatX(M_PI / 2.f, matTop);
+
+    float matTop_4x4[16]{};
+    SharedLib::Mat3x3ToMat4x4(matTop, matTop_4x4);
+    SharedLib::MatTranspose(matTop_4x4, 4);
+
+
+    // Bottom -- Tilt by 90 degrees
+    float matBottom[9];
+    memset(matBottom, 0, sizeof(float) * 9);
+    SharedLib::GenRotationMatX(-M_PI / 2.f, matBottom);
+
+    float matBottom_4x4[16]{};
+    SharedLib::Mat3x3ToMat4x4(matBottom, matBottom_4x4);
+    SharedLib::MatTranspose(matBottom_4x4, 4);
+
+    // Put matrices to the larger buffer
+    // Vulkan cubemap sequence: pos-x, neg-x, pos-y, neg-y, pos-z, neg-z.
+    memcpy(uboBufferData,      matFront_4x4, sizeof(float) * 16);
+    memcpy(&uboBufferData[16], matBack_4x4, sizeof(float) * 16);
+    memcpy(&uboBufferData[32], matTop_4x4, sizeof(float) * 16);
+    memcpy(&uboBufferData[48], matBottom_4x4, sizeof(float) * 16);
+    memcpy(&uboBufferData[64], matRight_4x4, sizeof(float) * 16);
+    memcpy(&uboBufferData[80], matLeft_4x4, sizeof(float) * 16);
+    // memcpy(&uboBufferData[64], matLeft_4x4, sizeof(float) * 16);
+    // memcpy(&uboBufferData[80], matRight_4x4, sizeof(float) * 16);
+
+    // Put the viewport sizes into the large buffer
+    uboBufferData[96] = m_outputCubemapExtent.width;
+    uboBufferData[97] = m_outputCubemapExtent.height;
+
+    // Send data to gpu
+    CopyRamDataToGpuBuffer(uboBufferData, m_uboBuffer, m_uboAlloc, bufferBytesCnt);
+}
+
+// ================================================================================================================
+void SphericalToCubemap::InitPipelineDescriptorSet()
+{
+    // Create pipeline descirptor
+    VkDescriptorSetAllocateInfo pipelineDesSet0AllocInfo{};
+    {
+        pipelineDesSet0AllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        pipelineDesSet0AllocInfo.descriptorPool = m_descriptorPool;
+        pipelineDesSet0AllocInfo.pSetLayouts = &m_pipelineDesSet0Layout;
+        pipelineDesSet0AllocInfo.descriptorSetCount = 1;
+    }
+
+    VK_CHECK(vkAllocateDescriptorSets(m_device,
+                                      &pipelineDesSet0AllocInfo,
+                                      &m_pipelineDescriptorSet0));
+
+    // Link descriptors to the buffer and image
+    VkDescriptorImageInfo hdriDesImgInfo{};
+    {
+        hdriDesImgInfo.imageView = m_inputHdriImageView;
+        hdriDesImgInfo.sampler = m_inputHdriSampler;
+        hdriDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    }
+
+    VkDescriptorBufferInfo sceneBufferInfo{};
+    {
+        sceneBufferInfo.buffer = m_uboBuffer;
+        sceneBufferInfo.offset = 0;
+        sceneBufferInfo.range = sizeof(float) * ((4 * 4) * 6 + 4);
+    }
+
+    VkWriteDescriptorSet writeUboBufDesSet{};
+    {
+        writeUboBufDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeUboBufDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        writeUboBufDesSet.dstSet = m_pipelineDescriptorSet0;
+        writeUboBufDesSet.dstBinding = 1;
+        writeUboBufDesSet.descriptorCount = 1;
+        writeUboBufDesSet.pBufferInfo = &sceneBufferInfo;
+    }
+
+    VkWriteDescriptorSet writeHdrDesSet{};
+    {
+        writeHdrDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeHdrDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writeHdrDesSet.dstSet = m_pipelineDescriptorSet0;
+        writeHdrDesSet.dstBinding = 0;
+        writeHdrDesSet.pImageInfo = &hdriDesImgInfo;
+        writeHdrDesSet.descriptorCount = 1;
+    }
+
+    // Linking pipeline descriptors: cubemap and scene buffer descriptors to their GPU memory and info.
+    VkWriteDescriptorSet writeSkyboxPipelineDescriptors[2] = { writeHdrDesSet, writeUboBufDesSet };
+    vkUpdateDescriptorSets(m_device, 2, writeSkyboxPipelineDescriptors, 0, NULL);
 }
 
 // ================================================================================================================
@@ -308,4 +507,8 @@ void SphericalToCubemap::AppInit()
     InitPipelineDescriptorSetLayout();
     InitPipelineLayout();
     InitPipeline();
+
+    InitHdriGpuObjects();
+    InitSceneBufferInfo();
+    InitPipelineDescriptorSet();
 }

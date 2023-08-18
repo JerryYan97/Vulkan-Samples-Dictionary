@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <iostream>
 
+#define M_PI 3.1415926535897932384626433832795
+
 // https://stackoverflow.com/a/36522355
 namespace cexp
 {
@@ -235,4 +237,13 @@ namespace SharedLib
 
     // Realtime rendering -- P75 -- Eqn(4.30)
     void GenRotationMatArb(float* axis, float radien, float* pResMat);
+
+    // Realtime rendering -- P61 -- Eqn(4.5, 4.6, 4.7)
+    // The positive axis points to your face. Counterclock-wise is positive radians.
+    // Right hand coordinate system.
+    void GenRotationMatX(float radien, float* pResmat);
+    void GenRotationMatY(float radien, float* pResMat);
+    void GenRotationMatZ(float radien, float* pResMat);
+
+    void Mat3x3ToMat4x4(float* mat3x3, float* mat4x4);
 }

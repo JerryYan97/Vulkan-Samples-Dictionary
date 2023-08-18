@@ -138,4 +138,70 @@ namespace SharedLib
         pResMat[7] = (1.f - cosf(radien)) * axis[1] * axis[2] + axis[0] * sinf(radien);
         pResMat[8] = cosf(radien) + (1.f - cosf(radien)) * axis[2] * axis[2];
     }
+
+    void GenRotationMatX(
+        float radien,
+        float* pResMat)
+    {
+        memset(pResMat, 0, sizeof(float) * 9);
+        
+        pResMat[0] = 1.f;
+
+        pResMat[4] = cosf(radien);
+        pResMat[5] = -sinf(radien);
+
+        pResMat[7] = sinf(radien);
+        pResMat[8] = cosf(radien);
+    }
+
+    void GenRotationMatY(
+        float radien,
+        float* pResMat)
+    {
+        memset(pResMat, 0, sizeof(float) * 9);
+
+        pResMat[0] = cosf(radien);
+        pResMat[2] = sinf(radien);
+
+        pResMat[4] = 1.f;
+
+        pResMat[6] = -sinf(radien);
+        pResMat[8] = cosf(radien);
+    }
+
+    void GenRotationMatZ(
+        float radien,
+        float* pResMat)
+    {
+        memset(pResMat, 0, sizeof(float) * 9);
+
+        pResMat[0] = cosf(radien);
+        pResMat[1] = -sinf(radien);
+
+        pResMat[3] = sinf(radien);
+        pResMat[4] = cosf(radien);
+
+        pResMat[8] = 1.f;
+    }
+
+    void Mat3x3ToMat4x4(
+        float* mat3x3,
+        float* mat4x4)
+    {
+        memset(mat4x4, 0, sizeof(float) * 16);
+
+        mat4x4[0] = mat3x3[0];
+        mat4x4[1] = mat3x3[1];
+        mat4x4[2] = mat3x3[2];
+
+        mat4x4[4] = mat3x3[3];
+        mat4x4[5] = mat3x3[4];
+        mat4x4[6] = mat3x3[5];
+
+        mat4x4[8]  = mat3x3[6];
+        mat4x4[9]  = mat3x3[7];
+        mat4x4[10] = mat3x3[8];
+
+        mat4x4[15] = 1.f;
+    }
 }

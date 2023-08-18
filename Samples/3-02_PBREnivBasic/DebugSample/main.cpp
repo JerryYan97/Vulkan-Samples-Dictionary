@@ -86,12 +86,37 @@ int main()
             1, &hdrUndefToDstBarrier);
 
         // Copy the data from buffer to the image
+        // - Our tool outputs vStrip, which is more convenient for IO. This example also uses vStrip.
+        VkBufferImageCopy hdrBufToImgCopie{};
+        {
+            VkExtent3D extent{};
+            {
+                extent.width = hdrImgExtent.width;
+                extent.height = hdrImgExtent.height / 6;
+                extent.depth = 1;
+            }
+
+            hdrBufToImgCopie.bufferRowLength = hdrImgExtent.width;
+            hdrBufToImgCopie.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            hdrBufToImgCopie.imageSubresource.mipLevel = 0;
+            hdrBufToImgCopie.imageSubresource.baseArrayLayer = 0;
+            hdrBufToImgCopie.imageSubresource.layerCount = 6;
+            hdrBufToImgCopie.imageExtent = extent;
+        }
+
+        vkCmdCopyBufferToImage(
+            stagingCmdBuffer,
+            stagingBuffer,
+            cubeMapImage,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1, &hdrBufToImgCopie);
+        
+        // - In the `cmftStudio`, you can choose hStrip. The code below is an example of using the hStrip.
         // - The buffer data of the image cannot be interleaved (The data of a separate image should be continues in the buffer address space.)
         // - However, our cubemap data (hStrip) is interleaved. 
         // - So, we have multiple choices to put them into the cubemap image. Here, I choose to offset the buffer starting point, specify the
         // -     long row length and copy that for 6 times.
-        // - We are using the hStrip skybox here. In the `cmftStudio`, we can also choose the vStrip here, which is more convenient, but we just
-        // -     use the hStrip here since it's more educational.
+        /*
         VkBufferImageCopy hdrBufToImgCopies[6];
         memset(hdrBufToImgCopies, 0, sizeof(hdrBufToImgCopies));
         for (uint32_t i = 0; i < 6; i++)
@@ -104,7 +129,7 @@ int main()
             }
 
             hdrBufToImgCopies[i].bufferRowLength = hdrImgExtent.width;
-            hdrBufToImgCopies[i].bufferImageHeight = hdrImgExtent.height;
+            // hdrBufToImgCopies[i].bufferImageHeight = hdrImgExtent.height;
             hdrBufToImgCopies[i].imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             hdrBufToImgCopies[i].imageSubresource.mipLevel = 0;
             hdrBufToImgCopies[i].imageSubresource.baseArrayLayer = i;
@@ -121,7 +146,8 @@ int main()
             cubeMapImage,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             6, hdrBufToImgCopies);
-        
+        */
+
         // Transform the layout of the image to shader access resource
         VkImageMemoryBarrier hdrDstToShaderBarrier{};
         {
