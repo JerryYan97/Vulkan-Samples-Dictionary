@@ -300,6 +300,7 @@ void SphericalToCubemap::InitShaderModules()
     m_psShaderModule = CreateShaderModule("/ToCubeMap_frag.spv");
 }
 
+// ================================================================================================================
 void SphericalToCubemap::InitSceneBufferInfo()
 {
     VmaAllocationCreateInfo uboBufAllocInfo{};
