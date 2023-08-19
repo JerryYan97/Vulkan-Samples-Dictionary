@@ -20,13 +20,23 @@ public:
     void InitPipelineLayout();
     void InitShaderModules();
     void InitPipelineDescriptorSet();
-    void InitSceneBufferInfo();
+
+    void InitFormatPipeline();
+    void InitFormatPipelineDescriptorSetLayout();
+    void InitFormatPipelineLayout();
+    void InitFormatShaderModules();
+    void InitFormatPipelineDescriptorSet();
 
     void ReadInHdri(const std::string& namePath);
     void SaveCubemap(const std::string& namePath, uint32_t width, uint32_t height, uint32_t components, float* pData);
 
     void InitHdriGpuObjects();
     void DestroyHdriGpuObjects();
+    void InitSceneBufferInfo();
+
+    void InitFormatImgsObjects();
+    void DestroyFormatImgsObjects();
+    void InitWidthHeightBufferInfo();
 
     float* GetInputHdriData() { return m_hdriData; }
     uint32_t GetInputHdriWidth() { return m_width; }
@@ -40,8 +50,6 @@ public:
     VkDescriptorSet GetDescriptorSet() { return m_pipelineDescriptorSet0; }
 
 private:
-    SharedLib::Camera* m_pCamera;
-
     VkBuffer      m_uboBuffer;
     VmaAllocation m_uboAlloc;
 
@@ -72,4 +80,14 @@ private:
     VkDescriptorSetLayout m_formatPipelineDesSet0Layout;
     VkPipelineLayout      m_formatPipelineLayout;
     SharedLib::Pipeline   m_formatPipeline;
+
+    VkDescriptorSet m_formatPipelineDescriptorSet0;
+    
+    std::vector<VkImage>       m_formatInputImages;
+    std::vector<VkImageView>   m_formatInputImagesViews;
+    std::vector<VmaAllocation> m_formatInputImagesAllocs;
+    std::vector<VkSampler>     m_formatInputImagesSamplers;
+
+    VkBuffer      m_formatWidthHeightBuffer;
+    VmaAllocation m_formatWidthHeightAlloc;
 };
