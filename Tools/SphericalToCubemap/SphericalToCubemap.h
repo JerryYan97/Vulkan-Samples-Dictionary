@@ -48,6 +48,10 @@ public:
     VkImage GetOutputCubemapImg() { return m_outputCubemap; }
     VkPipelineLayout GetPipelineLayout() { return m_pipelineLayout; }
     VkDescriptorSet GetDescriptorSet() { return m_pipelineDescriptorSet0; }
+    VkImage GetFormatImg(uint32_t i) { return m_formatInputImages[i]; }
+    VkPipelineLayout GetFormatPipelineLayout() { return m_formatPipelineLayout; }
+    VkDescriptorSet GetFormatDescriptorSet() { return m_formatPipelineDescriptorSet0; }
+    VkPipeline GetFormatPipeline() { return m_formatPipeline.GetVkPipeline(); }
 
 private:
     VkBuffer      m_uboBuffer;

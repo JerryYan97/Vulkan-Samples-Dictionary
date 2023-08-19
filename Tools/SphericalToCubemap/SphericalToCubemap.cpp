@@ -43,7 +43,8 @@ SphericalToCubemap::SphericalToCubemap() :
     m_formatPipelineLayout(VK_NULL_HANDLE),
     m_formatPipeline(),
     m_formatWidthHeightBuffer(VK_NULL_HANDLE),
-    m_formatWidthHeightAlloc(VK_NULL_HANDLE)
+    m_formatWidthHeightAlloc(VK_NULL_HANDLE),
+    m_formatPipelineDescriptorSet0(VK_NULL_HANDLE)
 {
 }
 
@@ -498,7 +499,7 @@ void SphericalToCubemap::InitFormatImgsObjects()
     {
         formatImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         formatImgInfo.imageType = VK_IMAGE_TYPE_2D;
-        formatImgInfo.format = VK_FORMAT_R32G32B32_SFLOAT;
+        formatImgInfo.format = VK_FORMAT_R32G32B32A32_SFLOAT;
         formatImgInfo.extent = m_outputCubemapExtent;
         formatImgInfo.mipLevels = 1;
         formatImgInfo.arrayLayers = 1;
@@ -506,17 +507,6 @@ void SphericalToCubemap::InitFormatImgsObjects()
         formatImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
         formatImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
         formatImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    }
-
-    VkImageViewCreateInfo formatImgViewInfo{};
-    {
-        formatImgViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        formatImgViewInfo.image = m_inputHdri;
-        formatImgViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        formatImgViewInfo.format = VK_FORMAT_R32G32B32_SFLOAT;
-        formatImgViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        formatImgViewInfo.subresourceRange.levelCount = 1;
-        formatImgViewInfo.subresourceRange.layerCount = 1;
     }
 
     VkSamplerCreateInfo samplerInfo{};
@@ -534,6 +524,9 @@ void SphericalToCubemap::InitFormatImgsObjects()
     }
 
     m_formatInputImages.resize(6);
+    m_formatInputImagesViews.resize(6);
+    m_formatInputImagesAllocs.resize(6);
+    m_formatInputImagesSamplers.resize(6);
     for (uint32_t i = 0; i < 6; i++)
     {
         VK_CHECK(vmaCreateImage(*m_pAllocator,
@@ -542,6 +535,17 @@ void SphericalToCubemap::InitFormatImgsObjects()
                                 &m_formatInputImages[i],
                                 &m_formatInputImagesAllocs[i],
                                 nullptr));
+
+        VkImageViewCreateInfo formatImgViewInfo{};
+        {
+            formatImgViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            formatImgViewInfo.image = m_formatInputImages[i];
+            formatImgViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            formatImgViewInfo.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+            formatImgViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            formatImgViewInfo.subresourceRange.levelCount = 1;
+            formatImgViewInfo.subresourceRange.layerCount = 1;
+        }
 
         VK_CHECK(vkCreateImageView(m_device, &formatImgViewInfo, nullptr, &m_formatInputImagesViews[i]));
         VK_CHECK(vkCreateSampler(m_device, &samplerInfo, nullptr, &m_formatInputImagesSamplers[i]));
@@ -616,7 +620,7 @@ void SphericalToCubemap::InitFormatPipelineLayout()
     {
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pipelineLayoutInfo.setLayoutCount = 1;
-        pipelineLayoutInfo.pSetLayouts = &m_pipelineDesSet0Layout;
+        pipelineLayoutInfo.pSetLayouts = &m_formatPipelineDesSet0Layout;
         pipelineLayoutInfo.pushConstantRangeCount = 0;
     }
 
@@ -685,6 +689,36 @@ void SphericalToCubemap::InitFormatPipelineDescriptorSet()
     // Linking pipeline descriptors: cubemap and scene buffer descriptors to their GPU memory and info.
     VkWriteDescriptorSet writeFormatPipelineDescriptors[2] = { writeformatImgsDesSet, writeUboBufDesSet };
     vkUpdateDescriptorSets(m_device, 2, writeFormatPipelineDescriptors, 0, NULL);
+}
+
+// ================================================================================================================
+void SphericalToCubemap::InitWidthHeightBufferInfo()
+{
+    VmaAllocationCreateInfo screenBufAllocInfo{};
+    {
+        screenBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        screenBufAllocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT |
+                                   VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    }
+
+    VkDeviceSize bufferBytesCnt = sizeof(float) * 2;
+    VkBufferCreateInfo screenBufInfo{};
+    {
+        screenBufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        screenBufInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        screenBufInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+        screenBufInfo.size = bufferBytesCnt;
+    }
+
+    VK_CHECK(vmaCreateBuffer(*m_pAllocator,
+                             &screenBufInfo,
+                             &screenBufAllocInfo,
+                             &m_formatWidthHeightBuffer,
+                             &m_formatWidthHeightAlloc,
+                             nullptr));
+
+    float widthHeight[2] = {m_outputCubemapExtent.width, m_outputCubemapExtent.height};
+    CopyRamDataToGpuBuffer(widthHeight, m_formatWidthHeightBuffer, m_formatWidthHeightAlloc, sizeof(float) * 2);
 }
 
 // ================================================================================================================
