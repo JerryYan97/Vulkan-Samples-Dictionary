@@ -19,6 +19,33 @@ void main()
 
     vec2 uv = vec2(gl_FragCoord.x / width, gl_FragCoord.y / height);
 
+    if((inViewId == 0) || (inViewId == 1) || (inViewId == 4) || (inViewId == 5))
+    {
+        uv.x = 1.0 - uv.x;
+    }
+    else
+    {
+        // TOP
+        if(inViewId == 2)
+        {
+            // Swap
+            float tmp = uv.x;
+            uv.x = uv.y;
+            uv.y = tmp;
+        }
+        // BOTTOM
+        else
+        {
+            // Swap
+            float tmp = uv.x;
+            uv.x = uv.y;
+            uv.y = tmp;
+            // Flip both uv
+            uv.x = -uv.x;
+            uv.y = -uv.y;
+        }
+    }
+
     vec4 cubemapColor = texture(cubemapTextures[inViewId], uv);
 
     outColor = cubemapColor;
