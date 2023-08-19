@@ -127,4 +127,31 @@ namespace SharedLib
         vmaDestroyBuffer(allocator, stagingBuffer, stagingBufAlloc);
         vkDestroyFence(device, stagingFence, nullptr);
     }
+
+    // ================================================================================================================
+    void SubmitCmdBufferAndWait(
+        VkDevice device,
+        VkQueue queue,
+        VkCommandBuffer cmdBuffer)
+    {
+        VkFence submitFence;
+        VkFenceCreateInfo fenceInfo{};
+        {
+            fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+            fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+        }
+        VK_CHECK(vkCreateFence(device, &fenceInfo, nullptr, &submitFence));
+        VK_CHECK(vkResetFences(device, 1, &submitFence));
+
+        VkSubmitInfo submitInfo{};
+        {
+            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            submitInfo.commandBufferCount = 1;
+            submitInfo.pCommandBuffers = &cmdBuffer;
+        }
+        VK_CHECK(vkQueueSubmit(queue, 1, &submitInfo, submitFence));
+        vkWaitForFences(device, 1, &submitFence, VK_TRUE, UINT64_MAX);
+
+        vkDestroyFence(device, submitFence, nullptr);
+    }
 }

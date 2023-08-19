@@ -233,25 +233,9 @@ int main(
         // Submit all the works recorded before
         VK_CHECK(vkEndCommandBuffer(cmdBuffer));
 
-        VkFence submitFence;
-        VkFenceCreateInfo fenceInfo{};
-        {
-            fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-            fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-        }
-        VK_CHECK(vkCreateFence(device, &fenceInfo, nullptr, &submitFence));
-        VK_CHECK(vkResetFences(device, 1, &submitFence));
+        SharedLib::SubmitCmdBufferAndWait(device, gfxQueue, cmdBuffer);
 
-        VkSubmitInfo submitInfo{};
-        {
-            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-            submitInfo.commandBufferCount = 1;
-            submitInfo.pCommandBuffers = &cmdBuffer;
-        }
-        VK_CHECK(vkQueueSubmit(gfxQueue, 1, &submitInfo, submitFence));
-        vkWaitForFences(device, 1, &submitFence, VK_TRUE, UINT64_MAX);
         vkResetCommandBuffer(cmdBuffer, 0);
-        vkDestroyFence(device, submitFence, nullptr);
     }
 
     // Convert output 6 faces images to the Vulkan's cubemap's format
@@ -429,25 +413,9 @@ int main(
         // Submit all the works recorded before
         VK_CHECK(vkEndCommandBuffer(cmdBuffer));
 
-        VkFence submitFence;
-        VkFenceCreateInfo fenceInfo{};
-        {
-            fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-            fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-        }
-        VK_CHECK(vkCreateFence(device, &fenceInfo, nullptr, &submitFence));
-        VK_CHECK(vkResetFences(device, 1, &submitFence));
+        SharedLib::SubmitCmdBufferAndWait(device, gfxQueue, cmdBuffer);
 
-        VkSubmitInfo submitInfo{};
-        {
-            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-            submitInfo.commandBufferCount = 1;
-            submitInfo.pCommandBuffers = &cmdBuffer;
-        }
-        VK_CHECK(vkQueueSubmit(gfxQueue, 1, &submitInfo, submitFence));
-        vkWaitForFences(device, 1, &submitFence, VK_TRUE, UINT64_MAX);
         vkResetCommandBuffer(cmdBuffer, 0);
-        vkDestroyFence(device, submitFence, nullptr);
     }
 
     // Save the vulkan format cubemap to the disk
@@ -523,23 +491,7 @@ int main(
         // Submit all the works recorded before
         VK_CHECK(vkEndCommandBuffer(cmdBuffer));
 
-        VkFence submitFence;
-        VkFenceCreateInfo fenceInfo{};
-        {
-            fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-            fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-        }
-        VK_CHECK(vkCreateFence(device, &fenceInfo, nullptr, &submitFence));
-        VK_CHECK(vkResetFences(device, 1, &submitFence));
-
-        VkSubmitInfo submitInfo{};
-        {
-            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-            submitInfo.commandBufferCount = 1;
-            submitInfo.pCommandBuffers = &cmdBuffer;
-        }
-        VK_CHECK(vkQueueSubmit(gfxQueue, 1, &submitInfo, submitFence));
-        vkWaitForFences(device, 1, &submitFence, VK_TRUE, UINT64_MAX);
+        SharedLib::SubmitCmdBufferAndWait(device, gfxQueue, cmdBuffer);
 
         // Copy the buffer data to RAM and save that on the disk.
         float* pImgData = new float[4 * app.GetOutputCubemapExtent().width * app.GetOutputCubemapExtent().height * 6];
@@ -592,7 +544,6 @@ int main(
         // Cleanup resources
         vkResetCommandBuffer(cmdBuffer, 0);
         vmaDestroyBuffer(allocator, stagingBuffer, stagingBufferAlloc);
-        vkDestroyFence(device, submitFence, nullptr);
         delete pImgData;
         delete pImgData3Ele;
     }

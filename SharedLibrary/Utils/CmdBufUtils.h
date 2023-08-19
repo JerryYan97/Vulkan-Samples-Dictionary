@@ -14,4 +14,9 @@ namespace SharedLib
                              VkImageSubresourceRange subResRange,
                              VkBufferImageCopy bufToImgCopyInfo,
                              VmaAllocator allocator);
+
+    void SubmitCmdBufferAndWait(
+        VkDevice device,
+        VkQueue queue,
+        VkCommandBuffer cmdBuffer);
 }
