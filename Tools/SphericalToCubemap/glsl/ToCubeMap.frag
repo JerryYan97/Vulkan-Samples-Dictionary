@@ -20,27 +20,25 @@ void main()
     float width = i_sceneInfo.widthHeight.x;
     float height = i_sceneInfo.widthHeight.y;
 
+    // Note: The app assumes a 2x2x2 box.
+    // Get the point position on the face in perspective image.
     float i = gl_FragCoord.x;
     float j = height - gl_FragCoord.y;
     vec3 p = vec3((2.0 * i / width) - 1.0, 1.0, (2.0 * j / height) - 1.0);
 
+    // Rotate the position around different axises to get the desired point position.
     mat4 rotMat = i_sceneInfo.rotMats[inViewId];
-
     vec4 p_prime = rotMat * vec4(p, 0.0);
 
-    // NOTE: The problem relates to both camera coordinate system and the primary axis for longtitude.
-    // float longitude = atan(p_prime.y, p_prime.x);
+    // From a world position, we can derive it's sphereical coordinate system's coordinate.
     float longitude = atan(p_prime.x, p_prime.y);
-    // float longitude = atan(p_prime.y / p_prime.x);
     float latitude = atan(p_prime.z, sqrt(p_prime.x * p_prime.x + p_prime.y * p_prime.y));
 
+    // Transform the sphereical coordinate system's coordinate to UV texture coordinate.
     float I = (longitude + M_PI) / (2.0 * M_PI);
     float J = (latitude + M_PI / 2.0) / M_PI;
 
     vec2 uv = vec2(I, 1.0 - J);
-
-    // Remap uv to accomodate vulkan's cubemap s_face, t_face sampling rule.
-    vec2 st = uv;
 
     vec4 cubemapColor = texture(hdriTexture, uv);
 

@@ -55,6 +55,33 @@ int main(
         return 1;
     }
 
+    std::string inputHdrPathName = {};
+    bool isDefault = true;
+    std::string inputHdrFolderPath = {};
+    if (inputPath)
+    {
+        inputHdrPathName = inputPath.Get();
+        std::cout << "Read File From: " << inputHdrPathName << std::endl;
+        isDefault = false;
+
+        size_t found = inputHdrPathName.find_last_of("/\\");
+        if (found != std::string::npos)
+        {
+            inputHdrFolderPath = inputHdrPathName.substr(0, found);
+        }
+        else
+        {
+            std::cout << "Cannot find the input file." << std::endl;
+            exit(1);
+        }
+    }
+    else
+    {
+        inputHdrPathName = SOURCE_PATH;
+        inputHdrPathName += "/data/little_paris_eiffel_tower_4k.hdr";
+        std::cout << "Read default file from: " << inputHdrPathName << std::endl;
+    }
+
     // RenderDoc debug starts
     RENDERDOC_API_1_6_0* rdoc_api = NULL;
     if (HMODULE mod = GetModuleHandleA("renderdoc.dll"))
@@ -70,7 +97,7 @@ int main(
     }
 
     SphericalToCubemap app;
-    app.ReadInHdri("C:\\JiaruiYan\\Projects\\OneFileVulkans\\Tools\\SphericalToCubemap\\data\\little_paris_eiffel_tower_4k.hdr");
+    app.ReadInHdri(inputHdrPathName);
     app.AppInit();
 
     if (CheckImgValAbove1(app.GetInputHdriData(), app.GetInputHdriWidth(), app.GetInputHdriHeight()))
@@ -535,7 +562,19 @@ int main(
             pImgData3Ele[ele3Idx1] = pImgData[ele4Idx1];
             pImgData3Ele[ele3Idx2] = pImgData[ele4Idx2];
         }
-        app.SaveCubemap("C:\\JiaruiYan\\Projects\\OneFileVulkans\\Tools\\SphericalToCubemap\\data\\little_paris_eiffel_tower_4k_cubemap.hdr",
+
+        std::string outputCubemapPathName = {};
+        if (isDefault)
+        {
+            outputCubemapPathName = SOURCE_PATH;
+            outputCubemapPathName += "/data/output_cubemap.hdr";
+        }
+        else
+        {
+            outputCubemapPathName = inputHdrFolderPath + "/output_cubemap.hdr";
+        }
+
+        app.SaveCubemap(outputCubemapPathName,
             app.GetOutputCubemapExtent().width,
             app.GetOutputCubemapExtent().height * 6,
             3,
