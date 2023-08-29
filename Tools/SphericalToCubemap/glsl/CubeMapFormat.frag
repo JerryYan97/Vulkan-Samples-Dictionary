@@ -41,8 +41,8 @@ void main()
             uv.x = uv.y;
             uv.y = tmp;
             // Flip both uv
-            uv.x = -uv.x;
-            uv.y = -uv.y;
+            uv.x = 1.0 - uv.x;
+            uv.y = 1.0 - uv.y;
         }
     }
 
