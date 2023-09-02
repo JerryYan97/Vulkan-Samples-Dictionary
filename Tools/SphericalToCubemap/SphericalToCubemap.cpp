@@ -1,5 +1,4 @@
 #include "SphericalToCubemap.h"
-#include <glfw3.h>
 #include "../../SharedLibrary/Utils/VulkanDbgUtils.h"
 #include "../../SharedLibrary/Camera/Camera.h"
 #include "../../SharedLibrary/Utils/MathUtils.h"
