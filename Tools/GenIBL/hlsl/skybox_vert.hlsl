@@ -1,26 +1,23 @@
-#version 450
+struct VSOutput
+{
+    float4 Pos : SV_POSITION;
+};
 
-layout(location = 0) out vec2 o_screenUv;
+static float2 positions[6] =
+{
+    float2(-1.f, -1.f),
+    float2( 1.f, -1.f),
+    float2(-1.f,  1.f),
+    float2( 1.f, -1.f),
+    float2( 1.f,  1.f),
+    float2(-1.f,  1.f)
+};
 
-vec2 positions[6] = vec2[](
-    vec2(-1.f, -1.f),
-    vec2( 1.f, -1.f),
-    vec2(-1.f,  1.f),
-    vec2( 1.f, -1.f),
-    vec2( 1.f,  1.f),
-    vec2(-1.f,  1.f)
-);
+VSOutput main(
+    uint instanceId : SV_InstanceID)
+{
+    VSOutput output = (VSOutput)0;
+    output.Pos = float4(positions[instanceId], 0.5, 1.0);
 
-vec2 screenUvs[6] = vec2[](
-    vec2(-1.f,  1.f),
-    vec2( 1.f,  1.f),
-    vec2(-1.f, -1.f),
-    vec2( 1.f,  1.f),
-    vec2( 1.f, -1.f),
-    vec2(-1.f, -1.f)
-);
-
-void main() {
-    gl_Position = vec4(positions[gl_VertexIndex], 0.5, 1.0);
-    o_screenUv = screenUvs[gl_VertexIndex];
+    return output;
 }
