@@ -30,6 +30,22 @@ def SelectProfile(srcFileName):
         sys.exit('Unrecogonized shader type.')
 
 
+def SelectDxc():
+    pathEnvStr = os.environ['PATH']
+    pathEnvStrList = pathEnvStr.rsplit(';')
+    foundVulkanSDK = False
+    dxcCmdStr = ''
+    for path in pathEnvStrList:
+        if 'VulkanSDK' in path:
+            foundVulkanSDK = True
+            dxcCmdStr = path
+
+    if foundVulkanSDK is False:
+        sys.exit('Cannot find the Vulkan SDK in the PATH environment variable.')
+
+    return dxcCmdStr + '\\dxc.exe'
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Compile the target .hlsl shaders')
     parser.add_argument('--src', type=str, help='path to the target hlsl shader', default="")
@@ -38,13 +54,14 @@ if __name__ == "__main__":
 
     if args.src.find('.hlsl') == -1:
         sys.exit('The input is not a hlsl file')
-    
+
     srcName = ShaderName(args.src)
     dstPathName = args.dstDir + '/' + srcName + '.spv'
     profile = SelectProfile(srcName)
+    dxcCmdStr = SelectDxc()
 
     subprocess.check_output([
-        'dxc',
+        dxcCmdStr,
         '-spirv',
         '-T', profile,
         '-E', 'main',

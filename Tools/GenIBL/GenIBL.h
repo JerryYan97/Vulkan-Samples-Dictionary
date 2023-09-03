@@ -1,6 +1,6 @@
 #pragma once
-#include "../../../SharedLibrary/Application/GlfwApplication.h"
-#include "../../../SharedLibrary/Pipeline/Pipeline.h"
+#include "../../SharedLibrary/Application/GlfwApplication.h"
+#include "../../SharedLibrary/Pipeline/Pipeline.h"
 
 VK_DEFINE_HANDLE(VmaAllocation);
 
@@ -9,7 +9,7 @@ namespace SharedLib
     class Camera;
 }
 
-class PBREnivBasicApp : public SharedLib::GlfwApplication
+class PBREnivBasicApp : public SharedLib::Application
 {
 public:
     PBREnivBasicApp();
@@ -25,12 +25,7 @@ public:
     VkExtent2D GetHdrImgExtent() 
         { return VkExtent2D{ m_hdrImgWidth, m_hdrImgHeight }; }
 
-    VkFence GetFence(uint32_t i) { return m_inFlightFences[i]; }
-
     VkPipelineLayout GetSkyboxPipelineLayout() { return m_skyboxPipelineLayout; }
-
-    VkDescriptorSet GetSkyboxCurrentFrameDescriptorSet0() 
-        { return m_skyboxPipelineDescriptorSet0s[m_currentFrame]; }
 
     VkPipeline GetSkyboxPipeline() { return m_skyboxPipeline.GetVkPipeline(); }
 

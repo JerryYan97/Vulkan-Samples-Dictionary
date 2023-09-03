@@ -1,32 +1,16 @@
-#include "PBREnivBasicApp.h"
-#include <glfw3.h>
-#include "../../../SharedLibrary/Utils/VulkanDbgUtils.h"
-#include "../../../SharedLibrary/Camera/Camera.h"
-#include "../../../SharedLibrary/Event/Event.h"
+#include "GenIBL.h"
+#include "../../SharedLibrary/Utils/VulkanDbgUtils.h"
+#include "../../SharedLibrary/Camera/Camera.h"
+#include "../../SharedLibrary/Event/Event.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
 #include "vk_mem_alloc.h"
 
-static bool g_isDown = false;
-
-static void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
-{
-    if (button == GLFW_MOUSE_BUTTON_MIDDLE && action == GLFW_PRESS)
-    {
-        g_isDown = true;
-    }
-
-    if (button == GLFW_MOUSE_BUTTON_MIDDLE && action == GLFW_RELEASE)
-    {
-        g_isDown = false;
-    }
-}
-
 // ================================================================================================================
 PBREnivBasicApp::PBREnivBasicApp() : 
-    GlfwApplication(),
+    Application(),
     m_hdrCubeMapImage(VK_NULL_HANDLE),
     m_hdrCubeMapView(VK_NULL_HANDLE),
     m_hdrSampler(VK_NULL_HANDLE),
@@ -106,9 +90,6 @@ void PBREnivBasicApp::SendCameraDataToBuffer(
 // ================================================================================================================
 void PBREnivBasicApp::UpdateCameraAndGpuBuffer()
 {
-    SharedLib::HEvent midMouseDownEvent = CreateMiddleMouseEvent(g_isDown);
-    m_pCamera->OnEvent(midMouseDownEvent);
-    SendCameraDataToBuffer(m_currentFrame);
 }
 
 // ================================================================================================================
@@ -355,7 +336,6 @@ void PBREnivBasicApp::InitSkyboxPipeline()
     {
         pipelineRenderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
         pipelineRenderCreateInfo.colorAttachmentCount = 1;
-        pipelineRenderCreateInfo.pColorAttachmentFormats = &m_choisenSurfaceFormat.format;
     }
 
     m_skyboxPipeline.SetPNext(&pipelineRenderCreateInfo);
@@ -372,58 +352,4 @@ void PBREnivBasicApp::InitSkyboxPipeline()
 // ================================================================================================================
 void PBREnivBasicApp::AppInit()
 {
-    glfwInit();
-    uint32_t glfwExtensionCount = 0;
-    const char** glfwExtensions;
-    glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-    std::vector<const char*> instExtensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
-
-    InitInstance(instExtensions, glfwExtensionCount);
-
-    // Init glfw window.
-    InitGlfwWindowAndCallbacks();
-    glfwSetMouseButtonCallback(m_pWindow, MouseButtonCallback);
-
-    // Create vulkan surface from the glfw window.
-    VK_CHECK(glfwCreateWindowSurface(m_instance, m_pWindow, nullptr, &m_surface));
-
-    InitPhysicalDevice();
-    InitGfxQueueFamilyIdx();
-    InitPresentQueueFamilyIdx();
-
-    // Queue family index should be unique in vk1.2:
-    // https://vulkan.lunarg.com/doc/view/1.2.198.0/windows/1.2-extensions/vkspec.html#VUID-VkDeviceCreateInfo-queueFamilyIndex-02802
-    std::vector<VkDeviceQueueCreateInfo> deviceQueueInfos = CreateDeviceQueueInfos({ m_graphicsQueueFamilyIdx,
-                                                                                     m_presentQueueFamilyIdx });
-    // We need the swap chain device extension and the dynamic rendering extension.
-    const std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-                                                        VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME };
-
-    VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeature{};
-    {
-        dynamicRenderingFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
-        dynamicRenderingFeature.dynamicRendering = VK_TRUE;
-    }
-
-    InitDevice(deviceExtensions, 2, deviceQueueInfos, &dynamicRenderingFeature);
-    InitVmaAllocator();
-    InitGraphicsQueue();
-    InitPresentQueue();
-    InitDescriptorPool();
-
-    InitGfxCommandPool();
-    InitGfxCommandBuffers(SharedLib::MAX_FRAMES_IN_FLIGHT);
-
-    InitSwapchain();
-    
-    // Create the graphics pipeline
-    InitSkyboxShaderModules();
-    InitSkyboxPipelineDescriptorSetLayout();
-    InitSkyboxPipelineLayout();
-    InitSkyboxPipeline();
-
-    InitHdrRenderObjects();
-    InitCameraUboObjects();
-    InitSkyboxPipelineDescriptorSets();
-    InitSwapchainSyncObjects();
 }
