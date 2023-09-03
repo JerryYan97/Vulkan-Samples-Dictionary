@@ -417,7 +417,9 @@ int main()
 
     // Create Vert Shader Module -- SOURCE_PATH is a MACRO definition passed in during compilation, which is specified in
     //                              the CMakeLists.txt file in the same level of repository.
-    std::string shaderVertPath = std::string(SOURCE_PATH) + std::string("/DumpQuad.vert.spv");
+    // std::string shaderVertPath = std::string(SOURCE_PATH) + std::string("/DumpQuad.vert.spv");
+    // std::string shaderVertPath = std::string(SOURCE_PATH) + std::string("/DumpQuadVert.spv");
+    std::string shaderVertPath = std::string(SOURCE_PATH) + std::string("/DumpQuad_vert.spv");
     std::ifstream inputVertShader(shaderVertPath.c_str(), std::ios::binary | std::ios::in);
     std::vector<unsigned char> inputVertShaderStr(std::istreambuf_iterator<char>(inputVertShader), {});
     inputVertShader.close();
@@ -441,7 +443,9 @@ int main()
 
     // Create Frag Shader Module -- SOURCE_PATH is a MACRO definition passed in during compilation, which is specified in
     //                              the CMakeLists.txt file in the same level of repository.
-    std::string shaderFragPath = std::string(SOURCE_PATH) + std::string("/DumpQuad.frag.spv");
+    // std::string shaderFragPath = std::string(SOURCE_PATH) + std::string("/DumpQuad.frag.spv");
+    // std::string shaderFragPath = std::string(SOURCE_PATH) + std::string("/DumpQuadFrag.spv");
+    std::string shaderFragPath = std::string(SOURCE_PATH) + std::string("/DumpQuad_frag.spv");
     std::ifstream inputFragShader(shaderFragPath.c_str(), std::ios::binary | std::ios::in);
     std::vector<unsigned char> inputFragShaderStr(std::istreambuf_iterator<char>(inputFragShader), {});
     inputFragShader.close();
