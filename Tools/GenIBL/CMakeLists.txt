@@ -33,9 +33,15 @@ target_link_libraries(${MY_APP_NAME} SharedLibrary)
 add_dependencies(${MY_APP_NAME} SharedLibrary)
 
 set(SHARED_LIB_HLSL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../SharedLibrary/HLSL")
+
+# Deal with the building warning.
+set(DUMMY_FILE dummy)
+set_property(SOURCE DUMMY_FILE
+             PROPERTY SYMBOLIC True)
+
 add_custom_command(
         OUTPUT 
-            dummy.md
+            DUMMY_FILE
         COMMAND python
             ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/prefilterEnvMap_vert.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
         COMMAND python

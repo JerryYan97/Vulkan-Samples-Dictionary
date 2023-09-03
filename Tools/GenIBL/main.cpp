@@ -8,7 +8,7 @@
 
 int main()
 {
-    PBREnivBasicApp app;
+    GenIBL app;
     app.AppInit();
 
 }
