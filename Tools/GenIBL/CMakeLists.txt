@@ -40,12 +40,20 @@ set_property(SOURCE DUMMY_FILE
              PROPERTY SYMBOLIC True)
 
 add_custom_command(
-        OUTPUT 
+        OUTPUT
             DUMMY_FILE
         COMMAND python
             ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/prefilterEnvMap_vert.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
         COMMAND python
             ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/prefilterEnvMap_frag.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
+        COMMAND python
+            ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/diffuseIrradiance_vert.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
+        COMMAND python
+            ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/diffuseIrradiance_frag.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
+        COMMAND python
+            ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/envBrdf_vert.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
+        COMMAND python
+            ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/envBrdf_frag.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
 )
 
 add_custom_target(SHADER_COMPILE

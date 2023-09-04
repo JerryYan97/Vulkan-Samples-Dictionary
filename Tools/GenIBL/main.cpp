@@ -3,9 +3,11 @@
 
 #include "GenIBL.h"
 #include "../../SharedLibrary/Utils/VulkanDbgUtils.h"
+#include "../../SharedLibrary/Utils/StrPathUtils.h"
 
 #include <vulkan/vulkan.h>
 #include <Windows.h>
+#include <cassert>
 
 #include "renderdoc_app.h"
 
@@ -42,6 +44,48 @@ int main(
         return 1;
     }
 
+    // Create or clean folder, path manipulation -- Make sure that they are absolute paths.
+    std::string inputPathName;
+    std::string outputDir;
+    {
+        if (inputPath)
+        {
+            if (SharedLib::IsFile(inputPath.Get()) == false)
+            {
+                std::cerr << "The input is not a file!" << std::endl;
+                return 1;
+            }
+
+            bool isValid = SharedLib::GetAbsolutePathName(inputPath.Get(), inputPathName);
+            std::cout << "Read File From: " << inputPathName << std::endl;
+            if (isValid == false)
+            {
+                std::cerr << "Invalid input Path!" << std::endl;
+                return 1;
+            }
+        }
+        else
+        {
+            std::cerr << "Cannot find the input Path!" << std::endl;
+            return 1;
+        }
+
+        if (outputPath)
+        {
+            bool isValid = SharedLib::GetAbsolutePathName(outputPath.Get(), outputDir);
+            if (isValid == false)
+            {
+                std::cerr << "Invalid output Path!" << std::endl;
+                return 1;
+            }
+        }
+        else
+        {
+            std::cerr << "Cannot find the output directory!" << std::endl;
+            return 1;
+        }
+    }
+
     // RenderDoc debug starts
     RENDERDOC_API_1_6_0* rdoc_api = NULL;
     if (HMODULE mod = GetModuleHandleA("renderdoc.dll"))
@@ -56,9 +100,13 @@ int main(
         rdoc_api->StartFrameCapture(NULL, NULL);
     }
 
-    GenIBL app;
-    app.AppInit();
+    // Start application
+    {
+        // GenIBL app;
+        // app.AppInit();
+    }
 
+    // End RenderDoc debug
     if (rdoc_api)
     {
         rdoc_api->EndFrameCapture(NULL, NULL);

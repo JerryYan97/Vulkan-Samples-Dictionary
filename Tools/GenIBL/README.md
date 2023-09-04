@@ -1,4 +1,3 @@
-
 Algorithm:
 
 HLSL:
@@ -12,3 +11,6 @@ References:
 
 Mipmap: https://vulkan-tutorial.com/Generating_Mipmaps
 
+Vulkan HLSL: https://github.com/SaschaWillems/Vulkan/blob/master/shaders/hlsl/README.md
+
+DXC doc: https://github.com/microsoft/DirectXShaderCompiler/blob/main/docs/SPIR-V.rst
