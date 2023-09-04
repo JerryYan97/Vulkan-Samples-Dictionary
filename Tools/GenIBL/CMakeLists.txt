@@ -49,6 +49,6 @@ add_custom_command(
 )
 
 add_custom_target(SHADER_COMPILE
-    DEPENDS dummy.md)
+    DEPENDS DUMMY_FILE)
 
 add_dependencies(${MY_APP_NAME} SHADER_COMPILE)

@@ -98,7 +98,12 @@ void PBREnivBasicApp::SendCameraDataToBuffer(
     m_pCamera->GetView(cameraData);
     m_pCamera->GetRight(&cameraData[4]);
     m_pCamera->GetUp(&cameraData[8]);
-    m_pCamera->GetNearPlane(cameraData[12], cameraData[13], cameraData[14]);
+
+    m_pCamera->GetNearPlane(cameraData[12], cameraData[13], cameraData[11]);
+
+    VkExtent2D swapchainImgExtent = GetSwapchainImageExtent();
+    cameraData[14] = swapchainImgExtent.width;
+    cameraData[15] = swapchainImgExtent.height;
 
     CopyRamDataToGpuBuffer(cameraData, m_cameraParaBuffers[i], m_cameraParaBufferAllocs[i], sizeof(cameraData));
 }
@@ -308,8 +313,8 @@ void PBREnivBasicApp::InitSkyboxPipelineLayout()
 void PBREnivBasicApp::InitSkyboxShaderModules()
 {
     // Create Shader Modules.
-    m_vsSkyboxShaderModule = CreateShaderModule("./skybox_vert.spv");
-    m_psSkyboxShaderModule = CreateShaderModule("./skybox_frag.spv");
+    m_vsSkyboxShaderModule = CreateShaderModule("./hlsl/skybox_vert.spv");
+    m_psSkyboxShaderModule = CreateShaderModule("./hlsl/skybox_frag.spv");
 }
 
 // ================================================================================================================
