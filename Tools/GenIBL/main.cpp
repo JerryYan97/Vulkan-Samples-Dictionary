@@ -102,8 +102,9 @@ int main(
 
     // Start application
     {
-        // GenIBL app;
-        // app.AppInit();
+        GenIBL app;
+        app.ReadInCubemap(inputPathName);
+        app.AppInit();
     }
 
     // End RenderDoc debug
