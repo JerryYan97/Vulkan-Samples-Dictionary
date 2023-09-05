@@ -154,4 +154,10 @@ namespace SharedLib
 
         vkDestroyFence(device, submitFence, nullptr);
     }
+
+    // ================================================================================================================
+    void CmdCopyCubemapToBuffer()
+    {
+
+    }
 }

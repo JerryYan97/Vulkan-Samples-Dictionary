@@ -15,6 +15,8 @@ namespace SharedLib
                              VkBufferImageCopy bufToImgCopyInfo,
                              VmaAllocator allocator);
 
+    void CmdCopyCubemapToBuffer();
+
     void SubmitCmdBufferAndWait(
         VkDevice device,
         VkQueue queue,

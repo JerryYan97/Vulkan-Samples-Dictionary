@@ -1,3 +1,8 @@
+// We assume the 2x2x2 box in the world space with camera at the center.
+// So, the near distance is always 1.
+// The near plane's width and height are always 2.
+// We don't have to pass them to the shader. Instead, we can just embed these data in the shader.
+// However, we need to pass the screen width and height in pxiel anyway, so I just pass them from the app.
 struct CameraInfoUbo
 {
     float3 view[6];

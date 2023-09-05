@@ -11,6 +11,10 @@ struct ImgInfo
     float*   pData;
 };
 
+constexpr int CameraScreenBufferSizeInFloats = 4 * 3 * 6 + 4;
+constexpr int CameraScreenBufferSizeInBytes = sizeof(float) * CameraScreenBufferSizeInFloats;
+constexpr VkFormat HdriRenderTargetFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+
 class GenIBL : public SharedLib::Application
 {
 public:
@@ -20,8 +24,6 @@ public:
     virtual void AppInit() override;
 
     void ReadInCubemap(const std::string& namePath);
-    void DumpDiffIrradianceImg(const std::string& outputPath);
-
 private:
     // Shared pipeline resources
     void InitDiffIrrPreFilterEnvMapDescriptorSets();
@@ -62,7 +64,7 @@ private:
     VkShaderModule      m_diffuseIrradiancePsShaderModule;
     VkPipelineLayout    m_diffuseIrradiancePipelineLayout;
 
-    VkImage       m_diffuseIrradianceCubemap;
+    VkImage       m_diffuseIrradianceCubemap; // Note: Mutiview can draw to different layers automatically.
     VmaAllocation m_diffuseIrradianceCubemapAlloc;
     VkImageView   m_diffuseIrradianceCubemapImageView;
 
