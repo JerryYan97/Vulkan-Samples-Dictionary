@@ -24,7 +24,15 @@ GenIBL::GenIBL() :
     m_preFilterEnvMapPipeline(),
     m_envBrdfPipeline(),
     m_uboCameraScreenBuffer(VK_NULL_HANDLE),
-    m_uboCameraScreenAlloc(VK_NULL_HANDLE)
+    m_uboCameraScreenAlloc(VK_NULL_HANDLE),
+    m_diffIrrPreFilterEnvMapDesSet0(VK_NULL_HANDLE),
+    m_diffIrrPreFilterEnvMapDesSet0Layout(VK_NULL_HANDLE),
+    m_diffuseIrradianceVsShaderModule(VK_NULL_HANDLE),
+    m_diffuseIrradiancePsShaderModule(VK_NULL_HANDLE),
+    m_diffuseIrradiancePipelineLayout(VK_NULL_HANDLE),
+    m_diffuseIrradianceCubemap(VK_NULL_HANDLE),
+    m_diffuseIrradianceCubemapAlloc(VK_NULL_HANDLE),
+    m_diffuseIrradianceCubemapImageView(VK_NULL_HANDLE)
 {
 }
 

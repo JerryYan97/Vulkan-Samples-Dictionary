@@ -43,7 +43,7 @@ private:
     void InitPrefilterEnvMapPipelineDescriptorSets();
     void DestroyPrefilterEnvMapPipelineResourses();
 
-    // 
+    // Environment brdf
 
     // Common resources
     void InitInputCubemapObjects();
@@ -69,7 +69,7 @@ private:
     // Resources for the prefilter environment map
     SharedLib::Pipeline m_preFilterEnvMapPipeline; // Specular split-sum 1st element.
 
-    // 
+    // Resrouces for the environment brdf
     SharedLib::Pipeline m_envBrdfPipeline; // Specular split-sum 2st element.
 
     // Input cubemap resources.
