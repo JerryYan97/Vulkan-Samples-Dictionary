@@ -9,4 +9,6 @@ target_sources(
     ${CMAKE_CURRENT_SOURCE_DIR}/DataGenUtils.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/MathUtils.h
     ${CMAKE_CURRENT_SOURCE_DIR}/MathUtils.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/AppUtils.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/AppUtils.cpp
 )

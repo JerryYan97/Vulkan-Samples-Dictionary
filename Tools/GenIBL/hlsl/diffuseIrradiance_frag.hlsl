@@ -8,7 +8,7 @@ struct CameraInfoUbo
     float3 view[6];
     float3 right[6];
     float3 up[6];
-    float  near; // Pack it with 'up'.
+    float  near; // Pack it with the following nearWidthHeight.
     float2 nearWidthHeight; // Near plane's width and height in the world.
     float2 viewportWidthHeight; // Screen width and height in the unit of pixels.
 };

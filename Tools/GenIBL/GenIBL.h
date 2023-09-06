@@ -11,7 +11,7 @@ struct ImgInfo
     float*   pData;
 };
 
-constexpr int CameraScreenBufferSizeInFloats = 4 * 3 * 6 + 4;
+constexpr int CameraScreenBufferSizeInFloats = 4 * 3 * 6 + 4 + 2;
 constexpr int CameraScreenBufferSizeInBytes = sizeof(float) * CameraScreenBufferSizeInFloats;
 constexpr VkFormat HdriRenderTargetFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
 

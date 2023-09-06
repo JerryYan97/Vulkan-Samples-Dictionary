@@ -6,6 +6,7 @@
 # SHARED_LIB_APP only includes Application.h and Application.cpp. 
 # SHARED_LIB_GLFW includes Application.h/cpp, GlfwApplication.h/cpp. 
 # SHARED_LIB_IMGUI includes Application.h/cpp, GlfwApplication.h/cpp, DearImGuiApplication.h/cpp.
+#
 # 
 
 add_library(SharedLibrary STATIC)
@@ -13,6 +14,8 @@ add_library(SharedLibrary STATIC)
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     message(FATAL_ERROR "The SharedLibrary cannot be built alone.")
 else()
+    add_definitions(-DSHARED_LIB_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}\")
+
     # Load applications source files.
     if(DEFINED SHARED_LIB_APP)
         target_sources(
@@ -67,6 +70,27 @@ else()
 
     target_link_libraries(SharedLibrary vulkan-1)
 
-    # CMAKE_CURRENT_BINARY_DIR
-    # set()
+    # AppUtils Shaders Compile
+    if(NOT DEFINED SHARED_LIB_HLSL_DIR)
+        set(SHARED_LIB_HLSL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/HLSL")
+    endif()
+
+    # Deal with the building warning.
+    set(DUMMY_FILE dummy)
+    set_property(SOURCE DUMMY_FILE
+                 PROPERTY SYMBOLIC True)
+
+    add_custom_command(
+            OUTPUT
+                DUMMY_FILE
+            COMMAND python
+                ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${SHARED_LIB_HLSL_DIR}/cubemapFormat_vert.hlsl --dstDir ${SHARED_LIB_HLSL_DIR}
+            COMMAND python
+                ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${SHARED_LIB_HLSL_DIR}/cubemapFormat_frag.hlsl --dstDir ${SHARED_LIB_HLSL_DIR}
+    )
+
+    add_custom_target(SHARED_LIB_SHADER_COMPILE
+                      DEPENDS DUMMY_FILE)
+
+    add_dependencies(SharedLibrary SHARED_LIB_SHADER_COMPILE)
 endif()

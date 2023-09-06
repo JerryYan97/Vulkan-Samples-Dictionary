@@ -128,42 +128,34 @@ int main(
 
         ImgInfo inputHdriInfo = app.GetInputHdriInfo();
 
-        // Send input hdri buffer data to its gpu buffer
+        // Send input hdri buffer data to its gpu cubemap image.
         {
-            // Fill the command buffer
-            VkCommandBufferBeginInfo beginInfo{};
+            VkBufferImageCopy hdrBufToImgCopy{};
             {
-                beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+                VkExtent3D extent{};
+                {
+                    extent.width = inputHdriInfo.width;
+                    extent.height = inputHdriInfo.width;
+                    extent.depth = 1;
+                }
+
+                hdrBufToImgCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                hdrBufToImgCopy.imageSubresource.mipLevel = 0;
+                hdrBufToImgCopy.imageSubresource.baseArrayLayer = 0;
+                hdrBufToImgCopy.imageSubresource.layerCount = 6;
+
+                hdrBufToImgCopy.imageExtent = extent;
             }
-            VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &beginInfo));
 
-            // Transform the layout of the input hdri cubemap from undefined to shader read.
-            VkImageMemoryBarrier inputHdriCubemapTransBarrier{};
-            {
-                inputHdriCubemapTransBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-                inputHdriCubemapTransBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-                inputHdriCubemapTransBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-                inputHdriCubemapTransBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-                inputHdriCubemapTransBarrier.image = app.GetInputCubemap();
-                inputHdriCubemapTransBarrier.subresourceRange = cubemapSubResRange;
-            }
-
-            vkCmdPipelineBarrier(cmdBuffer,
-                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                0,
-                0, nullptr,
-                0, nullptr,
-                1, &inputHdriCubemapTransBarrier);
-
-
-
-            // Submit all the works recorded before
-            VK_CHECK(vkEndCommandBuffer(cmdBuffer));
-
-            SharedLib::SubmitCmdBufferAndWait(device, gfxQueue, cmdBuffer);
-
-            vkResetCommandBuffer(cmdBuffer, 0);
+            SharedLib::CmdSendImgDataToGpu(cmdBuffer,
+                device,
+                gfxQueue,
+                inputHdriInfo.pData,
+                3 * sizeof(float) * inputHdriInfo.width * inputHdriInfo.height,
+                app.GetInputCubemap(),
+                cubemapSubResRange,
+                hdrBufToImgCopy,
+                allocator);
         }
 
         // Render the diffuse irradiance map

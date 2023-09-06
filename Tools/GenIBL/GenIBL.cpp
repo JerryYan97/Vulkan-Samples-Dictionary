@@ -204,9 +204,9 @@ void GenIBL::InitCameraScreenUbo()
     memcpy(screenCameraData, views, sizeof(views));
     memcpy(&screenCameraData[24], rights, sizeof(rights));
     memcpy(&screenCameraData[48], ups, sizeof(ups));
-    screenCameraData[71] = near;
-    memcpy(&screenCameraData[72], nearWidthHeight, sizeof(nearWidthHeight));
-    memcpy(&screenCameraData[74], viewportWidthHeight, sizeof(viewportWidthHeight));
+    screenCameraData[72] = near;
+    memcpy(&screenCameraData[73], nearWidthHeight, sizeof(nearWidthHeight));
+    memcpy(&screenCameraData[76], viewportWidthHeight, sizeof(viewportWidthHeight));
 
     // Send data to the GPU buffer
     CopyRamDataToGpuBuffer(screenCameraData,
