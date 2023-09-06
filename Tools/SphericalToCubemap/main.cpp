@@ -2,6 +2,7 @@
 #include "args.hxx"
 #include "../../SharedLibrary/Utils/CmdBufUtils.h"
 #include "../../SharedLibrary/Utils/VulkanDbgUtils.h"
+#include "../../SharedLibrary/Utils/AppUtils.h"
 
 #include "renderdoc_app.h"
 #include <Windows.h>
@@ -100,6 +101,9 @@ int main(
     app.ReadInHdri(inputHdrPathName);
     app.AppInit();
 
+    SharedLib::CubemapFormatTransApp cubemapFormatTransApp;
+    cubemapFormatTransApp.SetInputCubemapImg(app.GetOutputCubemapImg(), app.GetOutputCubemapExtent());
+
     if (CheckImgValAbove1(app.GetInputHdriData(), app.GetInputHdriWidth(), app.GetInputHdriHeight()))
     {
         std::cout << "The image has elements that are larger than 1.f." << std::endl;
@@ -116,6 +120,15 @@ int main(
     VmaAllocator allocator = *app.GetVmaAllocator();
     VkDescriptorSet pipelineDescriptorSet = app.GetDescriptorSet();
     VkDescriptorSet formatDescriptorSet = app.GetFormatDescriptorSet();
+
+    SharedLib::VulkanInfos formatTransVkInfo{};
+    {
+        formatTransVkInfo.device = device;
+        formatTransVkInfo.pAllocator = app.GetVmaAllocator();
+        formatTransVkInfo.descriptorPool = app.GetDescriptorPool();
+    }
+    cubemapFormatTransApp.GetVkInfos(formatTransVkInfo);
+    cubemapFormatTransApp.Init();
 
     VkImageSubresourceRange cubemapSubResRange{};
     {
@@ -562,5 +575,6 @@ int main(
         rdoc_api->EndFrameCapture(NULL, NULL);
     }
 
+    cubemapFormatTransApp.Destroy();
     system("pause");
 }

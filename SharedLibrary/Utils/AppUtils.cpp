@@ -112,6 +112,75 @@ namespace SharedLib
     }
 
     // ================================================================================================================
+    void CubemapFormatTransApp::CmdConvertCubemapFormat(
+        VkCommandBuffer cmdBuffer)
+    {
+        VkClearValue clearColor = { {{1.0f, 0.0f, 0.0f, 1.0f}} };
+
+        VkRenderingAttachmentInfoKHR renderAttachmentInfo{};
+        {
+            renderAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+            renderAttachmentInfo.imageView = m_outputCubemapImgView;
+            renderAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            renderAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            renderAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            renderAttachmentInfo.clearValue = clearColor;
+        }
+
+        VkExtent2D colorRenderTargetExtent{};
+        {
+            colorRenderTargetExtent.width = m_inputCubemapExtent.width;
+            colorRenderTargetExtent.height = m_inputCubemapExtent.height;
+        }
+
+        VkRenderingInfoKHR renderInfo{};
+        {
+            renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+            renderInfo.renderArea.offset = { 0, 0 };
+            renderInfo.renderArea.extent = colorRenderTargetExtent;
+            renderInfo.layerCount = 6;
+            renderInfo.colorAttachmentCount = 1;
+            renderInfo.viewMask = 0x3F;
+            renderInfo.pColorAttachments = &renderAttachmentInfo;
+        }
+
+        vkCmdBeginRendering(cmdBuffer, &renderInfo);
+
+        // Bind the graphics pipeline
+        vkCmdBindDescriptorSets(cmdBuffer,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            m_formatPipelineLayout,
+            0, 1, &m_formatPipelineDescriptorSet0,
+            0, NULL);
+
+        vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pPipeline->GetVkPipeline());
+
+        // Set the viewport
+        VkViewport viewport{};
+        {
+            viewport.x = 0.f;
+            viewport.y = 0.f;
+            viewport.width = (float)colorRenderTargetExtent.width;
+            viewport.height = (float)colorRenderTargetExtent.height;
+            viewport.minDepth = 0.f;
+            viewport.maxDepth = 1.f;
+        }
+        vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
+
+        // Set the scissor
+        VkRect2D scissor{};
+        {
+            scissor.offset = { 0, 0 };
+            scissor.extent = colorRenderTargetExtent;
+            vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
+        }
+
+        vkCmdDraw(cmdBuffer, 6, 1, 0, 0);
+
+        vkCmdEndRendering(cmdBuffer);
+    }
+
+    // ================================================================================================================
     void CubemapFormatTransApp::InitFormatPipeline()
     {
         VkFormat colorAttachmentFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
@@ -357,7 +426,7 @@ namespace SharedLib
         {
             outputImgViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
             outputImgViewInfo.image = m_outputCubemap;
-            outputImgViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            outputImgViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
             outputImgViewInfo.format = VK_FORMAT_R32G32B32A32_SFLOAT;
             outputImgViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             outputImgViewInfo.subresourceRange.levelCount = 1;

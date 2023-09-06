@@ -1,5 +1,5 @@
 #pragma once
-#include "Pipeline.h"
+#include "../Pipeline/Pipeline.h"
 #include "vulkan/vulkan.h"
 #include "vk_mem_alloc.h"
 #include <string>
@@ -43,6 +43,8 @@ namespace SharedLib
         virtual void Destroy() override;
 
         void SetInputCubemapImg(VkImage iCubemapImg, VkExtent3D extent);
+
+        void CmdConvertCubemapFormat(VkCommandBuffer cmdBuffer);
 
     private:
         void InitFormatPipeline();
