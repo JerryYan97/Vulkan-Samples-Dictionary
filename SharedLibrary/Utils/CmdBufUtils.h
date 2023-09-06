@@ -15,7 +15,15 @@ namespace SharedLib
                              VkBufferImageCopy bufToImgCopyInfo,
                              VmaAllocator allocator);
 
-    void CmdCopyCubemapToBuffer();
+    // The output color is always a 3 channels -- RGB.
+    // The input image is always 4 channels -- RGBA.
+    // Always 32 bits for each channels.
+    void CmdCopyCubemapToBuffer(VkCommandBuffer cmdBuffer,
+                                VkDevice        device,
+                                VkQueue         gfxQueue,
+                                VkImage         dstImg,
+                                uint32_t        widthHeight, // Assume the width and height of a face is always same.
+                                VkBuffer        dstBuffer);
 
     void SubmitCmdBufferAndWait(
         VkDevice device,

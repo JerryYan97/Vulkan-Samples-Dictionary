@@ -23,7 +23,17 @@ public:
 
     virtual void AppInit() override;
 
+    VkDescriptorSet GetDiffIrrPreFilterEnvMapDesSet() { return m_diffIrrPreFilterEnvMapDesSet0; }
+    VkImage GetDiffuseIrradianceCubemap() { return m_diffuseIrradianceCubemap; }
+    VkImageView GetDiffuseIrradianceCubemapView() { return m_diffuseIrradianceCubemapImageView; }
+    ImgInfo GetInputHdriInfo() { return m_hdrCubeMapInfo; }
+    VkPipelineLayout GetDiffuseIrradiancePipelineLayout() { return m_diffuseIrradiancePipelineLayout; }
+    VkPipeline GetDiffuseIrradiancePipeline() { return m_diffuseIrradiancePipeline.GetVkPipeline(); }
+    VkImage GetInputCubemap() { return m_hdrCubeMapImage; }
+    VkImageView GetInputCubemapImgView() { return m_diffuseIrradianceCubemapImageView; }
+
     void ReadInCubemap(const std::string& namePath);
+
 private:
     // Shared pipeline resources
     void InitDiffIrrPreFilterEnvMapDescriptorSets();

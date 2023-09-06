@@ -174,7 +174,7 @@ int main(
         }
         VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &beginInfo));
 
-        // Transform the layout of the swapchain from undefined to render target.
+        // Transform the layout of the output cubemap from undefined to render target.
         VkImageMemoryBarrier cubemapRenderTargetTransBarrier{};
         {
             cubemapRenderTargetTransBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -437,43 +437,6 @@ int main(
 
         vkCmdEndRendering(cmdBuffer);
 
-        // Submit all the works recorded before
-        VK_CHECK(vkEndCommandBuffer(cmdBuffer));
-
-        SharedLib::SubmitCmdBufferAndWait(device, gfxQueue, cmdBuffer);
-
-        vkResetCommandBuffer(cmdBuffer, 0);
-    }
-
-    // Save the vulkan format cubemap to the disk
-    {
-        // Fill the command buffer
-        VkCommandBufferBeginInfo beginInfo{};
-        {
-            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        }
-        VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &beginInfo));
-
-        // Copy the rendered images to a buffer.
-        VkBuffer stagingBuffer;
-        VmaAllocation stagingBufferAlloc;
-
-        VmaAllocationCreateInfo stagingBufAllocInfo{};
-        {
-            stagingBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-            stagingBufAllocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-        }
-
-        VkBufferCreateInfo stgBufInfo{};
-        {
-            stgBufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-            stgBufInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-            stgBufInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-            stgBufInfo.size = 4 * sizeof(float) * app.GetOutputCubemapExtent().width * app.GetOutputCubemapExtent().height * 6; // RGBA and 6 images blocks.
-        }
-
-        VK_CHECK(vmaCreateBuffer(allocator, &stgBufInfo, &stagingBufAllocInfo, &stagingBuffer, &stagingBufferAlloc, nullptr));
-
         // Transfer cubemap's layout to copy source
         VkImageMemoryBarrier cubemapColorAttToSrcBarrier{};
         {
@@ -495,30 +458,37 @@ int main(
             0, nullptr,
             1, &cubemapColorAttToSrcBarrier);
 
-        // Copy the data from buffer to the image
-        // The output cubemap will be vStrip for convenience.
-        // NOTE: Read the doc to check how do images' texel coordinates map to buffer's 1D index, which is not intuitive but mathmaically elegent.
-        VkBufferImageCopy cubemapToBufferCopy{};
-        {
-            cubemapToBufferCopy.bufferRowLength = app.GetOutputCubemapExtent().width;
-            // cubemapToBufferCopy.bufferImageHeight = app.GetOutputCubemapExtent().height;
-            cubemapToBufferCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            cubemapToBufferCopy.imageSubresource.mipLevel = 0;
-            cubemapToBufferCopy.imageSubresource.baseArrayLayer = 0;
-            cubemapToBufferCopy.imageSubresource.layerCount = 6;
-            cubemapToBufferCopy.imageExtent = app.GetOutputCubemapExtent();
-        }
-
-        vkCmdCopyImageToBuffer(cmdBuffer,
-            app.GetOutputCubemapImg(),
-            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            stagingBuffer,
-            1, &cubemapToBufferCopy);
-
         // Submit all the works recorded before
         VK_CHECK(vkEndCommandBuffer(cmdBuffer));
 
         SharedLib::SubmitCmdBufferAndWait(device, gfxQueue, cmdBuffer);
+
+        vkResetCommandBuffer(cmdBuffer, 0);
+    }
+
+    // Save the vulkan format cubemap to the disk
+    {
+        // Copy the rendered images to a buffer.
+        VkBuffer stagingBuffer;
+        VmaAllocation stagingBufferAlloc;
+
+        VmaAllocationCreateInfo stagingBufAllocInfo{};
+        {
+            stagingBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+            stagingBufAllocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        }
+
+        VkBufferCreateInfo stgBufInfo{};
+        {
+            stgBufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+            stgBufInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+            stgBufInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+            stgBufInfo.size = 4 * sizeof(float) * app.GetOutputCubemapExtent().width * app.GetOutputCubemapExtent().height * 6; // RGBA and 6 images blocks.
+        }
+
+        VK_CHECK(vmaCreateBuffer(allocator, &stgBufInfo, &stagingBufAllocInfo, &stagingBuffer, &stagingBufferAlloc, nullptr));
+
+        SharedLib::CmdCopyCubemapToBuffer(cmdBuffer, device, gfxQueue, app.GetOutputCubemapImg(), app.GetOutputCubemapExtent().width, stagingBuffer);
 
         // Copy the buffer data to RAM and save that on the disk.
         float* pImgData = new float[4 * app.GetOutputCubemapExtent().width * app.GetOutputCubemapExtent().height * 6];
@@ -591,4 +561,6 @@ int main(
     {
         rdoc_api->EndFrameCapture(NULL, NULL);
     }
+
+    system("pause");
 }

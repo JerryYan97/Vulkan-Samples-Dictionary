@@ -4,6 +4,9 @@
 namespace SharedLib
 {
     // ================================================================================================================
+    // TODO: This function has done too much. It shouldn't be responsible for layout transformation and cmdbuffer
+    // starts or ends or submittions. Cmdxxx(...) should only put packets into the cmdbuffer like native CmdXxx(...).
+    // Maybe we can still put layout transformation in it and make it flexible in the future.
     void CmdSendImgDataToGpu(
         VkCommandBuffer         cmdBuffer,
         VkDevice                device,
@@ -156,8 +159,50 @@ namespace SharedLib
     }
 
     // ================================================================================================================
-    void CmdCopyCubemapToBuffer()
+    void CmdCopyCubemapToBuffer(VkCommandBuffer cmdBuffer,
+                                VkDevice        device,
+                                VkQueue         gfxQueue,
+                                VkImage         dstImg,
+                                uint32_t        widthHeight, // Assume the width and height of a face is always same.
+                                VkBuffer        dstBuffer)
     {
+        // Fill the command buffer
+        VkCommandBufferBeginInfo beginInfo{};
+        {
+            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        }
+        VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &beginInfo));
 
+        VkExtent3D cubemapExtent{};
+        {
+            cubemapExtent.width  = widthHeight;
+            cubemapExtent.height = widthHeight;
+            cubemapExtent.depth  = 1;
+        }
+
+        // Copy the data from buffer to the image
+        // The output cubemap will be vStrip for convenience.
+        // NOTE: Read the doc to check how do images' texel coordinates map to buffer's 1D index, which is not intuitive but mathmaically elegent.
+        VkBufferImageCopy cubemapToBufferCopy{};
+        {
+            cubemapToBufferCopy.bufferRowLength = widthHeight;
+            // cubemapToBufferCopy.bufferImageHeight = app.GetOutputCubemapExtent().height;
+            cubemapToBufferCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            cubemapToBufferCopy.imageSubresource.mipLevel = 0;
+            cubemapToBufferCopy.imageSubresource.baseArrayLayer = 0;
+            cubemapToBufferCopy.imageSubresource.layerCount = 6;
+            cubemapToBufferCopy.imageExtent = cubemapExtent;
+        }
+
+        vkCmdCopyImageToBuffer(cmdBuffer,
+                               dstImg,
+                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                               dstBuffer,
+                               1, &cubemapToBufferCopy);
+
+        // Submit all the works recorded before
+        VK_CHECK(vkEndCommandBuffer(cmdBuffer));
+
+        SharedLib::SubmitCmdBufferAndWait(device, gfxQueue, cmdBuffer);
     }
 }

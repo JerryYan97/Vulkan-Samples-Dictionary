@@ -121,8 +121,8 @@ void PBREnivBasicApp::InitHdrRenderObjects()
 {
     // Load the HDRI image into RAM
     std::string hdriFilePath = SOURCE_PATH;
-    // hdriFilePath += "/../data/output_skybox.hdr";
-    hdriFilePath += "/../data/little_paris_eiffel_tower_4k_cubemap.hdr";
+    hdriFilePath += "/../data/output_cubemap.hdr";
+    // hdriFilePath += "/../data/little_paris_eiffel_tower_4k_cubemap.hdr";
 
     int width, height, nrComponents;
     m_hdrImgData = stbi_loadf(hdriFilePath.c_str(), &width, &height, &nrComponents, 0);
