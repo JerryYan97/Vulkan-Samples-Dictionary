@@ -119,7 +119,6 @@ int main(
     VkDevice device = app.GetVkDevice();
     VmaAllocator allocator = *app.GetVmaAllocator();
     VkDescriptorSet pipelineDescriptorSet = app.GetDescriptorSet();
-    VkDescriptorSet formatDescriptorSet = app.GetFormatDescriptorSet();
 
     SharedLib::VulkanInfos formatTransVkInfo{};
     {
