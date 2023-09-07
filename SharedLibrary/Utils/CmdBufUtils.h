@@ -21,7 +21,7 @@ namespace SharedLib
     void CmdCopyCubemapToBuffer(VkCommandBuffer cmdBuffer,
                                 VkDevice        device,
                                 VkQueue         gfxQueue,
-                                VkImage         dstImg,
+                                VkImage         srcImg,
                                 uint32_t        widthHeight, // Assume the width and height of a face is always same.
                                 VkBuffer        dstBuffer);
 

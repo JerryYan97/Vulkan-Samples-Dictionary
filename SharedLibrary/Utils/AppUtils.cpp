@@ -79,7 +79,11 @@ namespace SharedLib
         m_inputCubemapExtent(),
         m_outputCubemap(VK_NULL_HANDLE),
         m_outputCubemapImgView(VK_NULL_HANDLE),
-        m_outputCubemapAlloc(VK_NULL_HANDLE)
+        m_outputCubemapAlloc(VK_NULL_HANDLE),
+        m_formatInputImages(VK_NULL_HANDLE),
+        m_formatInputImagesViews(VK_NULL_HANDLE),
+        m_formatInputImagesAllocs(VK_NULL_HANDLE),
+        m_formatInputImagesSamplers(VK_NULL_HANDLE)
     {
 
     }
@@ -115,6 +119,103 @@ namespace SharedLib
     void CubemapFormatTransApp::CmdConvertCubemapFormat(
         VkCommandBuffer cmdBuffer)
     {
+        VkImageSubresourceRange cubemapSubResRange{};
+        {
+            cubemapSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            cubemapSubResRange.baseMipLevel = 0;
+            cubemapSubResRange.levelCount = 1;
+            cubemapSubResRange.baseArrayLayer = 0;
+            cubemapSubResRange.layerCount = 6;
+        }
+
+        // Transform the layout of the cubemap from render target to copy src.
+        // Transform the layout of the 6 images from undef to copy dst.
+        VkImageMemoryBarrier stg1ImgsTrans[2] = {};
+        {
+            stg1ImgsTrans[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            stg1ImgsTrans[0].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+            stg1ImgsTrans[0].oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            stg1ImgsTrans[0].newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+            stg1ImgsTrans[0].image = m_inputCubemap;
+            stg1ImgsTrans[0].subresourceRange = cubemapSubResRange;
+
+            stg1ImgsTrans[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            stg1ImgsTrans[1].dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            stg1ImgsTrans[1].oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            stg1ImgsTrans[1].newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            stg1ImgsTrans[1].image = m_formatInputImages;
+            stg1ImgsTrans[1].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            stg1ImgsTrans[1].subresourceRange.baseMipLevel = 0;
+            stg1ImgsTrans[1].subresourceRange.levelCount = 1;
+            stg1ImgsTrans[1].subresourceRange.baseArrayLayer = 0;
+            stg1ImgsTrans[1].subresourceRange.layerCount = 6;
+        }
+
+        vkCmdPipelineBarrier(cmdBuffer,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            0,
+            0, nullptr,
+            0, nullptr,
+            2, stg1ImgsTrans);
+
+        // Copy the cubemap to 6 separate images
+        VkImageCopy imgCpyInfo{};
+        {
+            imgCpyInfo.srcOffset = { 0, 0, 0 };
+            imgCpyInfo.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            imgCpyInfo.srcSubresource.baseArrayLayer = 0;
+            imgCpyInfo.srcSubresource.layerCount = 6;
+            imgCpyInfo.srcSubresource.mipLevel = 0;
+
+            imgCpyInfo.dstOffset = { 0, 0, 0 };
+            imgCpyInfo.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            imgCpyInfo.dstSubresource.baseArrayLayer = 0;
+            imgCpyInfo.dstSubresource.layerCount = 6;
+            imgCpyInfo.dstSubresource.mipLevel = 0;
+
+            imgCpyInfo.extent = m_inputCubemapExtent;
+        }
+
+        vkCmdCopyImage(cmdBuffer,
+            m_inputCubemap,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            m_formatInputImages,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1,
+            &imgCpyInfo);
+
+        // Transform the layout of cubemap to render target
+        // Transform the 6 images layout to ps shader input
+        VkImageMemoryBarrier stg2ImgsTrans[2] = {};
+        {
+            stg2ImgsTrans[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            stg2ImgsTrans[0].dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+            stg2ImgsTrans[0].oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            stg2ImgsTrans[0].newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            stg2ImgsTrans[0].image = m_outputCubemap;
+            stg2ImgsTrans[0].subresourceRange = cubemapSubResRange;
+
+            stg2ImgsTrans[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            stg2ImgsTrans[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            stg2ImgsTrans[1].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            stg2ImgsTrans[1].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            stg2ImgsTrans[1].image = m_formatInputImages;
+            stg2ImgsTrans[1].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            stg2ImgsTrans[1].subresourceRange.baseMipLevel = 0;
+            stg2ImgsTrans[1].subresourceRange.levelCount = 1;
+            stg2ImgsTrans[1].subresourceRange.baseArrayLayer = 0;
+            stg2ImgsTrans[1].subresourceRange.layerCount = 6;
+        }
+
+        vkCmdPipelineBarrier(cmdBuffer,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            0,
+            0, nullptr,
+            0, nullptr,
+            2, stg2ImgsTrans);
+
         VkClearValue clearColor = { {{1.0f, 0.0f, 0.0f, 1.0f}} };
 
         VkRenderingAttachmentInfoKHR renderAttachmentInfo{};
@@ -178,6 +279,27 @@ namespace SharedLib
         vkCmdDraw(cmdBuffer, 6, 1, 0, 0);
 
         vkCmdEndRendering(cmdBuffer);
+
+        // Transfer cubemap's layout to copy source
+        VkImageMemoryBarrier cubemapColorAttToSrcBarrier{};
+        {
+            cubemapColorAttToSrcBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            cubemapColorAttToSrcBarrier.image = m_outputCubemap;
+            cubemapColorAttToSrcBarrier.subresourceRange = cubemapSubResRange;
+            cubemapColorAttToSrcBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            cubemapColorAttToSrcBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+            cubemapColorAttToSrcBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            cubemapColorAttToSrcBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        }
+
+        vkCmdPipelineBarrier(
+            cmdBuffer,
+            VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &cubemapColorAttToSrcBarrier);
     }
 
     // ================================================================================================================
@@ -221,7 +343,7 @@ namespace SharedLib
             imgsSamplerBinding.binding = 0;
             imgsSamplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
             imgsSamplerBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            imgsSamplerBinding.descriptorCount = 6;
+            imgsSamplerBinding.descriptorCount = 1;
         }
 
         // Create pipeline's descriptors layout
@@ -279,12 +401,11 @@ namespace SharedLib
             &m_formatPipelineDescriptorSet0));
 
         // Link descriptors to the buffer and image
-        VkDescriptorImageInfo formatImgInfo[6] = {};
-        for (uint32_t i = 0; i < 6; i++)
+        VkDescriptorImageInfo formatImgInfo{};
         {
-            formatImgInfo[i].imageView = m_formatInputImagesViews[i];
-            formatImgInfo[i].sampler = m_formatInputImagesSamplers[i];
-            formatImgInfo[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            formatImgInfo.imageView = m_formatInputImagesViews;
+            formatImgInfo.sampler = m_formatInputImagesSamplers;
+            formatImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         }
 
         VkDescriptorBufferInfo screenBufferInfo{};
@@ -310,8 +431,8 @@ namespace SharedLib
             writeformatImgsDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
             writeformatImgsDesSet.dstSet = m_formatPipelineDescriptorSet0;
             writeformatImgsDesSet.dstBinding = 0;
-            writeformatImgsDesSet.pImageInfo = formatImgInfo;
-            writeformatImgsDesSet.descriptorCount = 6;
+            writeformatImgsDesSet.pImageInfo = &formatImgInfo;
+            writeformatImgsDesSet.descriptorCount = 1;
         }
 
         // Linking pipeline descriptors: cubemap and scene buffer descriptors to their GPU memory and info.
@@ -345,7 +466,7 @@ namespace SharedLib
             formatImgInfo.format = VK_FORMAT_R32G32B32A32_SFLOAT;
             formatImgInfo.extent = m_inputCubemapExtent;
             formatImgInfo.mipLevels = 1;
-            formatImgInfo.arrayLayers = 1;
+            formatImgInfo.arrayLayers = 6;
             formatImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
             formatImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
             formatImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
@@ -366,33 +487,27 @@ namespace SharedLib
             samplerInfo.maxAnisotropy = 1.0f;
         }
 
-        m_formatInputImages.resize(6);
-        m_formatInputImagesViews.resize(6);
-        m_formatInputImagesAllocs.resize(6);
-        m_formatInputImagesSamplers.resize(6);
-        for (uint32_t i = 0; i < 6; i++)
+        VK_CHECK(vmaCreateImage(*m_vkInfos.pAllocator,
+            &formatImgInfo,
+            &formatImgAllocInfo,
+            &m_formatInputImages,
+            &m_formatInputImagesAllocs,
+            nullptr));
+
+        VkImageViewCreateInfo formatImgViewInfo{};
         {
-            VK_CHECK(vmaCreateImage(*m_vkInfos.pAllocator,
-                &formatImgInfo,
-                &formatImgAllocInfo,
-                &m_formatInputImages[i],
-                &m_formatInputImagesAllocs[i],
-                nullptr));
-
-            VkImageViewCreateInfo formatImgViewInfo{};
-            {
-                formatImgViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-                formatImgViewInfo.image = m_formatInputImages[i];
-                formatImgViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-                formatImgViewInfo.format = VK_FORMAT_R32G32B32A32_SFLOAT;
-                formatImgViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                formatImgViewInfo.subresourceRange.levelCount = 1;
-                formatImgViewInfo.subresourceRange.layerCount = 1;
-            }
-
-            VK_CHECK(vkCreateImageView(m_vkInfos.device, &formatImgViewInfo, nullptr, &m_formatInputImagesViews[i]));
-            VK_CHECK(vkCreateSampler(m_vkInfos.device, &samplerInfo, nullptr, &m_formatInputImagesSamplers[i]));
+            formatImgViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            formatImgViewInfo.image = m_formatInputImages;
+            formatImgViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+            formatImgViewInfo.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+            formatImgViewInfo.subresourceRange = {};
+            formatImgViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            formatImgViewInfo.subresourceRange.levelCount = 1;
+            formatImgViewInfo.subresourceRange.layerCount = 6;
         }
+
+        VK_CHECK(vkCreateImageView(m_vkInfos.device, &formatImgViewInfo, nullptr, &m_formatInputImagesViews));
+        VK_CHECK(vkCreateSampler(m_vkInfos.device, &samplerInfo, nullptr, &m_formatInputImagesSamplers));
 
         // Allocate output cubemap resources
         VmaAllocationCreateInfo outputImgAllocInfo{};
@@ -439,12 +554,9 @@ namespace SharedLib
     // ================================================================================================================
     void CubemapFormatTransApp::DestroyFormatImgsObjects()
     {
-        for (uint32_t i = 0; i < m_formatInputImages.size(); i++)
-        {
-            vkDestroySampler(m_vkInfos.device, m_formatInputImagesSamplers[i], nullptr);
-            vkDestroyImageView(m_vkInfos.device, m_formatInputImagesViews[i], nullptr);
-            vmaDestroyImage(*m_vkInfos.pAllocator, m_formatInputImages[i], m_formatInputImagesAllocs[i]);
-        }
+        vkDestroySampler(m_vkInfos.device, m_formatInputImagesSamplers, nullptr);
+        vkDestroyImageView(m_vkInfos.device, m_formatInputImagesViews, nullptr);
+        vmaDestroyImage(*m_vkInfos.pAllocator, m_formatInputImages, m_formatInputImagesAllocs);
 
         vkDestroyImageView(m_vkInfos.device, m_outputCubemapImgView, nullptr);
         vmaDestroyImage(*m_vkInfos.pAllocator, m_outputCubemap, m_outputCubemapAlloc);

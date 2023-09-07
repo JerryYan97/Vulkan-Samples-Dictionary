@@ -43,6 +43,7 @@ namespace SharedLib
         virtual void Destroy() override;
 
         void SetInputCubemapImg(VkImage iCubemapImg, VkExtent3D extent);
+        VkImage GetOutputCubemap() { return m_outputCubemap; }
 
         void CmdConvertCubemapFormat(VkCommandBuffer cmdBuffer);
 
@@ -64,10 +65,10 @@ namespace SharedLib
 
         VkDescriptorSet m_formatPipelineDescriptorSet0;
 
-        std::vector<VkImage>       m_formatInputImages;
-        std::vector<VkImageView>   m_formatInputImagesViews;
-        std::vector<VmaAllocation> m_formatInputImagesAllocs;
-        std::vector<VkSampler>     m_formatInputImagesSamplers;
+        VkImage       m_formatInputImages; // 6 layers to accomodate that hlsl doesn't have separate descriptors.
+        VkImageView   m_formatInputImagesViews;
+        VmaAllocation m_formatInputImagesAllocs;
+        VkSampler     m_formatInputImagesSamplers;
 
         VkBuffer      m_formatWidthHeightBuffer;
         VmaAllocation m_formatWidthHeightAlloc;
