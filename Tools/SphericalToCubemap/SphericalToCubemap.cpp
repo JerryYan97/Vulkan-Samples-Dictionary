@@ -2,13 +2,7 @@
 #include "../../SharedLibrary/Utils/VulkanDbgUtils.h"
 #include "../../SharedLibrary/Camera/Camera.h"
 #include "../../SharedLibrary/Utils/MathUtils.h"
-
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-
-#define STBI_MSC_SECURE_CRT
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
+#include "../../SharedLibrary/Utils/DiskOpsUtils.h"
 
 #include <cassert>
 
@@ -74,7 +68,7 @@ void SphericalToCubemap::DestroyHdriGpuObjects()
 void SphericalToCubemap::ReadInHdri(const std::string& namePath)
 {
     int nrComponents, width, height;
-    m_hdriData = stbi_loadf(namePath.c_str(), &width, &height, &nrComponents, 0);
+    m_hdriData = SharedLib::ReadImg(namePath, nrComponents, width, height);
 
     m_width = (uint32_t)width;
     m_height = (uint32_t)height;
@@ -88,15 +82,7 @@ void SphericalToCubemap::SaveCubemap(
     uint32_t components, 
     float* pData)
 {
-    int res = stbi_write_hdr(namePath.c_str(), width, height, components, pData);
-    if (res > 0)
-    {
-        std::cout << "Cubemap saves successfully." << std::endl;
-    }
-    else
-    {
-        std::cout << "Cubemap fails to save." << std::endl;
-    }
+    SharedLib::SaveImg(namePath, width, height, components, pData);
 }
 
 // ================================================================================================================

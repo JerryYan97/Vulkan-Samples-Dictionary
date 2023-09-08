@@ -5,6 +5,7 @@
 #include "../../SharedLibrary/Utils/CmdBufUtils.h"
 #include "../../SharedLibrary/Utils/VulkanDbgUtils.h"
 #include "../../SharedLibrary/Utils/StrPathUtils.h"
+#include "../../SharedLibrary/Utils/AppUtils.h"
 
 #include "renderdoc_app.h"
 #include <Windows.h>
@@ -83,8 +84,8 @@ int main(
             std::cerr << "Cannot find the output directory!" << std::endl;
             return 1;
         }
-    }    
-    
+    }
+
     // Start application
     {
         // RenderDoc debug starts
@@ -108,11 +109,13 @@ int main(
         app.ReadInCubemap(inputPathName);
         app.AppInit();
 
+        SharedLib::CubemapFormatTransApp cubemapFormatTransApp{};
+
         // Common data used in the CmdBuffer filling process.
-        VkCommandBuffer cmdBuffer             = app.GetGfxCmdBuffer(0);
-        VkQueue         gfxQueue              = app.GetGfxQueue();
-        VkDevice        device                = app.GetVkDevice();
-        VmaAllocator    allocator             = *app.GetVmaAllocator();
+        VkCommandBuffer cmdBuffer = app.GetGfxCmdBuffer(0);
+        VkQueue         gfxQueue = app.GetGfxQueue();
+        VkDevice        device = app.GetVkDevice();
+        VmaAllocator    allocator = *app.GetVmaAllocator();
         VkDescriptorSet pipelineDescriptorSet = app.GetDiffIrrPreFilterEnvMapDesSet();
 
         VkImageSubresourceRange cubemapSubResRange{};
@@ -127,6 +130,23 @@ int main(
         VkClearValue clearColor = { {{1.0f, 0.0f, 0.0f, 1.0f}} };
 
         ImgInfo inputHdriInfo = app.GetInputHdriInfo();
+
+        // Init resources used by the CubemapFormatTransApp.
+        VkExtent3D cubemapExtent3D{};
+        {
+            cubemapExtent3D.width = inputHdriInfo.width;
+            cubemapExtent3D.height = inputHdriInfo.height;
+            cubemapExtent3D.depth = 1;
+        }
+        cubemapFormatTransApp.SetInputCubemapImg(app.GetDiffuseIrradianceCubemap(), cubemapExtent3D);
+        SharedLib::VulkanInfos formatTransVkInfo{};
+        {
+            formatTransVkInfo.device = device;
+            formatTransVkInfo.pAllocator = app.GetVmaAllocator();
+            formatTransVkInfo.descriptorPool = app.GetDescriptorPool();
+        }
+        cubemapFormatTransApp.GetVkInfos(formatTransVkInfo);
+        cubemapFormatTransApp.Init();
 
         // Send input hdri buffer data to its gpu cubemap image.
         {
@@ -277,6 +297,88 @@ int main(
             vkResetCommandBuffer(cmdBuffer, 0);
         }
 
+        // Reformat the diffuse irradiance map since it's a cubemap
+        {
+            // Fill the command buffer
+            VkCommandBufferBeginInfo beginInfo{};
+            {
+                beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            }
+            VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &beginInfo));
+
+            cubemapFormatTransApp.CmdConvertCubemapFormat(cmdBuffer);
+
+            // Submit all the works recorded before
+            VK_CHECK(vkEndCommandBuffer(cmdBuffer));
+
+            SharedLib::SubmitCmdBufferAndWait(device, gfxQueue, cmdBuffer);
+
+            vkResetCommandBuffer(cmdBuffer, 0);
+        }
+
+        // Save the vulkan format diffuse irradiance cubemap to the disk
+        {
+            // Copy the rendered images to a buffer.
+            VkBuffer stagingBuffer;
+            VmaAllocation stagingBufferAlloc;
+
+            VmaAllocationCreateInfo stagingBufAllocInfo{};
+            {
+                stagingBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+                stagingBufAllocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+            }
+
+            VkBufferCreateInfo stgBufInfo{};
+            {
+                stgBufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+                stgBufInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+                stgBufInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+                stgBufInfo.size = 4 * sizeof(float) * inputHdriInfo.width * inputHdriInfo.height * 6; // RGBA and 6 images blocks.
+            }
+
+            VK_CHECK(vmaCreateBuffer(allocator, &stgBufInfo, &stagingBufAllocInfo, &stagingBuffer, &stagingBufferAlloc, nullptr));
+
+            SharedLib::CmdCopyCubemapToBuffer(cmdBuffer, device, gfxQueue, cubemapFormatTransApp.GetOutputCubemap(), inputHdriInfo.width, stagingBuffer);
+
+            // Copy the buffer data to RAM and save that on the disk.
+            float* pImgData = new float[4 * inputHdriInfo.width * inputHdriInfo.height * 6];
+
+            void* pBufferMapped;
+            vmaMapMemory(allocator, stagingBufferAlloc, &pBufferMapped);
+            memcpy(pImgData, pBufferMapped, 4 * sizeof(float) * inputHdriInfo.width * inputHdriInfo.height * 6);
+            vmaUnmapMemory(allocator, stagingBufferAlloc);
+
+            // Convert data from 4 elements to 3 elements data
+            float* pImgData3Ele = new float[3 * inputHdriInfo.width * inputHdriInfo.height * 6];
+            for (uint32_t i = 0; i < inputHdriInfo.width * inputHdriInfo.height * 6; i++)
+            {
+                uint32_t ele4Idx0 = i * 4;
+                uint32_t ele4Idx1 = i * 4 + 1;
+                uint32_t ele4Idx2 = i * 4 + 2;
+
+                uint32_t ele3Idx0 = i * 3;
+                uint32_t ele3Idx1 = i * 3 + 1;
+                uint32_t ele3Idx2 = i * 3 + 2;
+
+                pImgData3Ele[ele3Idx0] = pImgData[ele4Idx0];
+                pImgData3Ele[ele3Idx1] = pImgData[ele4Idx1];
+                pImgData3Ele[ele3Idx2] = pImgData[ele4Idx2];
+            }
+
+            std::string outputCubemapPathName = outputDir + "/diffuse_irradiance_cubemap.hdr";
+
+            app.SaveCubemap(outputCubemapPathName,
+                app.GetOutputCubemapExtent().width,
+                app.GetOutputCubemapExtent().height * 6,
+                3,
+                pImgData3Ele);
+
+            // Cleanup resources
+            vkResetCommandBuffer(cmdBuffer, 0);
+            vmaDestroyBuffer(allocator, stagingBuffer, stagingBufferAlloc);
+            delete pImgData;
+            delete pImgData3Ele;
+        }
 
         // End RenderDoc debug
         if (rdoc_api)
@@ -284,6 +386,8 @@ int main(
             std::cout << "Frame capture ends." << std::endl;
             rdoc_api->EndFrameCapture(NULL, NULL);
         }
+
+        cubemapFormatTransApp.Destroy();
     }
 
     system("pause");

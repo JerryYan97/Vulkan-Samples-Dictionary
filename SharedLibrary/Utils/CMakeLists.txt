@@ -11,4 +11,6 @@ target_sources(
     ${CMAKE_CURRENT_SOURCE_DIR}/MathUtils.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/AppUtils.h
     ${CMAKE_CURRENT_SOURCE_DIR}/AppUtils.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/DiskOpsUtils.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/DiskOpsUtils.cpp
 )

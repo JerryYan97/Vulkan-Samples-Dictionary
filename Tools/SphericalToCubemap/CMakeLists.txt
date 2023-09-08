@@ -6,7 +6,6 @@ project(SphericalToCubemap VERSION 0.1 LANGUAGES CXX)
 
 include_directories("$ENV{VULKAN_SDK}/Include" "../../ThirdPartyLibs/VMA")
 include_directories(../../ThirdPartyLibs/args)
-include_directories(../../ThirdPartyLibs/stb)
 include_directories(../../ThirdPartyLibs/RenderDoc/renderdoc/api/app)
 
 link_directories("$ENV{VULKAN_SDK}/lib")

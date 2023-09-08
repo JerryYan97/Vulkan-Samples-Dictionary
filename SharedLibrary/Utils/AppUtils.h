@@ -11,6 +11,8 @@ namespace SharedLib
         VkDevice device;
         VkDescriptorPool descriptorPool;
         VmaAllocator* pAllocator;
+        VkCommandPool gfxCmdPool;
+        VkQueue gfxQueue;
     };
 
     class AppUtil
@@ -46,6 +48,8 @@ namespace SharedLib
         VkImage GetOutputCubemap() { return m_outputCubemap; }
 
         void CmdConvertCubemapFormat(VkCommandBuffer cmdBuffer);
+
+        void DumpOutputCubemapToDisk(const std::string& outputCubemapPathName);
 
     private:
         void InitFormatPipeline();

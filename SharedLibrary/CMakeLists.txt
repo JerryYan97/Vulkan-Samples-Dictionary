@@ -51,6 +51,7 @@ else()
         message(FATAL_ERROR "Application must defines one of SHARED_LIB_APP, SHARED_LIB_GLFW and SHARED_LIB_IMGUI.")
     endif()
 
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../ThirdPartyLibs/stb)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/Application)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/Camera)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/Event)
