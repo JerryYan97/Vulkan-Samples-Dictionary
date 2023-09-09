@@ -180,6 +180,8 @@ int main(
                 allocator);
         }
 
+        
+
         // Render the diffuse irradiance map
         {
             // Fill the command buffer

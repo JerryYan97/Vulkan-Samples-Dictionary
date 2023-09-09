@@ -33,6 +33,7 @@ public:
     VkImageView GetInputCubemapImgView() { return m_diffuseIrradianceCubemapImageView; }
 
     void ReadInCubemap(const std::string& namePath);
+    void BlurInputCubemap(); // Down scale the input cubemap first and then up scale it up to upgrade
 
 private:
     // Shared pipeline resources
