@@ -2,13 +2,8 @@
 #include "../../SharedLibrary/Utils/VulkanDbgUtils.h"
 #include "../../SharedLibrary/Camera/Camera.h"
 #include "../../SharedLibrary/Event/Event.h"
-
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-
-#define STBI_MSC_SECURE_CRT
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
+#include "../../SharedLibrary/Utils/DiskOpsUtils.h"
+#include <cassert>
 
 #include "vk_mem_alloc.h"
 
@@ -62,7 +57,7 @@ void GenIBL::ReadInCubemap(
     const std::string& namePath)
 {
     int nrComponents, width, height;
-    m_hdrCubeMapInfo.pData = stbi_loadf(namePath.c_str(), &width, &height, &nrComponents, 0);
+    m_hdrCubeMapInfo.pData = SharedLib::ReadImg(namePath.c_str(), nrComponents, width, height);
 
     m_hdrCubeMapInfo.width = (uint32_t)width;
     m_hdrCubeMapInfo.height = (uint32_t)height;
