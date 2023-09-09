@@ -665,7 +665,7 @@ namespace SharedLib
             pImgData3Ele[ele3Idx2] = pImgData[ele4Idx2];
         }
 
-        SaveImg(outputCubemapPathName, m_inputCubemapExtent.width, m_inputCubemapExtent.height, 3, pImgData3Ele);
+        SaveImg(outputCubemapPathName, m_inputCubemapExtent.width, m_inputCubemapExtent.height * 6, 3, pImgData3Ele);
 
         // Cleanup resources
         vkResetCommandBuffer(tmpGfxCmdBuffer, 0);

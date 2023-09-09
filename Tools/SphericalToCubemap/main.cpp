@@ -125,6 +125,8 @@ int main(
         formatTransVkInfo.device = device;
         formatTransVkInfo.pAllocator = app.GetVmaAllocator();
         formatTransVkInfo.descriptorPool = app.GetDescriptorPool();
+        formatTransVkInfo.gfxCmdPool = app.GetGfxCmdPool();
+        formatTransVkInfo.gfxQueue = gfxQueue;
     }
     cubemapFormatTransApp.GetVkInfos(formatTransVkInfo);
     cubemapFormatTransApp.Init();
@@ -166,7 +168,7 @@ int main(
             hdrBufToImgCopy.imageExtent = extent;
         }
 
-        SharedLib::CmdSendImgDataToGpu(cmdBuffer, 
+        SharedLib::SendImgDataToGpu(cmdBuffer, 
                                        device,
                                        gfxQueue,
                                        app.GetInputHdriData(),
@@ -299,71 +301,6 @@ int main(
 
     // Save the vulkan format cubemap to the disk
     {
-        // Copy the rendered images to a buffer.
-        VkBuffer stagingBuffer;
-        VmaAllocation stagingBufferAlloc;
-
-        VmaAllocationCreateInfo stagingBufAllocInfo{};
-        {
-            stagingBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-            stagingBufAllocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-        }
-
-        VkBufferCreateInfo stgBufInfo{};
-        {
-            stgBufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-            stgBufInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-            stgBufInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-            stgBufInfo.size = 4 * sizeof(float) * app.GetOutputCubemapExtent().width * app.GetOutputCubemapExtent().height * 6; // RGBA and 6 images blocks.
-        }
-
-        VK_CHECK(vmaCreateBuffer(allocator, &stgBufInfo, &stagingBufAllocInfo, &stagingBuffer, &stagingBufferAlloc, nullptr));
-
-        SharedLib::CmdCopyCubemapToBuffer(cmdBuffer, device, gfxQueue, cubemapFormatTransApp.GetOutputCubemap(), app.GetOutputCubemapExtent().width, stagingBuffer);
-
-        // Copy the buffer data to RAM and save that on the disk.
-        float* pImgData = new float[4 * app.GetOutputCubemapExtent().width * app.GetOutputCubemapExtent().height * 6];
-
-        void* pBufferMapped;
-        vmaMapMemory(allocator, stagingBufferAlloc, &pBufferMapped);
-        memcpy(pImgData, pBufferMapped, 4 * sizeof(float) * app.GetOutputCubemapExtent().width * app.GetOutputCubemapExtent().height * 6);
-        vmaUnmapMemory(allocator, stagingBufferAlloc);
-
-        bool foundProperData = false;
-        for (int i = 0; i < 4 * app.GetOutputCubemapExtent().width * app.GetOutputCubemapExtent().height * 6; i++)
-        {
-            if (pImgData[i] > 0.f)
-            {
-                foundProperData = true;
-                break;
-            }
-        }
-        if (foundProperData)
-        {
-            std::cout << "Found proper output data." << std::endl;
-        }
-        else
-        {
-            std::cout << "Didn't find proper output data." << std::endl;
-        }
-
-        // Convert data from 4 elements to 3 elements data
-        float* pImgData3Ele = new float[3 * app.GetOutputCubemapExtent().width * app.GetOutputCubemapExtent().height * 6];
-        for (uint32_t i = 0; i < app.GetOutputCubemapExtent().width * app.GetOutputCubemapExtent().height * 6; i++)
-        {
-            uint32_t ele4Idx0 = i * 4;
-            uint32_t ele4Idx1 = i * 4 + 1;
-            uint32_t ele4Idx2 = i * 4 + 2;
-
-            uint32_t ele3Idx0 = i * 3;
-            uint32_t ele3Idx1 = i * 3 + 1;
-            uint32_t ele3Idx2 = i * 3 + 2;
-
-            pImgData3Ele[ele3Idx0] = pImgData[ele4Idx0];
-            pImgData3Ele[ele3Idx1] = pImgData[ele4Idx1];
-            pImgData3Ele[ele3Idx2] = pImgData[ele4Idx2];
-        }
-
         std::string outputCubemapPathName = {};
         if (isDefault)
         {
@@ -375,17 +312,7 @@ int main(
             outputCubemapPathName = inputHdrFolderPath + "/output_cubemap.hdr";
         }
 
-        app.SaveCubemap(outputCubemapPathName,
-            app.GetOutputCubemapExtent().width,
-            app.GetOutputCubemapExtent().height * 6,
-            3,
-            pImgData3Ele);
-
-        // Cleanup resources
-        vkResetCommandBuffer(cmdBuffer, 0);
-        vmaDestroyBuffer(allocator, stagingBuffer, stagingBufferAlloc);
-        delete pImgData;
-        delete pImgData3Ele;
+        cubemapFormatTransApp.DumpOutputCubemapToDisk(outputCubemapPathName);
     }
 
     if (rdoc_api)

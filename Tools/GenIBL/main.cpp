@@ -167,7 +167,7 @@ int main(
                 hdrBufToImgCopy.imageExtent = extent;
             }
 
-            SharedLib::CmdSendImgDataToGpu(cmdBuffer,
+            SharedLib::SendImgDataToGpu(cmdBuffer,
                 device,
                 gfxQueue,
                 inputHdriInfo.pData,

@@ -58,6 +58,7 @@ namespace SharedLib
         VkDevice GetVkDevice() { return m_device; }
         VkQueue GetGfxQueue() { return m_graphicsQueue; }
         VkDescriptorPool GetDescriptorPool() { return m_descriptorPool; }
+        VkCommandPool GetGfxCmdPool() { return m_gfxCmdPool; }
 
     protected:
         // VkInstance, VkPhysicalDevice, VkDevice, gfxFamilyQueueIdx, presentFamilyQueueIdx,

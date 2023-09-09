@@ -4,10 +4,8 @@
 namespace SharedLib
 {
     // ================================================================================================================
-    // TODO: This function has done too much. It shouldn't be responsible for layout transformation and cmdbuffer
-    // starts or ends or submittions. Cmdxxx(...) should only put packets into the cmdbuffer like native CmdXxx(...).
-    // Maybe we can still put layout transformation in it and make it flexible in the future.
-    void CmdSendImgDataToGpu(
+    // The staging buffer has to be freed after the copy finishes, so this func has to control a fence.
+    void SendImgDataToGpu(
         VkCommandBuffer         cmdBuffer,
         VkDevice                device,
         VkQueue                 gfxQueue,

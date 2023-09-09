@@ -6,7 +6,7 @@ namespace SharedLib
 {
     // Function names should start with 'Cmd' so their names should be 'CmdXxxx'.
 
-    void CmdSendImgDataToGpu(VkCommandBuffer cmdBuffer,
+    void SendImgDataToGpu(VkCommandBuffer cmdBuffer,
                              VkDevice device,
                              VkQueue gfxQueue,
                              void* pData, uint32_t bytesCnt,
