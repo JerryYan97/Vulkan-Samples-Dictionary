@@ -49,17 +49,7 @@ float4 main(
     float3 irradiance = float3(0.f, 0.f, 0.f);
 
     float3 up = float3(0.f, 1.f, 0.f);
-    // float3 right = float3(0.f, 0.f, 1.f);
-
-    // bool isUp = all(up == normal);
-    // bool isOppUp = all(up == -normal);
-    // bool isParallelUp = isUp && isOppUp;
-
-    // if(isParallelUp == false)
-    // {
-    //    right = normalize(cross(up, normal));
-    // }
-
+    
     float3 right = normalize(cross(up, normal));
     
     up = normalize(cross(normal, right));
@@ -76,7 +66,8 @@ float4 main(
             float3 sampleDir = tangentSample.x * right + tangentSample.y * up + tangentSample.z * normal;
             sampleDir = normalize(sampleDir);
 
-            float3 sampledIrradiance = i_cubeMapTexture.Sample(samplerState, sampleDir).xyz;
+            // float3 sampledIrradiance = i_cubeMapTexture.Sample(samplerState, sampleDir).xyz;
+            float3 sampledIrradiance = i_cubeMapTexture.SampleLevel(samplerState, sampleDir, 4.5f).xyz;
 
             irradiance += (sampledIrradiance * cos(theta) * sin(theta));
             nrSamples += 1.f;

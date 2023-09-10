@@ -60,6 +60,22 @@ void GenIBL::DestroyInputCubemapRenderObjs()
 }
 
 // ================================================================================================================
+// Clamp the high radiance so that diffuse irradiance sampling is happy.
+void DataPreprosess(
+    float* pData,
+    uint32_t width,
+    uint32_t height)
+{
+    for (uint32_t i = 0; i < width * height * 3; i++)
+    {
+        if (pData[i] > 500.f)
+        {
+            pData[i] = 500.f;
+        }
+    }
+}
+
+// ================================================================================================================
 void GenIBL::ReadInCubemap(
     const std::string& namePath)
 {
@@ -68,6 +84,8 @@ void GenIBL::ReadInCubemap(
 
     m_hdrCubeMapInfo.width = (uint32_t)width;
     m_hdrCubeMapInfo.height = (uint32_t)height;
+
+    DataPreprosess(m_hdrCubeMapInfo.pData, m_hdrCubeMapInfo.width, m_hdrCubeMapInfo.height);
 }
 
 // ================================================================================================================
@@ -132,7 +150,7 @@ void GenIBL::InitInputCubemapObjects()
         sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
         sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
         sampler_info.minLod = 0.f;
-        sampler_info.maxLod = 5.f;
+        sampler_info.maxLod = 10.f;
         sampler_info.maxAnisotropy = 1.0f;
     }
     VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_hdrCubeMapSampler));
@@ -434,46 +452,9 @@ void GenHalfCubemapMipmapLinearMean(
 void GenIBL::CmdGenInputCubemapMipMaps(
     VkCommandBuffer cmdBuffer)
 {
-    // Fill the command buffer
-    VkCommandBufferBeginInfo beginInfo{};
-    {
-        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    }
-    VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &beginInfo));
+    constexpr bool DbgDump = false;
 
-    // Transfer layout of the different level of mips.
-    // The first level is the blit source and the other levels are blit destination.
-    // The current RGB format doesn't support the blit... So, I probally need to use CPU do the linear filtering...
-    VkImageMemoryBarrier mipDestTransBarrier{};
-    {
-        mipDestTransBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        mipDestTransBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        mipDestTransBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        mipDestTransBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        mipDestTransBarrier.image = m_hdrCubeMapImage;
-        mipDestTransBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        mipDestTransBarrier.subresourceRange.baseArrayLayer = 0;
-        mipDestTransBarrier.subresourceRange.layerCount = 6;
-        mipDestTransBarrier.subresourceRange.baseMipLevel = 2;
-        mipDestTransBarrier.subresourceRange.levelCount = 8;
-    }
-
-    vkCmdPipelineBarrier(cmdBuffer,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        VK_PIPELINE_STAGE_TRANSFER_BIT,
-        0,
-        0, nullptr,
-        0, nullptr,
-        1, &mipDestTransBarrier);
-
-    // Submit all the works recorded before
-    VK_CHECK(vkEndCommandBuffer(cmdBuffer));
-
-    SharedLib::SubmitCmdBufferAndWait(m_device, m_graphicsQueue, cmdBuffer);
-
-    vkResetCommandBuffer(cmdBuffer, 0);
-
-    // Prepare 6 mipmap chain data.
+    // Prepare 9 mipmap chain data.
     uint32_t mipMapNum = 9;
 
     m_pDiffuseIrradianceInputMips.resize(mipMapNum + 1);
@@ -492,49 +473,55 @@ void GenIBL::CmdGenInputCubemapMipMaps(
                                        m_hdrCubeMapInfo.width / srcDivFactor,
                                        pDstMip);
 
-        std::string outputPathName = SOURCE_PATH;
-        outputPathName += ("/mip" + std::to_string(mipLevel + 1) + ".hdr");
-        SharedLib::SaveImg(outputPathName,
-                           m_hdrCubeMapInfo.width / dstDivFactor,
-                           m_hdrCubeMapInfo.height / dstDivFactor,
-                           3, pDstMip);
-    }
-
-    uint32_t mip1BytesCnt = 3 * sizeof(float) * (m_hdrCubeMapInfo.width / 2) * (m_hdrCubeMapInfo.height / 2);
-    VkImageSubresourceRange mip1SubResRangeForLayoutTrans{};
-    {
-        mip1SubResRangeForLayoutTrans.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        mip1SubResRangeForLayoutTrans.baseArrayLayer = 0;
-        mip1SubResRangeForLayoutTrans.layerCount = 6;
-        mip1SubResRangeForLayoutTrans.baseMipLevel = 1;
-        mip1SubResRangeForLayoutTrans.levelCount = 1;
-    }
-
-    VkBufferImageCopy mip1Copy{};
-    {
-        VkExtent3D extent{};
+        if (DbgDump)
         {
-            extent.width = m_hdrCubeMapInfo.width / 2;
-            extent.height = m_hdrCubeMapInfo.width / 2;
-            extent.depth = 1;
+            std::string outputPathName = SOURCE_PATH;
+            outputPathName += ("/mip" + std::to_string(mipLevel + 1) + ".hdr");
+            SharedLib::SaveImg(outputPathName,
+                               m_hdrCubeMapInfo.width / dstDivFactor,
+                               m_hdrCubeMapInfo.height / dstDivFactor,
+                               3, pDstMip);
         }
 
-        mip1Copy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        mip1Copy.imageSubresource.mipLevel = 1;
-        mip1Copy.imageSubresource.baseArrayLayer = 0;
-        mip1Copy.imageSubresource.layerCount = 6;
+        uint32_t mipBytesCnt = 3 * sizeof(float) *
+                               (m_hdrCubeMapInfo.width / dstDivFactor) *
+                               (m_hdrCubeMapInfo.height / dstDivFactor);
 
-        mip1Copy.imageExtent = extent;
+        VkImageSubresourceRange mipSubResRangeForLayoutTrans{};
+        {
+            mipSubResRangeForLayoutTrans.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            mipSubResRangeForLayoutTrans.baseArrayLayer = 0;
+            mipSubResRangeForLayoutTrans.layerCount = 6;
+            mipSubResRangeForLayoutTrans.baseMipLevel = mipLevel + 1;
+            mipSubResRangeForLayoutTrans.levelCount = 1;
+        }
+
+        VkBufferImageCopy mipCopy{};
+        {
+            VkExtent3D extent{};
+            {
+                extent.width = m_hdrCubeMapInfo.width / dstDivFactor;
+                extent.height = m_hdrCubeMapInfo.width / dstDivFactor;
+                extent.depth = 1;
+            }
+
+            mipCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            mipCopy.imageSubresource.mipLevel = mipLevel + 1;
+            mipCopy.imageSubresource.baseArrayLayer = 0;
+            mipCopy.imageSubresource.layerCount = 6;
+
+            mipCopy.imageExtent = extent;
+        }
+
+        SharedLib::SendImgDataToGpu(cmdBuffer,
+                                    m_device,
+                                    m_graphicsQueue,
+                                    m_pDiffuseIrradianceInputMips[mipLevel + 1],
+                                    mipBytesCnt,
+                                    m_hdrCubeMapImage,
+                                    mipSubResRangeForLayoutTrans,
+                                    VK_IMAGE_LAYOUT_UNDEFINED,
+                                    mipCopy,
+                                    *m_pAllocator);
     }
-
-    SharedLib::SendImgDataToGpu(cmdBuffer,
-                                m_device,
-                                m_graphicsQueue,
-                                m_pDiffuseIrradianceInputMips[1],
-                                mip1BytesCnt,
-                                m_hdrCubeMapImage,
-                                mip1SubResRangeForLayoutTrans,
-                                VK_IMAGE_LAYOUT_UNDEFINED,
-                                mip1Copy,
-                                *m_pAllocator);
 }

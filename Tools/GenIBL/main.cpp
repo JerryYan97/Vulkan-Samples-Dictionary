@@ -11,6 +11,9 @@
 #include <Windows.h>
 #include <cassert>
 
+// Adjustable Parameters:
+// * The input HDRI color clamp.
+// * The input HDRI cubemap mipmap level sampling.
 int main(
     int argc,
     char** argv)
@@ -88,23 +91,6 @@ int main(
 
     // Start application
     {
-        // RenderDoc debug starts
-        RENDERDOC_API_1_6_0* rdoc_api = NULL;
-        {
-            if (HMODULE mod = GetModuleHandleA("renderdoc.dll"))
-            {
-                pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
-                int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_6_0, (void**)&rdoc_api);
-                assert(ret == 1);
-            }
-
-            if (rdoc_api)
-            {
-                std::cout << "Frame capture starts." << std::endl;
-                rdoc_api->StartFrameCapture(NULL, NULL);
-            }
-        }
-
         GenIBL app;
         app.ReadInCubemap(inputPathName);
         app.AppInit();
@@ -193,6 +179,23 @@ int main(
         // Blur the input cubemap of the diffuse irradiance map rendering -- Equivalent to generating mipmaps.
         {
             app.CmdGenInputCubemapMipMaps(cmdBuffer);
+        }
+
+        // RenderDoc debug starts
+        RENDERDOC_API_1_6_0* rdoc_api = NULL;
+        {
+            if (HMODULE mod = GetModuleHandleA("renderdoc.dll"))
+            {
+                pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
+                int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_6_0, (void**)&rdoc_api);
+                assert(ret == 1);
+            }
+
+            if (rdoc_api)
+            {
+                std::cout << "Frame capture starts." << std::endl;
+                rdoc_api->StartFrameCapture(NULL, NULL);
+            }
         }
 
         // Render the diffuse irradiance map
@@ -314,6 +317,13 @@ int main(
             vkResetCommandBuffer(cmdBuffer, 0);
         }
 
+        // End RenderDoc debug
+        if (rdoc_api)
+        {
+            std::cout << "Frame capture ends." << std::endl;
+            rdoc_api->EndFrameCapture(NULL, NULL);
+        }
+
         // Reformat the diffuse irradiance map since it's a cubemap
         {
             // Fill the command buffer
@@ -337,13 +347,6 @@ int main(
         {
             std::string outputCubemapPathName = outputDir + "/diffuse_irradiance_cubemap.hdr";
             cubemapFormatTransApp.DumpOutputCubemapToDisk(outputCubemapPathName);
-        }
-
-        // End RenderDoc debug
-        if (rdoc_api)
-        {
-            std::cout << "Frame capture ends." << std::endl;
-            rdoc_api->EndFrameCapture(NULL, NULL);
         }
 
         cubemapFormatTransApp.Destroy();
