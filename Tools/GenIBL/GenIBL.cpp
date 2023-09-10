@@ -434,10 +434,16 @@ void GenHalfCubemapMipmapLinearMean(
 void GenIBL::CmdGenInputCubemapMipMaps(
     VkCommandBuffer cmdBuffer)
 {
+    // Fill the command buffer
+    VkCommandBufferBeginInfo beginInfo{};
+    {
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    }
+    VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &beginInfo));
+
     // Transfer layout of the different level of mips.
     // The first level is the blit source and the other levels are blit destination.
     // The current RGB format doesn't support the blit... So, I probally need to use CPU do the linear filtering...
-    /*
     VkImageMemoryBarrier mipDestTransBarrier{};
     {
         mipDestTransBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -448,8 +454,8 @@ void GenIBL::CmdGenInputCubemapMipMaps(
         mipDestTransBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         mipDestTransBarrier.subresourceRange.baseArrayLayer = 0;
         mipDestTransBarrier.subresourceRange.layerCount = 6;
-        mipDestTransBarrier.subresourceRange.baseMipLevel = 1;
-        mipDestTransBarrier.subresourceRange.levelCount = 9;
+        mipDestTransBarrier.subresourceRange.baseMipLevel = 2;
+        mipDestTransBarrier.subresourceRange.levelCount = 8;
     }
 
     vkCmdPipelineBarrier(cmdBuffer,
@@ -459,7 +465,13 @@ void GenIBL::CmdGenInputCubemapMipMaps(
         0, nullptr,
         0, nullptr,
         1, &mipDestTransBarrier);
-     */
+
+    // Submit all the works recorded before
+    VK_CHECK(vkEndCommandBuffer(cmdBuffer));
+
+    SharedLib::SubmitCmdBufferAndWait(m_device, m_graphicsQueue, cmdBuffer);
+
+    vkResetCommandBuffer(cmdBuffer, 0);
 
     // Prepare 6 mipmap chain data.
     uint32_t mipMapNum = 9;
@@ -488,7 +500,7 @@ void GenIBL::CmdGenInputCubemapMipMaps(
                            3, pDstMip);
     }
 
-    uint32_t mip1BytesCnt = 3 * sizeof(float) * m_hdrCubeMapInfo.width * m_hdrCubeMapInfo.height / 2;
+    uint32_t mip1BytesCnt = 3 * sizeof(float) * (m_hdrCubeMapInfo.width / 2) * (m_hdrCubeMapInfo.height / 2);
     VkImageSubresourceRange mip1SubResRangeForLayoutTrans{};
     {
         mip1SubResRangeForLayoutTrans.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -500,7 +512,19 @@ void GenIBL::CmdGenInputCubemapMipMaps(
 
     VkBufferImageCopy mip1Copy{};
     {
-        mip1Copy.
+        VkExtent3D extent{};
+        {
+            extent.width = m_hdrCubeMapInfo.width / 2;
+            extent.height = m_hdrCubeMapInfo.width / 2;
+            extent.depth = 1;
+        }
+
+        mip1Copy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        mip1Copy.imageSubresource.mipLevel = 1;
+        mip1Copy.imageSubresource.baseArrayLayer = 0;
+        mip1Copy.imageSubresource.layerCount = 6;
+
+        mip1Copy.imageExtent = extent;
     }
 
     SharedLib::SendImgDataToGpu(cmdBuffer,
@@ -509,9 +533,8 @@ void GenIBL::CmdGenInputCubemapMipMaps(
                                 m_pDiffuseIrradianceInputMips[1],
                                 mip1BytesCnt,
                                 m_hdrCubeMapImage,
-                                mip1SubResRange,
+                                mip1SubResRangeForLayoutTrans,
                                 VK_IMAGE_LAYOUT_UNDEFINED,
-                                );
-
-
+                                mip1Copy,
+                                *m_pAllocator);
 }

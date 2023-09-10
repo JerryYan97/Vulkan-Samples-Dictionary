@@ -192,21 +192,7 @@ int main(
 
         // Blur the input cubemap of the diffuse irradiance map rendering -- Equivalent to generating mipmaps.
         {
-            // Fill the command buffer
-            VkCommandBufferBeginInfo beginInfo{};
-            {
-                beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-            }
-            VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &beginInfo));
-
             app.CmdGenInputCubemapMipMaps(cmdBuffer);
-
-            // Submit all the works recorded before
-            VK_CHECK(vkEndCommandBuffer(cmdBuffer));
-
-            SharedLib::SubmitCmdBufferAndWait(device, gfxQueue, cmdBuffer);
-
-            vkResetCommandBuffer(cmdBuffer, 0);
         }
 
         // Render the diffuse irradiance map

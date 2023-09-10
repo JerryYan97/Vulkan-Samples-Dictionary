@@ -5,6 +5,7 @@ namespace SharedLib
 {
     // ================================================================================================================
     // The staging buffer has to be freed after the copy finishes, so this func has to control a fence.
+    // Transfer the dstImg to VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL.
     void SendImgDataToGpu(
         VkCommandBuffer         cmdBuffer,
         VkDevice                device,
