@@ -118,13 +118,22 @@ int main(
         VmaAllocator    allocator = *app.GetVmaAllocator();
         VkDescriptorSet pipelineDescriptorSet = app.GetDiffIrrPreFilterEnvMapDesSet();
 
-        VkImageSubresourceRange cubemapSubResRange{};
+        VkImageSubresourceRange cubemapSubResRangeLayer6Level1{};
         {
-            cubemapSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            cubemapSubResRange.baseMipLevel = 0;
-            cubemapSubResRange.levelCount = 1;
-            cubemapSubResRange.baseArrayLayer = 0;
-            cubemapSubResRange.layerCount = 6;
+            cubemapSubResRangeLayer6Level1.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            cubemapSubResRangeLayer6Level1.baseMipLevel = 0;
+            cubemapSubResRangeLayer6Level1.levelCount = 1;
+            cubemapSubResRangeLayer6Level1.baseArrayLayer = 0;
+            cubemapSubResRangeLayer6Level1.layerCount = 6;
+        }
+
+        VkImageSubresourceRange cubemapSubResRangeLayer6Level10{};
+        {
+            cubemapSubResRangeLayer6Level10.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            cubemapSubResRangeLayer6Level10.baseMipLevel = 0;
+            cubemapSubResRangeLayer6Level10.levelCount = 10;
+            cubemapSubResRangeLayer6Level10.baseArrayLayer = 0;
+            cubemapSubResRangeLayer6Level10.layerCount = 6;
         }
 
         VkClearValue clearColor = { {{1.0f, 0.0f, 0.0f, 1.0f}} };
@@ -175,12 +184,30 @@ int main(
                 inputHdriInfo.pData,
                 3 * sizeof(float) * inputHdriInfo.width * inputHdriInfo.height,
                 app.GetInputCubemap(),
-                cubemapSubResRange,
+                cubemapSubResRangeLayer6Level1,
+                VK_IMAGE_LAYOUT_UNDEFINED,
                 hdrBufToImgCopy,
                 allocator);
         }
 
-        
+        // Blur the input cubemap of the diffuse irradiance map rendering -- Equivalent to generating mipmaps.
+        {
+            // Fill the command buffer
+            VkCommandBufferBeginInfo beginInfo{};
+            {
+                beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            }
+            VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &beginInfo));
+
+            app.CmdGenInputCubemapMipMaps(cmdBuffer);
+
+            // Submit all the works recorded before
+            VK_CHECK(vkEndCommandBuffer(cmdBuffer));
+
+            SharedLib::SubmitCmdBufferAndWait(device, gfxQueue, cmdBuffer);
+
+            vkResetCommandBuffer(cmdBuffer, 0);
+        }
 
         // Render the diffuse irradiance map
         {
@@ -191,6 +218,27 @@ int main(
             }
             VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &beginInfo));
 
+            // Transfer the layout of the input cubemap mipmaps from transfer dst to shader read.
+            VkImageMemoryBarrier hdrDstToShaderBarrier{};
+            {
+                hdrDstToShaderBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+                hdrDstToShaderBarrier.image = app.GetInputCubemap();
+                hdrDstToShaderBarrier.subresourceRange = cubemapSubResRangeLayer6Level10;
+                hdrDstToShaderBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                hdrDstToShaderBarrier.dstAccessMask = VK_ACCESS_NONE;
+                hdrDstToShaderBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+                hdrDstToShaderBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            }
+
+            vkCmdPipelineBarrier(
+                cmdBuffer,
+                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                0,
+                0, nullptr,
+                0, nullptr,
+                1, &hdrDstToShaderBarrier);
+
             // Transform the layout of the output cubemap from undefined to render target.
             VkImageMemoryBarrier cubemapRenderTargetTransBarrier{};
             {
@@ -199,7 +247,7 @@ int main(
                 cubemapRenderTargetTransBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
                 cubemapRenderTargetTransBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
                 cubemapRenderTargetTransBarrier.image = app.GetDiffuseIrradianceCubemap();
-                cubemapRenderTargetTransBarrier.subresourceRange = cubemapSubResRange;
+                cubemapRenderTargetTransBarrier.subresourceRange = cubemapSubResRangeLayer6Level1;
             }
 
             vkCmdPipelineBarrier(cmdBuffer,

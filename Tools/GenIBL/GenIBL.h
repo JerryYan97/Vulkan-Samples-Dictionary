@@ -33,7 +33,8 @@ public:
     VkImageView GetInputCubemapImgView() { return m_diffuseIrradianceCubemapImageView; }
 
     void ReadInCubemap(const std::string& namePath);
-    void BlurInputCubemap(); // Down scale the input cubemap first and then up scale it up to upgrade
+
+    void CmdGenInputCubemapMipMaps(VkCommandBuffer cmdBuffer); // Down scale the input cubemap first and then up scale it up to upgrade
 
 private:
     // Shared pipeline resources
@@ -78,6 +79,8 @@ private:
     VkImage       m_diffuseIrradianceCubemap; // Note: Mutiview can draw to different layers automatically.
     VmaAllocation m_diffuseIrradianceCubemapAlloc;
     VkImageView   m_diffuseIrradianceCubemapImageView;
+
+    std::vector<float*> m_pDiffuseIrradianceInputMips;
 
     // Resources for the prefilter environment map
     SharedLib::Pipeline m_preFilterEnvMapPipeline; // Specular split-sum 1st element.

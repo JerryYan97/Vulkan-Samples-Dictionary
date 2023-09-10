@@ -31,7 +31,7 @@ namespace SharedLib
         int res = stbi_write_hdr(namePath.c_str(), width, height, components, pData);
         if (res > 0)
         {
-            std::cout << "Img saves successfully." << std::endl;
+            std::cout << namePath << ": saves successfully." << std::endl;
         }
         else
         {

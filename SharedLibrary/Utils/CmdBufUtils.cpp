@@ -13,6 +13,7 @@ namespace SharedLib
         uint32_t                bytesCnt,
         VkImage                 dstImg,
         VkImageSubresourceRange subResRange,
+        VkImageLayout           dstImgCurrentLayout,
         VkBufferImageCopy       bufToImgCopyInfo,
         VmaAllocator            allocator)
     {
@@ -65,7 +66,7 @@ namespace SharedLib
             undefToDstBarrier.subresourceRange = subResRange;
             undefToDstBarrier.srcAccessMask = 0;
             undefToDstBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            undefToDstBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            undefToDstBarrier.oldLayout = dstImgCurrentLayout;
             undefToDstBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
         }
 
@@ -87,6 +88,7 @@ namespace SharedLib
             1, &bufToImgCopyInfo);
 
         // Transform the layout of the image to shader access resource
+        /*
         VkImageMemoryBarrier hdrDstToShaderBarrier{};
         {
             hdrDstToShaderBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -106,6 +108,7 @@ namespace SharedLib
             0, nullptr,
             0, nullptr,
             1, &hdrDstToShaderBarrier);
+        */
 
         // End the command buffer and submit the packets
         vkEndCommandBuffer(cmdBuffer);

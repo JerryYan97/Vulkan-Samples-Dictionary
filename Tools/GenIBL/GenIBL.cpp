@@ -3,7 +3,9 @@
 #include "../../SharedLibrary/Camera/Camera.h"
 #include "../../SharedLibrary/Event/Event.h"
 #include "../../SharedLibrary/Utils/DiskOpsUtils.h"
+#include "../../SharedLibrary/Utils/CmdBufUtils.h"
 #include <cassert>
+#include<cmath>
 
 #include "vk_mem_alloc.h"
 
@@ -47,6 +49,11 @@ GenIBL::~GenIBL()
 // ================================================================================================================
 void GenIBL::DestroyInputCubemapRenderObjs()
 {
+    for (uint32_t i = 1; i < m_pDiffuseIrradianceInputMips.size(); i++)
+    {
+        delete m_pDiffuseIrradianceInputMips[i];
+    }
+
     vmaDestroyImage(*m_pAllocator, m_hdrCubeMapImage, m_hdrCubeMapAlloc);
     vkDestroyImageView(m_device, m_hdrCubeMapView, nullptr);
     vkDestroySampler(m_device, m_hdrCubeMapSampler, nullptr);
@@ -87,11 +94,11 @@ void GenIBL::InitInputCubemapObjects()
         cubeMapImgInfo.imageType = VK_IMAGE_TYPE_2D;
         cubeMapImgInfo.format = VK_FORMAT_R32G32B32_SFLOAT;
         cubeMapImgInfo.extent = extent;
-        cubeMapImgInfo.mipLevels = 1;
+        cubeMapImgInfo.mipLevels = 10;
         cubeMapImgInfo.arrayLayers = 6;
         cubeMapImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
         cubeMapImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
-        cubeMapImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        cubeMapImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
         cubeMapImgInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
         cubeMapImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     }
@@ -110,7 +117,7 @@ void GenIBL::InitInputCubemapObjects()
         info.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
         info.format = VK_FORMAT_R32G32B32_SFLOAT;
         info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        info.subresourceRange.levelCount = 1;
+        info.subresourceRange.levelCount = 10;
         info.subresourceRange.layerCount = 6;
     }
     VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_hdrCubeMapView));
@@ -124,8 +131,8 @@ void GenIBL::InitInputCubemapObjects()
         sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT; // outside image bounds just use border color
         sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
         sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        sampler_info.minLod = -1000;
-        sampler_info.maxLod = 1000;
+        sampler_info.minLod = 0.f;
+        sampler_info.maxLod = 5.f;
         sampler_info.maxAnisotropy = 1.0f;
     }
     VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_hdrCubeMapSampler));
@@ -361,4 +368,150 @@ void GenIBL::AppInit()
     // Pipeline and resources for the prefilter environment map gen.
 
     // Pipeline and resources for the environment brdf map gen.
+}
+
+// ================================================================================================================
+// Only for the rectangle pic now. 3 channels per color element.
+void GenHalfMipmapLinearMean(
+    float* pSrc,
+    uint32_t srcDim,
+    float* pDst)
+{
+    uint32_t faceWidth = srcDim / 2;
+    uint32_t faceHeight = srcDim / 2;
+    for (uint32_t row = 0; row < faceHeight; row++)
+    {
+        for (uint32_t col = 0; col < faceWidth; col++)
+        {
+            uint32_t dstPixelId = row * faceHeight + col;
+
+            uint32_t srcRowId = 2 * row;
+            uint32_t srcColId = 2 * col;
+            uint32_t srcPixelId0 = srcRowId * srcDim + srcColId;
+            uint32_t srcPixelId1 = srcRowId * srcDim + srcColId + 1;
+            uint32_t srcPixelId2 = (srcRowId + 1) * srcDim + srcColId;
+            uint32_t srcPixelId3 = (srcRowId + 1) * srcDim + srcColId + 1;
+
+            pDst[3 * dstPixelId] = (pSrc[srcPixelId0 * 3] +
+                                    pSrc[srcPixelId1 * 3] +
+                                    pSrc[srcPixelId2 * 3] +
+                                    pSrc[srcPixelId3 * 3]) / 4.f;
+
+            pDst[3 * dstPixelId + 1] = (pSrc[srcPixelId0 * 3 + 1] +
+                                        pSrc[srcPixelId1 * 3 + 1] +
+                                        pSrc[srcPixelId2 * 3 + 1] +
+                                        pSrc[srcPixelId3 * 3 + 1]) / 4.f;
+
+            pDst[3 * dstPixelId + 2] = (pSrc[srcPixelId0 * 3 + 2] +
+                                        pSrc[srcPixelId1 * 3 + 2] +
+                                        pSrc[srcPixelId2 * 3 + 2] +
+                                        pSrc[srcPixelId3 * 3 + 2]) / 4.f;
+        }
+    }
+}
+
+// ================================================================================================================
+// Assume vertical format cubemap
+void GenHalfCubemapMipmapLinearMean(
+    float* pSrc,
+    uint32_t srcDim,
+    float* pDst)
+{
+    uint32_t dstDim = srcDim / 2;
+    for (uint32_t face = 0; face < 6; face++)
+    {
+        uint32_t faceSrcPixelStartId = face * (srcDim * srcDim);
+        float* pFaceSrc = &pSrc[3 * faceSrcPixelStartId];
+
+        uint32_t faceDstPixelStartId = face * (dstDim * dstDim);
+        float* pFaceDst = &pDst[3 * faceDstPixelStartId];
+
+        GenHalfMipmapLinearMean(pFaceSrc, srcDim, pFaceDst);
+    }
+}
+
+// ================================================================================================================
+void GenIBL::CmdGenInputCubemapMipMaps(
+    VkCommandBuffer cmdBuffer)
+{
+    // Transfer layout of the different level of mips.
+    // The first level is the blit source and the other levels are blit destination.
+    // The current RGB format doesn't support the blit... So, I probally need to use CPU do the linear filtering...
+    /*
+    VkImageMemoryBarrier mipDestTransBarrier{};
+    {
+        mipDestTransBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        mipDestTransBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        mipDestTransBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        mipDestTransBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        mipDestTransBarrier.image = m_hdrCubeMapImage;
+        mipDestTransBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        mipDestTransBarrier.subresourceRange.baseArrayLayer = 0;
+        mipDestTransBarrier.subresourceRange.layerCount = 6;
+        mipDestTransBarrier.subresourceRange.baseMipLevel = 1;
+        mipDestTransBarrier.subresourceRange.levelCount = 9;
+    }
+
+    vkCmdPipelineBarrier(cmdBuffer,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        0,
+        0, nullptr,
+        0, nullptr,
+        1, &mipDestTransBarrier);
+     */
+
+    // Prepare 6 mipmap chain data.
+    uint32_t mipMapNum = 9;
+
+    m_pDiffuseIrradianceInputMips.resize(mipMapNum + 1);
+    m_pDiffuseIrradianceInputMips[0] = m_hdrCubeMapInfo.pData;
+
+    for (uint32_t mipLevel = 0; mipLevel < mipMapNum; mipLevel++)
+    {
+        uint32_t dstDivFactor = 2 << mipLevel;
+        uint32_t mipPixelCnt = (m_hdrCubeMapInfo.width / dstDivFactor) * (m_hdrCubeMapInfo.height / dstDivFactor);
+        float* pDstMip = new float[3 * mipPixelCnt];
+
+        m_pDiffuseIrradianceInputMips[mipLevel + 1] = pDstMip;
+
+        uint32_t srcDivFactor = 1 << mipLevel;
+        GenHalfCubemapMipmapLinearMean(m_pDiffuseIrradianceInputMips[mipLevel],
+                                       m_hdrCubeMapInfo.width / srcDivFactor,
+                                       pDstMip);
+
+        std::string outputPathName = SOURCE_PATH;
+        outputPathName += ("/mip" + std::to_string(mipLevel + 1) + ".hdr");
+        SharedLib::SaveImg(outputPathName,
+                           m_hdrCubeMapInfo.width / dstDivFactor,
+                           m_hdrCubeMapInfo.height / dstDivFactor,
+                           3, pDstMip);
+    }
+
+    uint32_t mip1BytesCnt = 3 * sizeof(float) * m_hdrCubeMapInfo.width * m_hdrCubeMapInfo.height / 2;
+    VkImageSubresourceRange mip1SubResRangeForLayoutTrans{};
+    {
+        mip1SubResRangeForLayoutTrans.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        mip1SubResRangeForLayoutTrans.baseArrayLayer = 0;
+        mip1SubResRangeForLayoutTrans.layerCount = 6;
+        mip1SubResRangeForLayoutTrans.baseMipLevel = 1;
+        mip1SubResRangeForLayoutTrans.levelCount = 1;
+    }
+
+    VkBufferImageCopy mip1Copy{};
+    {
+        mip1Copy.
+    }
+
+    SharedLib::SendImgDataToGpu(cmdBuffer,
+                                m_device,
+                                m_graphicsQueue,
+                                m_pDiffuseIrradianceInputMips[1],
+                                mip1BytesCnt,
+                                m_hdrCubeMapImage,
+                                mip1SubResRange,
+                                VK_IMAGE_LAYOUT_UNDEFINED,
+                                );
+
+
 }

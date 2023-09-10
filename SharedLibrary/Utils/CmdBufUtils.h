@@ -5,13 +5,14 @@
 namespace SharedLib
 {
     // Function names should start with 'Cmd' so their names should be 'CmdXxxx'.
-
+    // Maybe we should only change the layouts at the beginning of CmdXxxx functions.
     void SendImgDataToGpu(VkCommandBuffer cmdBuffer,
                              VkDevice device,
                              VkQueue gfxQueue,
                              void* pData, uint32_t bytesCnt,
                              VkImage dstImg,
                              VkImageSubresourceRange subResRange,
+                             VkImageLayout           dstImgCurrentLayout,
                              VkBufferImageCopy bufToImgCopyInfo,
                              VmaAllocator allocator);
 
