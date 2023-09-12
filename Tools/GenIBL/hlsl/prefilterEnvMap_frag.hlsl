@@ -1,8 +1,18 @@
+#include <GGXModel.hlsl>
+#include <hammersley.hlsl>
+
+// We assume the 2x2x2 box in the world space with camera at the center.
+// So, the near distance is always 1.
+// The near plane's width and height are always 2.
+// We don't have to pass them to the shader. Instead, we can just embed these data in the shader.
+// However, we need to pass the screen width and height in pxiel anyway, so I just pass them from the app.
 struct CameraInfoUbo
 {
-    float3 view;
-    float3 right;
-    float3 up;
+    float3 view[6];
+    float3 right[6];
+    float3 up[6];
+    float  near; // Pack it with the following nearWidthHeight.
+    float roughness;
     float2 nearWidthHeight; // Near plane's width and height in the world.
     float2 viewportWidthHeight; // Screen width and height in the unit of pixels.
 };
@@ -12,7 +22,10 @@ SamplerState samplerState : register(s0);
 
 cbuffer UBO0 : register(b1) { CameraInfoUbo i_cameraInfo; }
 
+static const float PI = 3.14159265359;
+
 float4 main(
+    [[vk::location(0)]] nointerpolation uint viewId : BLENDINDICES0,
     float4 fragCoord : SV_Position) : SV_Target
 {
     // Map current pixel coordinate to [-1.f, 1.f].
@@ -26,11 +39,40 @@ float4 main(
     float nearWorldWidth = i_cameraInfo.nearWidthHeight[0];
     float nearWorldHeight = i_cameraInfo.nearWidthHeight[1];
 
-    float3 sampleDir = x * (nearWorldWidth / 2.f) * i_cameraInfo.right + 
-                       (-y) * (nearWorldHeight / 2) * i_cameraInfo.up;
+    float3 curRight = i_cameraInfo.right[viewId];
+    float3 curView  = i_cameraInfo.view[viewId];
+    float3 curUp    = i_cameraInfo.up[viewId];
 
-    sampleDir = normalize(sampleDir);
+    float3 normalDir = x * (nearWorldWidth / 2.f) * curRight +
+                       (-y) * (nearWorldHeight / 2.f) * curUp +
+                       curView * i_cameraInfo.near;
 
-    // Sample the cubemap
-    return i_cubeMapTexture.Sample(samplerState, sampleDir);
+    // It's equivalent to the normal of the fragment/point that uses this light map and is sampled.
+    float3 normal = normalize(normalDir);
+
+    float3 N = normal;
+    float3 R = N;
+    float3 V = R;
+
+    float3 irradiance = float3(0.f, 0.f, 0.f);
+
+    const uint SAMPLE_COUNT = 1024u;
+    float totalWeight = 0.0;   
+    float3 prefilteredColor = float3(0.f, 0.f, 0.f); 
+
+    for(uint i = 0u; i < SAMPLE_COUNT; ++i)
+    {
+        float2 Xi = Hammersley(i, SAMPLE_COUNT);
+        float3 H  = ImportanceSampleGGX(Xi, N, i_cameraInfo.roughness);
+        float3 L  = normalize(2.0 * dot(V, H) * H - V);
+        float NdotL = max(dot(N, L), 0.0);
+        if(NdotL > 0.0)
+        {
+            prefilteredColor += i_cubeMapTexture.Sample(samplerState, L).rgb * NdotL;
+            totalWeight      += NdotL;
+        }
+    }
+    prefilteredColor = prefilteredColor / totalWeight;
+
+    return float4(prefilteredColor, 1.f);
 }

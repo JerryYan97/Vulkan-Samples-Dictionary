@@ -65,6 +65,7 @@ if __name__ == "__main__":
         '-spirv',
         '-T', profile,
         '-E', 'main',
+        '-I', os.path.realpath(os.path.dirname(__file__)),
         '-fspv-extension=SPV_KHR_ray_tracing',
         '-fspv-extension=SPV_KHR_multiview',
         '-fspv-extension=SPV_KHR_shader_draw_parameters',

@@ -49,9 +49,9 @@ GenIBL::~GenIBL()
 // ================================================================================================================
 void GenIBL::DestroyInputCubemapRenderObjs()
 {
-    for (uint32_t i = 1; i < m_pDiffuseIrradianceInputMips.size(); i++)
+    for (uint32_t i = 1; i < m_pHdrCubemapMips.size(); i++)
     {
-        delete m_pDiffuseIrradianceInputMips[i];
+        delete m_pHdrCubemapMips[i];
     }
 
     vmaDestroyImage(*m_pAllocator, m_hdrCubeMapImage, m_hdrCubeMapAlloc);
@@ -384,6 +384,10 @@ void GenIBL::AppInit()
     InitDiffuseIrradiancePipeline();
 
     // Pipeline and resources for the prefilter environment map gen.
+    InitPrefilterEnvMapOutputObjects();
+    InitPrefilterEnvMapShaderModules();
+    InitPrefilterEnvMapPipelineLayout();
+    InitPrefilterEnvMapPipeline();
 
     // Pipeline and resources for the environment brdf map gen.
 }
@@ -457,8 +461,8 @@ void GenIBL::CmdGenInputCubemapMipMaps(
     // Prepare 9 mipmap chain data.
     uint32_t mipMapNum = 9;
 
-    m_pDiffuseIrradianceInputMips.resize(mipMapNum + 1);
-    m_pDiffuseIrradianceInputMips[0] = m_hdrCubeMapInfo.pData;
+    m_pHdrCubemapMips.resize(mipMapNum + 1);
+    m_pHdrCubemapMips[0] = m_hdrCubeMapInfo.pData;
 
     for (uint32_t mipLevel = 0; mipLevel < mipMapNum; mipLevel++)
     {
@@ -466,10 +470,10 @@ void GenIBL::CmdGenInputCubemapMipMaps(
         uint32_t mipPixelCnt = (m_hdrCubeMapInfo.width / dstDivFactor) * (m_hdrCubeMapInfo.height / dstDivFactor);
         float* pDstMip = new float[3 * mipPixelCnt];
 
-        m_pDiffuseIrradianceInputMips[mipLevel + 1] = pDstMip;
+        m_pHdrCubemapMips[mipLevel + 1] = pDstMip;
 
         uint32_t srcDivFactor = 1 << mipLevel;
-        GenHalfCubemapMipmapLinearMean(m_pDiffuseIrradianceInputMips[mipLevel],
+        GenHalfCubemapMipmapLinearMean(m_pHdrCubemapMips[mipLevel],
                                        m_hdrCubeMapInfo.width / srcDivFactor,
                                        pDstMip);
 
@@ -516,7 +520,7 @@ void GenIBL::CmdGenInputCubemapMipMaps(
         SharedLib::SendImgDataToGpu(cmdBuffer,
                                     m_device,
                                     m_graphicsQueue,
-                                    m_pDiffuseIrradianceInputMips[mipLevel + 1],
+                                    m_pHdrCubemapMips[mipLevel + 1],
                                     mipBytesCnt,
                                     m_hdrCubeMapImage,
                                     mipSubResRangeForLayoutTrans,

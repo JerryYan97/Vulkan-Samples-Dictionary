@@ -36,6 +36,8 @@ public:
 
     void CmdGenInputCubemapMipMaps(VkCommandBuffer cmdBuffer); // Down scale the input cubemap first and then up scale it up to upgrade
 
+    void CmdGenPrefilterEnvMap(VkCommandBuffer cmdBuffer);
+
 private:
     // Shared pipeline resources
     void InitDiffIrrPreFilterEnvMapDescriptorSets();
@@ -51,11 +53,11 @@ private:
 
     // Prefilter Environment Map
     void InitPrefilterEnvMapPipeline();
-    void InitPrefilterEnvMapPipelineDescriptorSetLayout();
     void InitPrefilterEnvMapPipelineLayout();
     void InitPrefilterEnvMapShaderModules();
-    void InitPrefilterEnvMapPipelineDescriptorSets();
     void DestroyPrefilterEnvMapPipelineResourses();
+
+    void InitPrefilterEnvMapOutputObjects();
 
     // Environment brdf
 
@@ -67,23 +69,28 @@ private:
     void DestroyCameraScreenUbo();
 
     // Shared pipeline resources
-    VkDescriptorSet       m_diffIrrPreFilterEnvMapDesSet0;
     VkDescriptorSetLayout m_diffIrrPreFilterEnvMapDesSet0Layout;
+    VkDescriptorSet       m_diffIrrPreFilterEnvMapDesSet0;
 
     // Resources for the diffuse irradiance generation.
     SharedLib::Pipeline m_diffuseIrradiancePipeline;
     VkShaderModule      m_diffuseIrradianceVsShaderModule;
     VkShaderModule      m_diffuseIrradiancePsShaderModule;
     VkPipelineLayout    m_diffuseIrradiancePipelineLayout;
-
+    
     VkImage       m_diffuseIrradianceCubemap; // Note: Mutiview can draw to different layers automatically.
     VmaAllocation m_diffuseIrradianceCubemapAlloc;
     VkImageView   m_diffuseIrradianceCubemapImageView;
 
-    std::vector<float*> m_pDiffuseIrradianceInputMips;
-
     // Resources for the prefilter environment map
     SharedLib::Pipeline m_preFilterEnvMapPipeline; // Specular split-sum 1st element.
+    VkShaderModule      m_preFilterEnvMapVsShaderModule;
+    VkShaderModule      m_preFilterEnvMapPsShaderModule;
+    VkPipelineLayout    m_preFilterEnvMapPipelineLayout;
+
+    VkImage       m_preFilterEnvMapCubemap; // Note: Mutiview can draw to different layers automatically.
+    VmaAllocation m_preFilterEnvMapCubemapAlloc;
+    VkImageView   m_preFilterEnvMapCubemapImageView;
 
     // Resrouces for the environment brdf
     SharedLib::Pipeline m_envBrdfPipeline; // Specular split-sum 2st element.
@@ -94,6 +101,8 @@ private:
     VkSampler     m_hdrCubeMapSampler;
     VmaAllocation m_hdrCubeMapAlloc;
     ImgInfo       m_hdrCubeMapInfo;
+
+    std::vector<float*> m_pHdrCubemapMips;
 
     // Camera and screen info buffer for cubemap gen (Diffuse irradiance and prefilter env map).
     VkBuffer      m_uboCameraScreenBuffer;
