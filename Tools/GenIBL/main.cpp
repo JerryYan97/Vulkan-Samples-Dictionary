@@ -14,6 +14,7 @@
 // Adjustable Parameters:
 // * The input HDRI color clamp.
 // * The input HDRI cubemap mipmap level sampling.
+// * The number of roughness levels for the prefilter environment map.
 int main(
     int argc,
     char** argv)
@@ -347,6 +348,30 @@ int main(
         {
             std::string outputCubemapPathName = outputDir + "/diffuse_irradiance_cubemap.hdr";
             cubemapFormatTransApp.DumpOutputCubemapToDisk(outputCubemapPathName);
+        }
+
+        // Rendering the prefilter environment map
+        {
+            // Fill the command buffer
+            VkCommandBufferBeginInfo beginInfo{};
+            {
+                beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            }
+            VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &beginInfo));
+
+            app.CmdGenPrefilterEnvMap(cmdBuffer);
+
+            // Submit all the works recorded before
+            VK_CHECK(vkEndCommandBuffer(cmdBuffer));
+
+            SharedLib::SubmitCmdBufferAndWait(device, gfxQueue, cmdBuffer);
+
+            vkResetCommandBuffer(cmdBuffer, 0);
+        }
+
+        // Save the prefilter environment map
+        {
+
         }
 
         cubemapFormatTransApp.Destroy();

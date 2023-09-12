@@ -58,6 +58,7 @@ private:
     void DestroyPrefilterEnvMapPipelineResourses();
 
     void InitPrefilterEnvMapOutputObjects();
+    void UpdateRoughnessInUbo(uint32_t idx, uint32_t maxRoughnessLevels);
 
     // Environment brdf
 

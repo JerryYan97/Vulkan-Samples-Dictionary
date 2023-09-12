@@ -3,6 +3,8 @@
 #include "../../SharedLibrary/Utils/VulkanDbgUtils.h"
 
 
+constexpr uint32_t RoughnessLevels = 8;
+
 // ================================================================================================================
 void GenIBL::DestroyPrefilterEnvMapPipelineResourses()
 {
@@ -84,7 +86,7 @@ void GenIBL::InitPrefilterEnvMapOutputObjects()
         cubeMapImgInfo.imageType = VK_IMAGE_TYPE_2D;
         cubeMapImgInfo.format = HdriRenderTargetFormat;
         cubeMapImgInfo.extent = extent;
-        cubeMapImgInfo.mipLevels = 8;
+        cubeMapImgInfo.mipLevels = RoughnessLevels;
         cubeMapImgInfo.arrayLayers = 6;
         cubeMapImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
         cubeMapImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
@@ -107,8 +109,23 @@ void GenIBL::InitPrefilterEnvMapOutputObjects()
         info.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
         info.format = HdriRenderTargetFormat;
         info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        info.subresourceRange.levelCount = 8;
+        info.subresourceRange.levelCount = RoughnessLevels;
         info.subresourceRange.layerCount = 6;
     }
     VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_preFilterEnvMapCubemapImageView));
+}
+
+// ================================================================================================================
+void GenIBL::UpdateRoughnessInUbo(
+    uint32_t idx,
+    uint32_t maxRoughnessLevels)
+{
+
+}
+
+// ================================================================================================================
+void GenIBL::CmdGenPrefilterEnvMap(
+    VkCommandBuffer cmdBuffer)
+{
+
 }

@@ -29,7 +29,13 @@ GenIBL::GenIBL() :
     m_diffuseIrradiancePipelineLayout(VK_NULL_HANDLE),
     m_diffuseIrradianceCubemap(VK_NULL_HANDLE),
     m_diffuseIrradianceCubemapAlloc(VK_NULL_HANDLE),
-    m_diffuseIrradianceCubemapImageView(VK_NULL_HANDLE)
+    m_diffuseIrradianceCubemapImageView(VK_NULL_HANDLE),
+    m_preFilterEnvMapVsShaderModule(VK_NULL_HANDLE),
+    m_preFilterEnvMapPsShaderModule(VK_NULL_HANDLE),
+    m_preFilterEnvMapPipelineLayout(VK_NULL_HANDLE),
+    m_preFilterEnvMapCubemap(VK_NULL_HANDLE),
+    m_preFilterEnvMapCubemapAlloc(VK_NULL_HANDLE),
+    m_preFilterEnvMapCubemapImageView(VK_NULL_HANDLE)
 {
 }
 
