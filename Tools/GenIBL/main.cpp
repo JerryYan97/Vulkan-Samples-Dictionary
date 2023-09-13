@@ -182,23 +182,6 @@ int main(
             app.CmdGenInputCubemapMipMaps(cmdBuffer);
         }
 
-        // RenderDoc debug starts
-        RENDERDOC_API_1_6_0* rdoc_api = NULL;
-        {
-            if (HMODULE mod = GetModuleHandleA("renderdoc.dll"))
-            {
-                pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
-                int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_6_0, (void**)&rdoc_api);
-                assert(ret == 1);
-            }
-
-            if (rdoc_api)
-            {
-                std::cout << "Frame capture starts." << std::endl;
-                rdoc_api->StartFrameCapture(NULL, NULL);
-            }
-        }
-
         // Render the diffuse irradiance map
         {
             // Fill the command buffer
@@ -318,13 +301,6 @@ int main(
             vkResetCommandBuffer(cmdBuffer, 0);
         }
 
-        // End RenderDoc debug
-        if (rdoc_api)
-        {
-            std::cout << "Frame capture ends." << std::endl;
-            rdoc_api->EndFrameCapture(NULL, NULL);
-        }
-
         // Reformat the diffuse irradiance map since it's a cubemap
         {
             // Fill the command buffer
@@ -350,6 +326,23 @@ int main(
             cubemapFormatTransApp.DumpOutputCubemapToDisk(outputCubemapPathName);
         }
 
+        // RenderDoc debug starts
+        RENDERDOC_API_1_6_0* rdoc_api = NULL;
+        {
+            if (HMODULE mod = GetModuleHandleA("renderdoc.dll"))
+            {
+                pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
+                int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_6_0, (void**)&rdoc_api);
+                assert(ret == 1);
+            }
+
+            if (rdoc_api)
+            {
+                std::cout << "Frame capture starts." << std::endl;
+                rdoc_api->StartFrameCapture(NULL, NULL);
+            }
+        }
+
         // Rendering the prefilter environment map
         {
             // Fill the command buffer
@@ -367,6 +360,13 @@ int main(
             SharedLib::SubmitCmdBufferAndWait(device, gfxQueue, cmdBuffer);
 
             vkResetCommandBuffer(cmdBuffer, 0);
+        }
+
+        // End RenderDoc debug
+        if (rdoc_api)
+        {
+            std::cout << "Frame capture ends." << std::endl;
+            rdoc_api->EndFrameCapture(NULL, NULL);
         }
 
         // Save the prefilter environment map

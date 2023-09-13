@@ -34,9 +34,9 @@ GenIBL::GenIBL() :
     m_preFilterEnvMapPsShaderModule(VK_NULL_HANDLE),
     m_preFilterEnvMapPipelineLayout(VK_NULL_HANDLE),
     m_preFilterEnvMapCubemap(VK_NULL_HANDLE),
-    m_preFilterEnvMapCubemapAlloc(VK_NULL_HANDLE),
-    m_preFilterEnvMapCubemapImageView(VK_NULL_HANDLE)
+    m_preFilterEnvMapCubemapAlloc(VK_NULL_HANDLE)
 {
+    memset(m_screenCameraData, 0, sizeof(m_screenCameraData));
 }
 
 // ================================================================================================================
@@ -190,8 +190,6 @@ void GenIBL::InitCameraScreenUbo()
                     nullptr);
 
     // Prepare data
-    float screenCameraData[CameraScreenBufferSizeInFloats]{};
-
     // Front, back, top, bottom, right, left.
     float views[6 * 4] = 
     {
@@ -227,18 +225,18 @@ void GenIBL::InitCameraScreenUbo()
     float nearWidthHeight[2] = {2.f, 2.f};
     float viewportWidthHeight[2] = { m_hdrCubeMapInfo.width, m_hdrCubeMapInfo.width };
 
-    memcpy(screenCameraData, views, sizeof(views));
-    memcpy(&screenCameraData[24], rights, sizeof(rights));
-    memcpy(&screenCameraData[48], ups, sizeof(ups));
-    screenCameraData[72] = near;
-    memcpy(&screenCameraData[73], nearWidthHeight, sizeof(nearWidthHeight));
-    memcpy(&screenCameraData[76], viewportWidthHeight, sizeof(viewportWidthHeight));
+    memcpy(m_screenCameraData, views, sizeof(views));
+    memcpy(&m_screenCameraData[24], rights, sizeof(rights));
+    memcpy(&m_screenCameraData[48], ups, sizeof(ups));
+    m_screenCameraData[72] = near;
+    memcpy(&m_screenCameraData[73], nearWidthHeight, sizeof(nearWidthHeight));
+    memcpy(&m_screenCameraData[76], viewportWidthHeight, sizeof(viewportWidthHeight));
 
     // Send data to the GPU buffer
-    CopyRamDataToGpuBuffer(screenCameraData,
+    CopyRamDataToGpuBuffer(m_screenCameraData,
                            m_uboCameraScreenBuffer,
                            m_uboCameraScreenAlloc,
-                           sizeof(screenCameraData));
+                           sizeof(m_screenCameraData));
 }
 
 // ================================================================================================================

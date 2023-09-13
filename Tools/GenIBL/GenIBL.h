@@ -58,7 +58,7 @@ private:
     void DestroyPrefilterEnvMapPipelineResourses();
 
     void InitPrefilterEnvMapOutputObjects();
-    void UpdateRoughnessInUbo(uint32_t idx, uint32_t maxRoughnessLevels);
+    void UpdateRoughnessInUbo(float roughness, float imgDim);
 
     // Environment brdf
 
@@ -72,6 +72,7 @@ private:
     // Shared pipeline resources
     VkDescriptorSetLayout m_diffIrrPreFilterEnvMapDesSet0Layout;
     VkDescriptorSet       m_diffIrrPreFilterEnvMapDesSet0;
+    float                 m_screenCameraData[CameraScreenBufferSizeInFloats];
 
     // Resources for the diffuse irradiance generation.
     SharedLib::Pipeline m_diffuseIrradiancePipeline;
@@ -89,9 +90,9 @@ private:
     VkShaderModule      m_preFilterEnvMapPsShaderModule;
     VkPipelineLayout    m_preFilterEnvMapPipelineLayout;
 
-    VkImage       m_preFilterEnvMapCubemap; // Note: Mutiview can draw to different layers automatically.
-    VmaAllocation m_preFilterEnvMapCubemapAlloc;
-    VkImageView   m_preFilterEnvMapCubemapImageView;
+    VkImage                  m_preFilterEnvMapCubemap; // Note: Mutiview can draw to different layers automatically.
+    VmaAllocation            m_preFilterEnvMapCubemapAlloc;
+    std::vector<VkImageView> m_preFilterEnvMapCubemapImageViews; // The render target needs different views to specify different mip levels.
 
     // Resrouces for the environment brdf
     SharedLib::Pipeline m_envBrdfPipeline; // Specular split-sum 2st element.

@@ -15,7 +15,11 @@ void GenIBL::DestroyPrefilterEnvMapPipelineResourses()
     vkDestroyPipelineLayout(m_device, m_preFilterEnvMapPipelineLayout, nullptr);
 
     vmaDestroyImage(*m_pAllocator, m_preFilterEnvMapCubemap, m_preFilterEnvMapCubemapAlloc);
-    vkDestroyImageView(m_device, m_preFilterEnvMapCubemapImageView, nullptr);
+
+    for (uint32_t i = 0; i < m_preFilterEnvMapCubemapImageViews.size(); i++)
+    {
+        vkDestroyImageView(m_device, m_preFilterEnvMapCubemapImageViews[i], nullptr);
+    }
 }
 
 // ================================================================================================================
@@ -102,30 +106,149 @@ void GenIBL::InitPrefilterEnvMapOutputObjects()
         &m_preFilterEnvMapCubemapAlloc,
         nullptr));
 
-    VkImageViewCreateInfo info{};
+    m_preFilterEnvMapCubemapImageViews.resize(RoughnessLevels);
+    for (uint32_t i = 0; i < RoughnessLevels; i++)
     {
-        info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        info.image = m_preFilterEnvMapCubemap;
-        info.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
-        info.format = HdriRenderTargetFormat;
-        info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        info.subresourceRange.levelCount = RoughnessLevels;
-        info.subresourceRange.layerCount = 6;
+        VkImageViewCreateInfo info{};
+        {
+            info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            info.image = m_preFilterEnvMapCubemap;
+            info.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+            info.format = HdriRenderTargetFormat;
+            info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            info.subresourceRange.baseMipLevel = i;
+            info.subresourceRange.levelCount = 1;
+            info.subresourceRange.layerCount = 6;
+        }
+        VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_preFilterEnvMapCubemapImageViews[i]));
     }
-    VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_preFilterEnvMapCubemapImageView));
 }
 
 // ================================================================================================================
 void GenIBL::UpdateRoughnessInUbo(
-    uint32_t idx,
-    uint32_t maxRoughnessLevels)
+    float roughness,
+    float imgDim)
 {
+    float near = 1.f;
+    float nearWidthHeight[2] = { 2.f, 2.f };
+    float viewportWidthHeight[2] = { imgDim, imgDim };
 
+    m_screenCameraData[72] = near;
+    m_screenCameraData[73] = roughness;
+    memcpy(&m_screenCameraData[74], nearWidthHeight, sizeof(nearWidthHeight));
+    memcpy(&m_screenCameraData[76], viewportWidthHeight, sizeof(viewportWidthHeight));
+
+    // Send data to the GPU buffer
+    CopyRamDataToGpuBuffer(m_screenCameraData,
+                           m_uboCameraScreenBuffer,
+                           m_uboCameraScreenAlloc,
+                           sizeof(m_screenCameraData));
 }
 
 // ================================================================================================================
 void GenIBL::CmdGenPrefilterEnvMap(
     VkCommandBuffer cmdBuffer)
 {
+    // Transfer the environment filter cubemap from undefined to color attachment
+    VkImageSubresourceRange prefilterEnvMapSubresource{};
+    {
+        prefilterEnvMapSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        prefilterEnvMapSubresource.baseMipLevel = 0;
+        prefilterEnvMapSubresource.levelCount = RoughnessLevels;
+        prefilterEnvMapSubresource.baseArrayLayer = 0;
+        prefilterEnvMapSubresource.layerCount = 6;
+    }
 
+    VkImageMemoryBarrier cubemapRenderTargetTransBarrier{};
+    {
+        cubemapRenderTargetTransBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        cubemapRenderTargetTransBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        cubemapRenderTargetTransBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        cubemapRenderTargetTransBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        cubemapRenderTargetTransBarrier.image = m_preFilterEnvMapCubemap;
+        cubemapRenderTargetTransBarrier.subresourceRange = prefilterEnvMapSubresource;
+    }
+
+    vkCmdPipelineBarrier(cmdBuffer,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        0,
+        0, nullptr,
+        0, nullptr,
+        1, &cubemapRenderTargetTransBarrier);
+
+    // Shared information
+    VkClearValue clearColor = { {{1.0f, 0.0f, 0.0f, 1.0f}} };
+
+    // 
+    for (uint32_t i = 0; i < RoughnessLevels; i++)
+    {
+        float currentRoughness = float(i) / float(RoughnessLevels - 1);
+        uint32_t divFactor = 1 << i;
+        uint32_t currentRenderDim = m_hdrCubeMapInfo.width / divFactor;
+        VkExtent2D colorRenderTargetExtent{};
+        {
+            colorRenderTargetExtent.width = currentRenderDim;
+            colorRenderTargetExtent.height = currentRenderDim;
+        }
+
+        // BUG! The buffer change happens but packets are not submitted to GPU!
+        UpdateRoughnessInUbo(currentRoughness, float(currentRenderDim));
+
+        VkRenderingAttachmentInfoKHR renderAttachmentInfo{};
+        {
+            renderAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+            renderAttachmentInfo.imageView = m_preFilterEnvMapCubemapImageViews[i];
+            renderAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            renderAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            renderAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            renderAttachmentInfo.clearValue = clearColor;
+        }
+
+        VkRenderingInfoKHR renderInfo{};
+        {
+            renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+            renderInfo.renderArea.offset = { 0, 0 };
+            renderInfo.renderArea.extent = colorRenderTargetExtent;
+            renderInfo.layerCount = 6;
+            renderInfo.colorAttachmentCount = 1;
+            renderInfo.viewMask = 0x3F;
+            renderInfo.pColorAttachments = &renderAttachmentInfo;
+        }
+
+        vkCmdBeginRendering(cmdBuffer, &renderInfo);
+
+        // Bind the graphics pipeline
+        vkCmdBindDescriptorSets(cmdBuffer,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            m_preFilterEnvMapPipelineLayout,
+            0, 1, &m_diffIrrPreFilterEnvMapDesSet0,
+            0, NULL);
+
+        vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_preFilterEnvMapPipeline.GetVkPipeline());
+
+        // Set the viewport
+        VkViewport viewport{};
+        {
+            viewport.x = 0.f;
+            viewport.y = 0.f;
+            viewport.width = (float)colorRenderTargetExtent.width;
+            viewport.height = (float)colorRenderTargetExtent.height;
+            viewport.minDepth = 0.f;
+            viewport.maxDepth = 1.f;
+        }
+        vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
+
+        // Set the scissor
+        VkRect2D scissor{};
+        {
+            scissor.offset = { 0, 0 };
+            scissor.extent = colorRenderTargetExtent;
+            vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
+        }
+
+        vkCmdDraw(cmdBuffer, 6, 1, 0, 0);
+
+        vkCmdEndRendering(cmdBuffer);
+    }
 }
