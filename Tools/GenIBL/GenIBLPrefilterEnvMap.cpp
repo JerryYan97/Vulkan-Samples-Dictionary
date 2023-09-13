@@ -1,7 +1,7 @@
 #include "GenIBL.h"
 #include "vk_mem_alloc.h"
 #include "../../SharedLibrary/Utils/VulkanDbgUtils.h"
-
+#include "../../SharedLibrary/Utils/CmdBufUtils.h"
 
 constexpr uint32_t RoughnessLevels = 8;
 
@@ -146,43 +146,67 @@ void GenIBL::UpdateRoughnessInUbo(
 }
 
 // ================================================================================================================
-void GenIBL::CmdGenPrefilterEnvMap(
-    VkCommandBuffer cmdBuffer)
+void GenIBL::GenPrefilterEnvMap()
 {
+    VkCommandBuffer cmdBuffer = GetGfxCmdBuffer(0);
+
     // Transfer the environment filter cubemap from undefined to color attachment
-    VkImageSubresourceRange prefilterEnvMapSubresource{};
     {
-        prefilterEnvMapSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        prefilterEnvMapSubresource.baseMipLevel = 0;
-        prefilterEnvMapSubresource.levelCount = RoughnessLevels;
-        prefilterEnvMapSubresource.baseArrayLayer = 0;
-        prefilterEnvMapSubresource.layerCount = 6;
-    }
+        // Fill the command buffer
+        VkCommandBufferBeginInfo beginInfo{};
+        {
+            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        }
+        VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &beginInfo));
 
-    VkImageMemoryBarrier cubemapRenderTargetTransBarrier{};
-    {
-        cubemapRenderTargetTransBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        cubemapRenderTargetTransBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        cubemapRenderTargetTransBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        cubemapRenderTargetTransBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        cubemapRenderTargetTransBarrier.image = m_preFilterEnvMapCubemap;
-        cubemapRenderTargetTransBarrier.subresourceRange = prefilterEnvMapSubresource;
-    }
+        VkImageSubresourceRange prefilterEnvMapSubresource{};
+        {
+            prefilterEnvMapSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            prefilterEnvMapSubresource.baseMipLevel = 0;
+            prefilterEnvMapSubresource.levelCount = RoughnessLevels;
+            prefilterEnvMapSubresource.baseArrayLayer = 0;
+            prefilterEnvMapSubresource.layerCount = 6;
+        }
 
-    vkCmdPipelineBarrier(cmdBuffer,
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        0,
-        0, nullptr,
-        0, nullptr,
-        1, &cubemapRenderTargetTransBarrier);
+        VkImageMemoryBarrier cubemapRenderTargetTransBarrier{};
+        {
+            cubemapRenderTargetTransBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            cubemapRenderTargetTransBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            cubemapRenderTargetTransBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            cubemapRenderTargetTransBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            cubemapRenderTargetTransBarrier.image = m_preFilterEnvMapCubemap;
+            cubemapRenderTargetTransBarrier.subresourceRange = prefilterEnvMapSubresource;
+        }
+
+        vkCmdPipelineBarrier(cmdBuffer,
+            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &cubemapRenderTargetTransBarrier);
+
+        // Submit all the works recorded before
+        VK_CHECK(vkEndCommandBuffer(cmdBuffer));
+
+        SharedLib::SubmitCmdBufferAndWait(m_device, m_graphicsQueue, cmdBuffer);
+
+        vkResetCommandBuffer(cmdBuffer, 0);
+    }
 
     // Shared information
     VkClearValue clearColor = { {{1.0f, 0.0f, 0.0f, 1.0f}} };
 
-    // 
+    // Render the prefilter environment map into different mip maps
     for (uint32_t i = 0; i < RoughnessLevels; i++)
     {
+        // Fill the command buffer
+        VkCommandBufferBeginInfo beginInfo{};
+        {
+            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        }
+        VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &beginInfo));
+
         float currentRoughness = float(i) / float(RoughnessLevels - 1);
         uint32_t divFactor = 1 << i;
         uint32_t currentRenderDim = m_hdrCubeMapInfo.width / divFactor;
@@ -250,5 +274,12 @@ void GenIBL::CmdGenPrefilterEnvMap(
         vkCmdDraw(cmdBuffer, 6, 1, 0, 0);
 
         vkCmdEndRendering(cmdBuffer);
+
+        // Submit all the works recorded before
+        VK_CHECK(vkEndCommandBuffer(cmdBuffer));
+
+        SharedLib::SubmitCmdBufferAndWait(m_device, m_graphicsQueue, cmdBuffer);
+
+        vkResetCommandBuffer(cmdBuffer, 0);
     }
 }

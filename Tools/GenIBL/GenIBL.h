@@ -33,11 +33,9 @@ public:
     VkImageView GetInputCubemapImgView() { return m_diffuseIrradianceCubemapImageView; }
 
     void ReadInCubemap(const std::string& namePath);
+    void GenPrefilterEnvMap();
 
     void CmdGenInputCubemapMipMaps(VkCommandBuffer cmdBuffer); // Down scale the input cubemap first and then up scale it up to upgrade
-
-    void CmdGenPrefilterEnvMap(VkCommandBuffer cmdBuffer);
-
 private:
     // Shared pipeline resources
     void InitDiffIrrPreFilterEnvMapDescriptorSets();

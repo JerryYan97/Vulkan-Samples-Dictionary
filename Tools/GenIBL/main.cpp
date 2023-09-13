@@ -345,21 +345,7 @@ int main(
 
         // Rendering the prefilter environment map
         {
-            // Fill the command buffer
-            VkCommandBufferBeginInfo beginInfo{};
-            {
-                beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-            }
-            VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &beginInfo));
-
-            app.CmdGenPrefilterEnvMap(cmdBuffer);
-
-            // Submit all the works recorded before
-            VK_CHECK(vkEndCommandBuffer(cmdBuffer));
-
-            SharedLib::SubmitCmdBufferAndWait(device, gfxQueue, cmdBuffer);
-
-            vkResetCommandBuffer(cmdBuffer, 0);
+            app.GenPrefilterEnvMap();
         }
 
         // End RenderDoc debug
@@ -367,6 +353,11 @@ int main(
         {
             std::cout << "Frame capture ends." << std::endl;
             rdoc_api->EndFrameCapture(NULL, NULL);
+        }
+
+        // Reformat the prefilter environment map
+        {
+
         }
 
         // Save the prefilter environment map
