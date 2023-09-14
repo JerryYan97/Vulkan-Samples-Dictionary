@@ -134,7 +134,11 @@ int main(
             cubemapExtent3D.height = inputHdriInfo.width;
             cubemapExtent3D.depth = 1;
         }
-        cubemapFormatTransApp.SetInputCubemapImg(app.GetDiffuseIrradianceCubemap(), cubemapExtent3D);
+
+        cubemapFormatTransApp.SetInputCubemapImg(app.GetDiffuseIrradianceCubemap(),
+                                                 cubemapExtent3D,
+                                                 cubemapSubResRangeLayer6Level1);
+
         SharedLib::VulkanInfos formatTransVkInfo{};
         {
             formatTransVkInfo.device = device;
@@ -355,17 +359,61 @@ int main(
             rdoc_api->EndFrameCapture(NULL, NULL);
         }
 
-        // Reformat the prefilter environment map
+        // Reformat the prefilter environment map and dump out
         {
+            cubemapFormatTransApp.Destroy();
+            std::string prefilterOutputDir = outputDir + "/prefilterEnvMaps";
+            SharedLib::CleanOrCreateDir(prefilterOutputDir);
 
+            for (uint32_t i = 0; i < RoughnessLevels; i++)
+            {
+                uint32_t divFactor = 1 << i;
+                uint32_t currentMipDim = inputHdriInfo.width / divFactor;
+                VkExtent3D currentMipExtent{};
+                {
+                    currentMipExtent.width = currentMipDim;
+                    currentMipExtent.height = currentMipDim;
+                    currentMipExtent.depth = 1;
+                }
+
+                VkImageSubresourceRange currentMipSubres{};
+                {
+                    currentMipSubres.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                    currentMipSubres.baseMipLevel = i;
+                    currentMipSubres.levelCount = 1;
+                    currentMipSubres.baseArrayLayer = 0;
+                    currentMipSubres.layerCount = 6;
+                }
+
+                cubemapFormatTransApp.SetInputCubemapImg(app.GetPrefilterEnvMap(), 
+                                                         currentMipExtent,
+                                                         currentMipSubres);
+                cubemapFormatTransApp.Init();
+
+                // Fill the command buffer
+                VkCommandBufferBeginInfo beginInfo{};
+                {
+                    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+                }
+                VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &beginInfo));
+
+                cubemapFormatTransApp.CmdConvertCubemapFormat(cmdBuffer);
+
+                // Submit all the works recorded before
+                VK_CHECK(vkEndCommandBuffer(cmdBuffer));
+
+                SharedLib::SubmitCmdBufferAndWait(device, gfxQueue, cmdBuffer);
+
+                vkResetCommandBuffer(cmdBuffer, 0);
+
+                std::string currentMipName = "prefilterMip" + std::to_string(i) + ".hdr";
+                std::string prefilterEnvMapPathName = prefilterOutputDir + "/" + currentMipName;
+
+                cubemapFormatTransApp.DumpOutputCubemapToDisk(prefilterEnvMapPathName);
+
+                cubemapFormatTransApp.Destroy();
+            }
         }
-
-        // Save the prefilter environment map
-        {
-
-        }
-
-        cubemapFormatTransApp.Destroy();
     }
 
     system("pause");

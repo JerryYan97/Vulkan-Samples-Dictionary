@@ -14,6 +14,7 @@ struct ImgInfo
 constexpr int CameraScreenBufferSizeInFloats = 4 * 3 * 6 + 4 + 2;
 constexpr int CameraScreenBufferSizeInBytes = sizeof(float) * CameraScreenBufferSizeInFloats;
 constexpr VkFormat HdriRenderTargetFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+constexpr uint32_t RoughnessLevels = 8;
 
 class GenIBL : public SharedLib::Application
 {
@@ -31,6 +32,7 @@ public:
     VkPipeline GetDiffuseIrradiancePipeline() { return m_diffuseIrradiancePipeline.GetVkPipeline(); }
     VkImage GetInputCubemap() { return m_hdrCubeMapImage; }
     VkImageView GetInputCubemapImgView() { return m_diffuseIrradianceCubemapImageView; }
+    VkImage GetPrefilterEnvMap() { return m_preFilterEnvMapCubemap; }
 
     void ReadInCubemap(const std::string& namePath);
     void GenPrefilterEnvMap();

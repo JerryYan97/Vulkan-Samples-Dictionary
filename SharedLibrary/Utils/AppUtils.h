@@ -44,7 +44,8 @@ namespace SharedLib
         virtual void Init() override;
         virtual void Destroy() override;
 
-        void SetInputCubemapImg(VkImage iCubemapImg, VkExtent3D extent);
+        // Only copy one mipmap at a time, which is specified in the mip base level.
+        void SetInputCubemapImg(VkImage iCubemapImg, VkExtent3D extent, VkImageSubresourceRange iSubres);
         VkImage GetOutputCubemap() { return m_outputCubemap; }
 
         void CmdConvertCubemapFormat(VkCommandBuffer cmdBuffer);
@@ -69,6 +70,7 @@ namespace SharedLib
 
         VkDescriptorSet m_formatPipelineDescriptorSet0;
 
+        // Copy the input cubemap to an image array with 6 images as the input of the pipeline.
         VkImage       m_formatInputImages; // 6 layers to accomodate that hlsl doesn't have separate descriptors.
         VkImageView   m_formatInputImagesViews;
         VmaAllocation m_formatInputImagesAllocs;
@@ -77,8 +79,9 @@ namespace SharedLib
         VkBuffer      m_formatWidthHeightBuffer;
         VmaAllocation m_formatWidthHeightAlloc;
 
-        VkImage    m_inputCubemap;
-        VkExtent3D m_inputCubemapExtent;
+        VkImage                 m_inputCubemap;
+        VkExtent3D              m_inputCubemapExtent;
+        VkImageSubresourceRange m_inputSubres;
 
         VkImage       m_outputCubemap;
         VkImageView   m_outputCubemapImgView;

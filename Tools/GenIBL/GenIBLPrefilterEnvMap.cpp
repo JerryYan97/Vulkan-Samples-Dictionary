@@ -3,8 +3,6 @@
 #include "../../SharedLibrary/Utils/VulkanDbgUtils.h"
 #include "../../SharedLibrary/Utils/CmdBufUtils.h"
 
-constexpr uint32_t RoughnessLevels = 8;
-
 // ================================================================================================================
 void GenIBL::DestroyPrefilterEnvMapPipelineResourses()
 {

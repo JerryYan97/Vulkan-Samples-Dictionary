@@ -3,6 +3,7 @@
 #include "../../SharedLibrary/Utils/CmdBufUtils.h"
 #include "../../SharedLibrary/Utils/DiskOpsUtils.h"
 #include <fstream>
+#include <cassert>
 
 namespace SharedLib
 {
@@ -121,15 +122,15 @@ namespace SharedLib
     void CubemapFormatTransApp::CmdConvertCubemapFormat(
         VkCommandBuffer cmdBuffer)
     {
-        VkImageSubresourceRange cubemapSubResRange{};
+        VkImageSubresourceRange outputCubemapSubResRange{};
         {
-            cubemapSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            cubemapSubResRange.baseMipLevel = 0;
-            cubemapSubResRange.levelCount = 1;
-            cubemapSubResRange.baseArrayLayer = 0;
-            cubemapSubResRange.layerCount = 6;
+            outputCubemapSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            outputCubemapSubResRange.baseMipLevel = 0;
+            outputCubemapSubResRange.levelCount = 1;
+            outputCubemapSubResRange.baseArrayLayer = 0;
+            outputCubemapSubResRange.layerCount = 6;
         }
-
+        
         // Transform the layout of the cubemap from render target to copy src.
         // Transform the layout of the 6 images from undef to copy dst.
         VkImageMemoryBarrier stg1ImgsTrans[2] = {};
@@ -139,18 +140,14 @@ namespace SharedLib
             stg1ImgsTrans[0].oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
             stg1ImgsTrans[0].newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
             stg1ImgsTrans[0].image = m_inputCubemap;
-            stg1ImgsTrans[0].subresourceRange = cubemapSubResRange;
+            stg1ImgsTrans[0].subresourceRange = m_inputSubres;
 
             stg1ImgsTrans[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
             stg1ImgsTrans[1].dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
             stg1ImgsTrans[1].oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
             stg1ImgsTrans[1].newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
             stg1ImgsTrans[1].image = m_formatInputImages;
-            stg1ImgsTrans[1].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            stg1ImgsTrans[1].subresourceRange.baseMipLevel = 0;
-            stg1ImgsTrans[1].subresourceRange.levelCount = 1;
-            stg1ImgsTrans[1].subresourceRange.baseArrayLayer = 0;
-            stg1ImgsTrans[1].subresourceRange.layerCount = 6;
+            stg1ImgsTrans[1].subresourceRange = outputCubemapSubResRange;
         }
 
         vkCmdPipelineBarrier(cmdBuffer,
@@ -168,7 +165,7 @@ namespace SharedLib
             imgCpyInfo.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             imgCpyInfo.srcSubresource.baseArrayLayer = 0;
             imgCpyInfo.srcSubresource.layerCount = 6;
-            imgCpyInfo.srcSubresource.mipLevel = 0;
+            imgCpyInfo.srcSubresource.mipLevel = m_inputSubres.baseMipLevel;
 
             imgCpyInfo.dstOffset = { 0, 0, 0 };
             imgCpyInfo.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -196,18 +193,14 @@ namespace SharedLib
             stg2ImgsTrans[0].oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
             stg2ImgsTrans[0].newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
             stg2ImgsTrans[0].image = m_outputCubemap;
-            stg2ImgsTrans[0].subresourceRange = cubemapSubResRange;
+            stg2ImgsTrans[0].subresourceRange = outputCubemapSubResRange;
 
             stg2ImgsTrans[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
             stg2ImgsTrans[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
             stg2ImgsTrans[1].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
             stg2ImgsTrans[1].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
             stg2ImgsTrans[1].image = m_formatInputImages;
-            stg2ImgsTrans[1].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            stg2ImgsTrans[1].subresourceRange.baseMipLevel = 0;
-            stg2ImgsTrans[1].subresourceRange.levelCount = 1;
-            stg2ImgsTrans[1].subresourceRange.baseArrayLayer = 0;
-            stg2ImgsTrans[1].subresourceRange.layerCount = 6;
+            stg2ImgsTrans[1].subresourceRange = outputCubemapSubResRange;
         }
 
         vkCmdPipelineBarrier(cmdBuffer,
@@ -287,7 +280,7 @@ namespace SharedLib
         {
             cubemapColorAttToSrcBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
             cubemapColorAttToSrcBarrier.image = m_outputCubemap;
-            cubemapColorAttToSrcBarrier.subresourceRange = cubemapSubResRange;
+            cubemapColorAttToSrcBarrier.subresourceRange = outputCubemapSubResRange;
             cubemapColorAttToSrcBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
             cubemapColorAttToSrcBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
             cubemapColorAttToSrcBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -445,10 +438,13 @@ namespace SharedLib
     // ================================================================================================================
     void CubemapFormatTransApp::SetInputCubemapImg(
         VkImage    iCubemapImg, 
-        VkExtent3D extent)
+        VkExtent3D extent,
+        VkImageSubresourceRange iSubres)
     {
-        m_inputCubemap = iCubemapImg;
+        m_inputCubemap       = iCubemapImg;
         m_inputCubemapExtent = extent;
+        m_inputSubres        = iSubres;
+        assert(iSubres.levelCount == 1, "The mipmap level count must be 1.");
     }
 
     // ================================================================================================================
