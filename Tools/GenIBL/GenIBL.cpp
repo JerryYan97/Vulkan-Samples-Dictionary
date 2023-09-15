@@ -5,7 +5,7 @@
 #include "../../SharedLibrary/Utils/DiskOpsUtils.h"
 #include "../../SharedLibrary/Utils/CmdBufUtils.h"
 #include <cassert>
-#include<cmath>
+#include <cmath>
 
 #include "vk_mem_alloc.h"
 

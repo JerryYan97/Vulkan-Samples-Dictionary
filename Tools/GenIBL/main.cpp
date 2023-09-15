@@ -348,6 +348,7 @@ int main(
         }
 
         // Rendering the prefilter environment map
+        // TODO: Use the push constant instead of waiting for draw completes and ubo updates.
         {
             app.GenPrefilterEnvMap();
         }
