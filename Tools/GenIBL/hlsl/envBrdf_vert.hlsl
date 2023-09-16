@@ -14,10 +14,10 @@ static float2 positions[6] =
 };
 
 VSOutput main(
-    uint instanceId : SV_InstanceID)
+    uint vertId : SV_VertexID)
 {
     VSOutput output = (VSOutput)0;
-    output.Pos = float4(positions[instanceId], 0.5, 1.0);
+    output.Pos = float4(positions[vertId], 0.5, 1.0);
 
     return output;
 }

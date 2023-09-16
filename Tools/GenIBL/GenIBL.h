@@ -34,6 +34,10 @@ public:
     VkImage GetInputCubemap() { return m_hdrCubeMapImage; }
     VkImageView GetInputCubemapImgView() { return m_diffuseIrradianceCubemapImageView; }
     VkImage GetPrefilterEnvMap() { return m_preFilterEnvMapCubemap; }
+    VkImage GetEnvBrdfOutputImg() { return m_envBrdfOutputImg; }
+    VkImageView GetEnvBrdfOutputImgView() { return m_envBrdfOutputImgView; }
+    VkPipeline GetEnvBrdfPipeline() { return m_envBrdfPipeline.GetVkPipeline(); }
+    VkPipelineLayout GetEnvBrdfPipelineLayout() { return m_envBrdfPipelineLayout; }
 
     void ReadInCubemap(const std::string& namePath);
     void GenPrefilterEnvMap();

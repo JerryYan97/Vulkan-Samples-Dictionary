@@ -330,34 +330,10 @@ int main(
             cubemapFormatTransApp.DumpOutputCubemapToDisk(outputCubemapPathName);
         }
 
-        // RenderDoc debug starts
-        RENDERDOC_API_1_6_0* rdoc_api = NULL;
-        {
-            if (HMODULE mod = GetModuleHandleA("renderdoc.dll"))
-            {
-                pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
-                int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_6_0, (void**)&rdoc_api);
-                assert(ret == 1);
-            }
-
-            if (rdoc_api)
-            {
-                std::cout << "Frame capture starts." << std::endl;
-                rdoc_api->StartFrameCapture(NULL, NULL);
-            }
-        }
-
         // Rendering the prefilter environment map
         // TODO: Use the push constant instead of waiting for draw completes and ubo updates.
         {
             app.GenPrefilterEnvMap();
-        }
-
-        // End RenderDoc debug
-        if (rdoc_api)
-        {
-            std::cout << "Frame capture ends." << std::endl;
-            rdoc_api->EndFrameCapture(NULL, NULL);
         }
 
         // Reformat the prefilter environment map and dump out
@@ -414,6 +390,129 @@ int main(
 
                 cubemapFormatTransApp.Destroy();
             }
+        }
+
+        // RenderDoc debug starts
+        RENDERDOC_API_1_6_0* rdoc_api = NULL;
+        {
+            if (HMODULE mod = GetModuleHandleA("renderdoc.dll"))
+            {
+                pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
+                int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_6_0, (void**)&rdoc_api);
+                assert(ret == 1);
+            }
+
+            if (rdoc_api)
+            {
+                std::cout << "Frame capture starts." << std::endl;
+                rdoc_api->StartFrameCapture(NULL, NULL);
+            }
+        }
+
+        // Render the envBrdf map
+        {
+            // Fill the command buffer
+            VkCommandBufferBeginInfo beginInfo{};
+            {
+                beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            }
+            VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &beginInfo));
+
+            // Transform the layout of the output image to the color attachment
+            VkImageSubresourceRange envBrdfMapSubresource{};
+            {
+                envBrdfMapSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                envBrdfMapSubresource.baseMipLevel = 0;
+                envBrdfMapSubresource.levelCount = 1;
+                envBrdfMapSubresource.baseArrayLayer = 0;
+                envBrdfMapSubresource.layerCount = 1;
+            }
+
+            VkImageMemoryBarrier envBrdfRenderTargetTransBarrier{};
+            {
+                envBrdfRenderTargetTransBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+                envBrdfRenderTargetTransBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+                envBrdfRenderTargetTransBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+                envBrdfRenderTargetTransBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                envBrdfRenderTargetTransBarrier.image = app.GetEnvBrdfOutputImg();
+                envBrdfRenderTargetTransBarrier.subresourceRange = envBrdfMapSubresource;
+            }
+
+            vkCmdPipelineBarrier(cmdBuffer,
+                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                0,
+                0, nullptr,
+                0, nullptr,
+                1, &envBrdfRenderTargetTransBarrier);
+
+            VkRenderingAttachmentInfoKHR renderAttachmentInfo{};
+            {
+                renderAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+                renderAttachmentInfo.imageView = app.GetEnvBrdfOutputImgView();
+                renderAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                renderAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+                renderAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+                renderAttachmentInfo.clearValue = clearColor;
+            }
+
+            VkRenderingInfoKHR renderInfo{};
+            {
+                renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+                renderInfo.renderArea.offset = { 0, 0 };
+                renderInfo.renderArea.extent = { EnvBrdfMapDim, EnvBrdfMapDim };
+                renderInfo.layerCount = 1;
+                renderInfo.colorAttachmentCount = 1;
+                renderInfo.pColorAttachments = &renderAttachmentInfo;
+            }
+
+            vkCmdBeginRendering(cmdBuffer, &renderInfo);
+
+            float data[2] = { EnvBrdfMapDim, EnvBrdfMapDim };
+            vkCmdPushConstants(cmdBuffer,
+                               app.GetEnvBrdfPipelineLayout(),
+                               VK_SHADER_STAGE_FRAGMENT_BIT,
+                               0, sizeof(float) * 2, data);
+
+            vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, app.GetEnvBrdfPipeline());
+
+            // Set the viewport
+            VkViewport viewport{};
+            {
+                viewport.x = 0.f;
+                viewport.y = 0.f;
+                viewport.width = (float)EnvBrdfMapDim;
+                viewport.height = (float)EnvBrdfMapDim;
+                viewport.minDepth = 0.f;
+                viewport.maxDepth = 1.f;
+            }
+            vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
+
+            // Set the scissor
+            VkRect2D scissor{};
+            {
+                scissor.offset = { 0, 0 };
+                scissor.extent = { EnvBrdfMapDim, EnvBrdfMapDim };
+            }
+            vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
+
+            vkCmdDraw(cmdBuffer, 6, 1, 0, 0);
+
+            vkCmdEndRendering(cmdBuffer);
+
+            // Submit all the works recorded before
+            VK_CHECK(vkEndCommandBuffer(cmdBuffer));
+
+            SharedLib::SubmitCmdBufferAndWait(device, gfxQueue, cmdBuffer);
+
+            vkResetCommandBuffer(cmdBuffer, 0);
+        }
+
+        // End RenderDoc debug
+        if (rdoc_api)
+        {
+            std::cout << "Frame capture ends." << std::endl;
+            rdoc_api->EndFrameCapture(NULL, NULL);
         }
     }
 
