@@ -6,6 +6,20 @@
 
 namespace SharedLib
 {
+    // Assume that each channel is a float.
+    // The input image's layout should be VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL.
+    void CopyImgToRam(VkCommandBuffer          cmdBuffer,
+                      VkDevice                 device,
+                      VkQueue                  gfxQueue,
+                      VmaAllocator             allocator,
+                      VkImage                  srcImg,
+                      VkImageSubresourceLayers srcImgSubres,
+                      VkExtent3D               srcImgExtent,
+                      uint32_t                 srcImgChannelCnt,
+                      void*                    pDst);
+
+    void Img4EleTo3Ele(float* pSrc, float* pDst, uint32_t pixCnt);
+
     struct VulkanInfos
     {
         VkDevice device;

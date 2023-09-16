@@ -645,6 +645,7 @@ namespace SharedLib
         vmaUnmapMemory(*m_vkInfos.pAllocator, stagingBufferAlloc);
 
         // Convert data from 4 elements to 3 elements data
+        // TODO: It can be put into utils.
         float* pImgData3Ele = new float[3 * m_inputCubemapExtent.width * m_inputCubemapExtent.height * 6];
         for (uint32_t i = 0; i < m_inputCubemapExtent.width * m_inputCubemapExtent.height * 6; i++)
         {
@@ -668,5 +669,95 @@ namespace SharedLib
         vmaDestroyBuffer(*m_vkInfos.pAllocator, stagingBuffer, stagingBufferAlloc);
         delete pImgData;
         delete pImgData3Ele;
+    }
+
+    void CopyImgToRam(
+        VkCommandBuffer          cmdBuffer,
+        VkDevice                 device,
+        VkQueue                  gfxQueue,
+        VmaAllocator             allocator,
+        VkImage                  srcImg,
+        VkImageSubresourceLayers srcImgSubres,
+        VkExtent3D               srcImgExtent,
+        uint32_t                 srcImgChannelCnt,
+        void*                    pDst)
+    {
+        // Copy the rendered images to a buffer.
+        VkBuffer stagingBuffer;
+        VmaAllocation stagingBufferAlloc;
+        uint32_t bufferDwordsCnt = srcImgChannelCnt * srcImgExtent.width * srcImgExtent.height * srcImgSubres.layerCount;
+        uint32_t bufferBytesCnt = sizeof(float) * bufferDwordsCnt;
+
+        VmaAllocationCreateInfo stagingBufAllocInfo{};
+        {
+            stagingBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+            stagingBufAllocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT |
+                                        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        }
+
+        VkBufferCreateInfo stgBufInfo{};
+        {
+            stgBufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+            stgBufInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+            stgBufInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+            stgBufInfo.size = bufferBytesCnt;
+        }
+
+        VK_CHECK(vmaCreateBuffer(allocator, &stgBufInfo, &stagingBufAllocInfo, &stagingBuffer, &stagingBufferAlloc, nullptr));
+
+        VkBufferImageCopy imgToBufferCopy{};
+        {
+            imgToBufferCopy.bufferRowLength = srcImgExtent.width;
+            imgToBufferCopy.imageSubresource = srcImgSubres;
+            imgToBufferCopy.imageExtent = srcImgExtent;
+        }
+
+        // Fill the command buffer
+        VkCommandBufferBeginInfo beginInfo{};
+        {
+            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        }
+        VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &beginInfo));
+
+        vkCmdCopyImageToBuffer(cmdBuffer,
+                               srcImg,
+                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                               stagingBuffer,
+                               1, &imgToBufferCopy);
+
+        // Submit all the works recorded before
+        VK_CHECK(vkEndCommandBuffer(cmdBuffer));
+
+        SharedLib::SubmitCmdBufferAndWait(device, gfxQueue, cmdBuffer);
+
+        // Copy the data from buffer out.
+        void* pBufferMapped;
+        vmaMapMemory(allocator, stagingBufferAlloc, &pBufferMapped);
+        memcpy(pDst, pBufferMapped, bufferBytesCnt);
+        vmaUnmapMemory(allocator, stagingBufferAlloc);
+
+        vkResetCommandBuffer(cmdBuffer, 0);
+        vmaDestroyBuffer(allocator, stagingBuffer, stagingBufferAlloc);
+    }
+
+    void Img4EleTo3Ele(
+        float* pSrc,
+        float* pDst,
+        uint32_t pixCnt)
+    {
+        for (uint32_t i = 0; i < pixCnt; i++)
+        {
+            uint32_t ele4Idx0 = i * 4;
+            uint32_t ele4Idx1 = i * 4 + 1;
+            uint32_t ele4Idx2 = i * 4 + 2;
+
+            uint32_t ele3Idx0 = i * 3;
+            uint32_t ele3Idx1 = i * 3 + 1;
+            uint32_t ele3Idx2 = i * 3 + 2;
+
+            pDst[ele3Idx0] = pSrc[ele4Idx0];
+            pDst[ele3Idx1] = pSrc[ele4Idx1];
+            pDst[ele3Idx2] = pSrc[ele4Idx2];
+        }
     }
 }

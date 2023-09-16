@@ -161,6 +161,7 @@ namespace SharedLib
     }
 
     // ================================================================================================================
+    // TODO: The submit cannot happen in it.
     void CmdCopyCubemapToBuffer(VkCommandBuffer cmdBuffer,
                                 VkDevice        device,
                                 VkQueue         gfxQueue,

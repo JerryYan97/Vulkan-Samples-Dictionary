@@ -6,6 +6,7 @@
 #include "../../SharedLibrary/Utils/VulkanDbgUtils.h"
 #include "../../SharedLibrary/Utils/StrPathUtils.h"
 #include "../../SharedLibrary/Utils/AppUtils.h"
+#include "../../SharedLibrary/Utils/DiskOpsUtils.h"
 
 #include "renderdoc_app.h"
 #include <Windows.h>
@@ -506,6 +507,84 @@ int main(
             SharedLib::SubmitCmdBufferAndWait(device, gfxQueue, cmdBuffer);
 
             vkResetCommandBuffer(cmdBuffer, 0);
+        }
+
+        // Dump the envBrdf map
+        {
+            // Transfer the envBrdf map from color attachment layout to the copy dst and copy it to a buffer to dump.
+            // Fill the command buffer
+            VkCommandBufferBeginInfo beginInfo{};
+            {
+                beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            }
+            VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &beginInfo));
+
+            // Transform the layout of the output image to the color attachment
+            VkImageSubresourceRange envBrdfMapSubresource{};
+            {
+                envBrdfMapSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                envBrdfMapSubresource.baseMipLevel = 0;
+                envBrdfMapSubresource.levelCount = 1;
+                envBrdfMapSubresource.baseArrayLayer = 0;
+                envBrdfMapSubresource.layerCount = 1;
+            }
+
+            VkImageSubresourceLayers envBrdfMapSubresLayers{};
+            {
+                envBrdfMapSubresLayers.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                envBrdfMapSubresLayers.baseArrayLayer = 0;
+                envBrdfMapSubresLayers.layerCount = 1;
+                envBrdfMapSubresLayers.mipLevel = 0;
+            }
+
+            VkImageMemoryBarrier envBrdfRenderTargetTransBarrier{};
+            {
+                envBrdfRenderTargetTransBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+                envBrdfRenderTargetTransBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+                envBrdfRenderTargetTransBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                envBrdfRenderTargetTransBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+                envBrdfRenderTargetTransBarrier.image = app.GetEnvBrdfOutputImg();
+                envBrdfRenderTargetTransBarrier.subresourceRange = envBrdfMapSubresource;
+            }
+
+            vkCmdPipelineBarrier(cmdBuffer,
+                VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                0,
+                0, nullptr,
+                0, nullptr,
+                1, &envBrdfRenderTargetTransBarrier);
+
+            // Submit all the works recorded before
+            VK_CHECK(vkEndCommandBuffer(cmdBuffer));
+
+            SharedLib::SubmitCmdBufferAndWait(device, gfxQueue, cmdBuffer);
+
+            vkResetCommandBuffer(cmdBuffer, 0);
+            
+            // Dump the buffer to the disk.
+            uint32_t bufferDwordsCnt = EnvBrdfMapDim * EnvBrdfMapDim * 4;
+            float* pEnvBrdfMapData = new float[bufferDwordsCnt];
+
+            SharedLib::CopyImgToRam(cmdBuffer,
+                                    device,
+                                    gfxQueue,
+                                    allocator,
+                                    app.GetEnvBrdfOutputImg(),
+                                    envBrdfMapSubresLayers,
+                                    { EnvBrdfMapDim, EnvBrdfMapDim, 1},
+                                    4, pEnvBrdfMapData);
+            
+            uint32_t outputDwordsCnt = EnvBrdfMapDim * EnvBrdfMapDim * 3;
+            float* pEnvBrdfOutputData = new float[outputDwordsCnt];
+
+            SharedLib::Img4EleTo3Ele(pEnvBrdfMapData, pEnvBrdfOutputData, EnvBrdfMapDim* EnvBrdfMapDim);
+
+            std::string envBrdfMapPathName = outputDir + "/envBrdf.hdr";
+            SharedLib::SaveImg(envBrdfMapPathName, EnvBrdfMapDim, EnvBrdfMapDim, 3, pEnvBrdfOutputData);
+
+            delete[] pEnvBrdfMapData;
+            delete[] pEnvBrdfOutputData;
         }
 
         // End RenderDoc debug
