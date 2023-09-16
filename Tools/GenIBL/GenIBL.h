@@ -15,6 +15,7 @@ constexpr int CameraScreenBufferSizeInFloats = 4 * 3 * 6 + 4 + 2;
 constexpr int CameraScreenBufferSizeInBytes = sizeof(float) * CameraScreenBufferSizeInFloats;
 constexpr VkFormat HdriRenderTargetFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
 constexpr uint32_t RoughnessLevels = 8;
+constexpr uint32_t EnvBrdfMapDim = 1024;
 
 class GenIBL : public SharedLib::Application
 {
@@ -61,6 +62,12 @@ private:
     void UpdateRoughnessInUbo(float roughness, float imgDim);
 
     // Environment brdf
+    void InitEnvBrdfPipeline();
+    void InitEnvBrdfPipelineLayout();
+    void InitEnvBrdfShaderModules();
+    void DestroyEnvBrdfPipelineResources();
+
+    void InitEnvBrdfOutputObjects();
 
     // Common resources
     void InitInputCubemapObjects();
@@ -96,6 +103,12 @@ private:
 
     // Resrouces for the environment brdf
     SharedLib::Pipeline m_envBrdfPipeline; // Specular split-sum 2st element.
+    VkShaderModule      m_envBrdfVsShaderModule;
+    VkShaderModule      m_envBrdfPsShaderModule;
+    VkPipelineLayout    m_envBrdfPipelineLayout;
+    VkImage             m_envBrdfOutputImg;
+    VmaAllocation       m_envBrdfOutputImgAlloc;
+    VkImageView         m_envBrdfOutputImgView;
 
     // Input cubemap resources.
     VkImage       m_hdrCubeMapImage;

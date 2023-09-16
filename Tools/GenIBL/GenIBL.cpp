@@ -50,6 +50,7 @@ GenIBL::~GenIBL()
     DestroyInputCubemapRenderObjs();
     DestroyDiffuseIrradiancePipelineResourses();
     DestroyPrefilterEnvMapPipelineResourses();
+    DestroyEnvBrdfPipelineResources();
 }
 
 // ================================================================================================================
@@ -394,6 +395,10 @@ void GenIBL::AppInit()
     InitPrefilterEnvMapPipeline();
 
     // Pipeline and resources for the environment brdf map gen.
+    InitEnvBrdfOutputObjects();
+    InitEnvBrdfShaderModules();
+    InitEnvBrdfPipelineLayout();
+    InitEnvBrdfPipeline();
 }
 
 // ================================================================================================================

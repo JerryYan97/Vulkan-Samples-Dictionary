@@ -18,7 +18,8 @@ add_executable(${MY_APP_NAME} "main.cpp"
                               ${CMAKE_CURRENT_SOURCE_DIR}/GenIBL.h
                               ${CMAKE_CURRENT_SOURCE_DIR}/GenIBL.cpp
                               ${CMAKE_CURRENT_SOURCE_DIR}/GenIBLDiffuseIrradiance.cpp
-                              ${CMAKE_CURRENT_SOURCE_DIR}/GenIBLPrefilterEnvMap.cpp)
+                              ${CMAKE_CURRENT_SOURCE_DIR}/GenIBLPrefilterEnvMap.cpp
+                              ${CMAKE_CURRENT_SOURCE_DIR}/GenIBLEnvBrdf.cpp)
 
 # Load the shared library.
 set(SHARED_LIB_APP TRUE)
