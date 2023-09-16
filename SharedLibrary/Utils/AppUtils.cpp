@@ -608,69 +608,45 @@ namespace SharedLib
         }
         VK_CHECK(vkAllocateCommandBuffers(m_vkInfos.device, &commandBufferAllocInfo, &tmpGfxCmdBuffer));
 
-        // Copy the rendered images to a buffer.
-        VkBuffer stagingBuffer;
-        VmaAllocation stagingBufferAlloc;
-
-        VmaAllocationCreateInfo stagingBufAllocInfo{};
-        {
-            stagingBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-            stagingBufAllocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT |
-                                        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-        }
-
-        VkBufferCreateInfo stgBufInfo{};
-        {
-            stgBufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-            stgBufInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-            stgBufInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-            stgBufInfo.size = 4 * sizeof(float) * m_inputCubemapExtent.width * m_inputCubemapExtent.height * 6; // RGBA and 6 images blocks.
-        }
-
-        VK_CHECK(vmaCreateBuffer(*m_vkInfos.pAllocator, &stgBufInfo, &stagingBufAllocInfo, &stagingBuffer, &stagingBufferAlloc, nullptr));
-
-        SharedLib::CmdCopyCubemapToBuffer(tmpGfxCmdBuffer,
-                                          m_vkInfos.device,
-                                          m_vkInfos.gfxQueue,
-                                          m_outputCubemap,
-                                          m_inputCubemapExtent.width,
-                                          stagingBuffer);
-
         // Copy the buffer data to RAM and save that on the disk.
         float* pImgData = new float[4 * m_inputCubemapExtent.width * m_inputCubemapExtent.height * 6];
 
-        void* pBufferMapped;
-        vmaMapMemory(*m_vkInfos.pAllocator, stagingBufferAlloc, &pBufferMapped);
-        memcpy(pImgData, pBufferMapped, 4 * sizeof(float) * m_inputCubemapExtent.width * m_inputCubemapExtent.height * 6);
-        vmaUnmapMemory(*m_vkInfos.pAllocator, stagingBufferAlloc);
+        VkImageSubresourceLayers outputCubemapLayersSubres{};
+        {
+            outputCubemapLayersSubres.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            outputCubemapLayersSubres.mipLevel = 0;
+            outputCubemapLayersSubres.baseArrayLayer = 0;
+            outputCubemapLayersSubres.layerCount = 6;
+        }
+
+        VkExtent3D outputCubemapExtent{};
+        {
+            outputCubemapExtent.width = m_inputCubemapExtent.width;
+            outputCubemapExtent.height = m_inputCubemapExtent.width;
+            outputCubemapExtent.depth = 1;
+        }
+        
+        CopyImgToRam(tmpGfxCmdBuffer, 
+                     m_vkInfos.device,
+                     m_vkInfos.gfxQueue,
+                     *m_vkInfos.pAllocator,
+                     m_outputCubemap,
+                     outputCubemapLayersSubres,
+                     outputCubemapExtent,
+                     4, pImgData);
 
         // Convert data from 4 elements to 3 elements data
-        // TODO: It can be put into utils.
         float* pImgData3Ele = new float[3 * m_inputCubemapExtent.width * m_inputCubemapExtent.height * 6];
-        for (uint32_t i = 0; i < m_inputCubemapExtent.width * m_inputCubemapExtent.height * 6; i++)
-        {
-            uint32_t ele4Idx0 = i * 4;
-            uint32_t ele4Idx1 = i * 4 + 1;
-            uint32_t ele4Idx2 = i * 4 + 2;
-
-            uint32_t ele3Idx0 = i * 3;
-            uint32_t ele3Idx1 = i * 3 + 1;
-            uint32_t ele3Idx2 = i * 3 + 2;
-
-            pImgData3Ele[ele3Idx0] = pImgData[ele4Idx0];
-            pImgData3Ele[ele3Idx1] = pImgData[ele4Idx1];
-            pImgData3Ele[ele3Idx2] = pImgData[ele4Idx2];
-        }
+        Img4EleTo3Ele(pImgData, pImgData3Ele, m_inputCubemapExtent.width * m_inputCubemapExtent.height * 6);
 
         SaveImg(outputCubemapPathName, m_inputCubemapExtent.width, m_inputCubemapExtent.height * 6, 3, pImgData3Ele);
 
         // Cleanup resources
-        vkResetCommandBuffer(tmpGfxCmdBuffer, 0);
-        vmaDestroyBuffer(*m_vkInfos.pAllocator, stagingBuffer, stagingBufferAlloc);
-        delete pImgData;
-        delete pImgData3Ele;
+        delete[] pImgData;
+        delete[] pImgData3Ele;
     }
 
+    // ================================================================================================================
     void CopyImgToRam(
         VkCommandBuffer          cmdBuffer,
         VkDevice                 device,
@@ -740,6 +716,7 @@ namespace SharedLib
         vmaDestroyBuffer(allocator, stagingBuffer, stagingBufferAlloc);
     }
 
+    // ================================================================================================================
     void Img4EleTo3Ele(
         float* pSrc,
         float* pDst,
