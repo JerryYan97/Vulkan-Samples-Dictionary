@@ -1,4 +1,4 @@
-#include "PBREnivBasicApp.h"
+#include "PBRIBLApp.h"
 #include <glfw3.h>
 #include "../../../SharedLibrary/Utils/VulkanDbgUtils.h"
 #include "../../../SharedLibrary/Camera/Camera.h"
@@ -25,7 +25,7 @@ static void MouseButtonCallback(GLFWwindow* window, int button, int action, int 
 }
 
 // ================================================================================================================
-PBREnivBasicApp::PBREnivBasicApp() : 
+PBRIBLApp::PBRIBLApp() : 
     GlfwApplication(),
     m_hdrCubeMapImage(VK_NULL_HANDLE),
     m_hdrCubeMapView(VK_NULL_HANDLE),
@@ -41,7 +41,7 @@ PBREnivBasicApp::PBREnivBasicApp() :
 }
 
 // ================================================================================================================
-PBREnivBasicApp::~PBREnivBasicApp()
+PBRIBLApp::~PBRIBLApp()
 {
     vkDeviceWaitIdle(m_device);
     delete m_pCamera;
@@ -61,7 +61,7 @@ PBREnivBasicApp::~PBREnivBasicApp()
 }
 
 // ================================================================================================================
-void PBREnivBasicApp::DestroyHdrRenderObjs()
+void PBRIBLApp::DestroyHdrRenderObjs()
 {
     vmaDestroyImage(*m_pAllocator, m_hdrCubeMapImage, m_hdrCubeMapAlloc);
     vkDestroyImageView(m_device, m_hdrCubeMapView, nullptr);
@@ -69,7 +69,7 @@ void PBREnivBasicApp::DestroyHdrRenderObjs()
 }
 
 // ================================================================================================================
-void PBREnivBasicApp::DestroyCameraUboObjects()
+void PBRIBLApp::DestroyCameraUboObjects()
 {
     for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
     {
@@ -78,20 +78,20 @@ void PBREnivBasicApp::DestroyCameraUboObjects()
 }
 
 // ================================================================================================================
-VkDeviceSize PBREnivBasicApp::GetHdrByteNum()
+VkDeviceSize PBRIBLApp::GetHdrByteNum()
 {
     return 3 * sizeof(float) * m_hdrImgWidth * m_hdrImgHeight;
 }
 
 // ================================================================================================================
-void PBREnivBasicApp::GetCameraData(
+void PBRIBLApp::GetCameraData(
     float* pBuffer)
 {
     
 }
 
 // ================================================================================================================
-void PBREnivBasicApp::SendCameraDataToBuffer(
+void PBRIBLApp::SendCameraDataToBuffer(
     uint32_t i)
 {
     float cameraData[16] = {};
@@ -109,7 +109,7 @@ void PBREnivBasicApp::SendCameraDataToBuffer(
 }
 
 // ================================================================================================================
-void PBREnivBasicApp::UpdateCameraAndGpuBuffer()
+void PBRIBLApp::UpdateCameraAndGpuBuffer()
 {
     SharedLib::HEvent midMouseDownEvent = CreateMiddleMouseEvent(g_isDown);
     m_pCamera->OnEvent(midMouseDownEvent);
@@ -117,7 +117,7 @@ void PBREnivBasicApp::UpdateCameraAndGpuBuffer()
 }
 
 // ================================================================================================================
-void PBREnivBasicApp::InitHdrRenderObjects()
+void PBRIBLApp::InitHdrRenderObjects()
 {
     // Load the HDRI image into RAM
     std::string hdriFilePath = SOURCE_PATH;
@@ -196,7 +196,7 @@ void PBREnivBasicApp::InitHdrRenderObjects()
 }
 
 // ================================================================================================================
-void PBREnivBasicApp::InitCameraUboObjects()
+void PBRIBLApp::InitCameraUboObjects()
 {
     // The alignment of a vec3 is 4 floats and the element alignment of a struct is the largest element alignment,
     // which is also the 4 float. Therefore, we need 16 floats as the buffer to store the Camera's parameters.
@@ -231,7 +231,7 @@ void PBREnivBasicApp::InitCameraUboObjects()
 
 // ================================================================================================================
 // TODO: I may need to put most the content in this function to CreateXXXX(...) in the parent class.
-void PBREnivBasicApp::InitSkyboxPipelineDescriptorSets()
+void PBRIBLApp::InitSkyboxPipelineDescriptorSets()
 {
     // Create pipeline descirptor
     VkDescriptorSetAllocateInfo skyboxPipelineDesSet0AllocInfo{};
@@ -295,7 +295,7 @@ void PBREnivBasicApp::InitSkyboxPipelineDescriptorSets()
 }
 
 // ================================================================================================================
-void PBREnivBasicApp::InitSkyboxPipelineLayout()
+void PBRIBLApp::InitSkyboxPipelineLayout()
 {
     // Create pipeline layout
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
@@ -310,7 +310,7 @@ void PBREnivBasicApp::InitSkyboxPipelineLayout()
 }
 
 // ================================================================================================================
-void PBREnivBasicApp::InitSkyboxShaderModules()
+void PBRIBLApp::InitSkyboxShaderModules()
 {
     // Create Shader Modules.
     m_vsSkyboxShaderModule = CreateShaderModule("./hlsl/skybox_vert.spv");
@@ -318,7 +318,7 @@ void PBREnivBasicApp::InitSkyboxShaderModules()
 }
 
 // ================================================================================================================
-void PBREnivBasicApp::InitSkyboxPipelineDescriptorSetLayout()
+void PBRIBLApp::InitSkyboxPipelineDescriptorSetLayout()
 {
     // Create pipeline binding and descriptor objects for the camera parameters
     VkDescriptorSetLayoutBinding cameraUboBinding{};
@@ -354,7 +354,7 @@ void PBREnivBasicApp::InitSkyboxPipelineDescriptorSetLayout()
 }
 
 // ================================================================================================================
-void PBREnivBasicApp::InitSkyboxPipeline()
+void PBRIBLApp::InitSkyboxPipeline()
 {
     VkPipelineRenderingCreateInfoKHR pipelineRenderCreateInfo{};
     {
@@ -375,7 +375,7 @@ void PBREnivBasicApp::InitSkyboxPipeline()
 }
 
 // ================================================================================================================
-void PBREnivBasicApp::AppInit()
+void PBRIBLApp::AppInit()
 {
     glfwInit();
     uint32_t glfwExtensionCount = 0;

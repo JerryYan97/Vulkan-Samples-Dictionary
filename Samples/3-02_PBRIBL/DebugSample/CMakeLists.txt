@@ -1,9 +1,9 @@
 # Debug version
 include(../../../CMakeFuncSupport/CMakeUtil.cmake)
-set(MY_APP_NAME "PBREnvBasic")
+set(MY_APP_NAME "PBRIBL")
 CheckVulkanSDK()
 cmake_minimum_required(VERSION 3.5)
-project(PBREnvBasic VERSION 0.1 LANGUAGES CXX)
+project(PBRIBL VERSION 0.1 LANGUAGES CXX)
 
 include_directories("$ENV{VULKAN_SDK}/Include" "../../../ThirdPartyLibs/VMA")
 include_directories(../../../ThirdPartyLibs/glfw/include/GLFW)
@@ -20,8 +20,8 @@ link_directories("../../../ThirdPartyLibs/glfw/build/src/Debug/")
 
 add_definitions(-DSOURCE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}\")
 add_executable(${MY_APP_NAME} "main.cpp"
-                              ${CMAKE_CURRENT_SOURCE_DIR}/PBREnivBasicApp.h
-                              ${CMAKE_CURRENT_SOURCE_DIR}/PBREnivBasicApp.cpp)
+                              ${CMAKE_CURRENT_SOURCE_DIR}/PBRIBLApp.h
+                              ${CMAKE_CURRENT_SOURCE_DIR}/PBRIBLApp.cpp)
 
 # Load the shared library.
 set(SHARED_LIB_GLFW TRUE)
@@ -52,6 +52,10 @@ add_custom_command(
             ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/skybox_vert.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
         COMMAND python
             ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/skybox_frag.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
+        COMMAND python
+            ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/ibl_vert.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
+        COMMAND python
+            ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/ibl_frag.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
 )
 
 add_custom_target(SHADER_COMPILE

@@ -1,16 +1,14 @@
 // #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
 
-#include "PBREnivBasicApp.h"
+#include "PBRIBLApp.h"
 #include "../../../SharedLibrary/Utils/VulkanDbgUtils.h"
 
 #include <vulkan/vulkan.h>
 
-// TODO1: Make the application, realtime swapchain application class for the Level 3 examples.
-
 int main()
 {
-    PBREnivBasicApp app;
+    PBRIBLApp app;
     app.AppInit();
 
     VkImageSubresourceRange swapchainPresentSubResRange{};
