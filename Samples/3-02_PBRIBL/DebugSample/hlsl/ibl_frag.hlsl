@@ -19,5 +19,13 @@ float4 main(
     float4 i_pixelWorldNormal : NORMAL0,
     float2 i_params           : TEXCOORD0) : SV_Target
 {
+    float3 V = normalize(i_cameraInfo.cameraPosition);
+    float3 N = i_pixelWorldNormal.xyz;
+    float NoV = saturate(dot(N, V));
+    float3 R = 2 * NoV * N - V;
+
+    // float3 prefilterColor = i_prefilterEnvCubeMapTexture.texture();
+    // float3 envBrdf = 
+
     return i_pixelWorldNormal;
 }

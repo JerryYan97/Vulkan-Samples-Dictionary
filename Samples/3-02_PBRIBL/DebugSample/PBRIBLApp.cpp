@@ -3,6 +3,7 @@
 #include "../../../SharedLibrary/Utils/VulkanDbgUtils.h"
 #include "../../../SharedLibrary/Camera/Camera.h"
 #include "../../../SharedLibrary/Event/Event.h"
+#include "../../../SharedLibrary/Utils/StrPathUtils.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -35,7 +36,27 @@ PBRIBLApp::PBRIBLApp() :
     m_psSkyboxShaderModule(VK_NULL_HANDLE),
     m_skyboxPipelineDesSet0Layout(VK_NULL_HANDLE),
     m_skyboxPipelineLayout(VK_NULL_HANDLE),
-    m_skyboxPipeline()
+    m_skyboxPipeline(),
+    m_vsIblShaderModule(VK_NULL_HANDLE),
+    m_psIblShaderModule(VK_NULL_HANDLE),
+    m_iblPipelineDesSet0Layout(VK_NULL_HANDLE),
+    m_iblPipelineLayout(VK_NULL_HANDLE),
+    m_iblPipeline(),
+    m_diffuseIrradianceCubemap(VK_NULL_HANDLE),
+    m_diffuseIrradianceCubemapImgView(VK_NULL_HANDLE),
+    m_diffuseIrradianceCubemapSampler(VK_NULL_HANDLE),
+    m_diffuseIrradianceCubemapAlloc(VK_NULL_HANDLE),
+    m_prefilterEnvCubemap(VK_NULL_HANDLE),
+    m_prefilterEnvCubemapView(VK_NULL_HANDLE),
+    m_prefilterEnvCubemapSampler(VK_NULL_HANDLE),
+    m_prefilterEnvCubemapAlloc(VK_NULL_HANDLE),
+    m_envBrdfImg(VK_NULL_HANDLE),
+    m_envBrdfImgView(VK_NULL_HANDLE),
+    m_envBrdfImgSampler(VK_NULL_HANDLE),
+    m_envBrdfImgAlloc(VK_NULL_HANDLE),
+    m_hdrImgCubemap(),
+    m_diffuseIrradianceCubemapImgInfo(),
+    m_envBrdfImgInfo()
 {
     m_pCamera = new SharedLib::Camera();
 }
@@ -49,20 +70,32 @@ PBRIBLApp::~PBRIBLApp()
     DestroyHdrRenderObjs();
     DestroyCameraUboObjects();
 
-    // Destroy shader modules
-    vkDestroyShaderModule(m_device, m_vsSkyboxShaderModule, nullptr);
-    vkDestroyShaderModule(m_device, m_psSkyboxShaderModule, nullptr);
-
-    // Destroy the pipeline layout
-    vkDestroyPipelineLayout(m_device, m_skyboxPipelineLayout, nullptr);
-
-    // Destroy the descriptor set layout
-    vkDestroyDescriptorSetLayout(m_device, m_skyboxPipelineDesSet0Layout, nullptr);
+    DestroySkyboxPipelineRes();
+    DestroyIblPipelineRes();
 }
 
 // ================================================================================================================
 void PBRIBLApp::DestroyHdrRenderObjs()
 {
+    delete m_diffuseIrradianceCubemapImgInfo.pData;
+    for (auto itr : m_prefilterEnvCubemapImgsInfo)
+    {
+        delete itr.pData;
+    }
+    delete m_envBrdfImgInfo.pData;
+
+    vmaDestroyImage(*m_pAllocator, m_diffuseIrradianceCubemap, m_diffuseIrradianceCubemapAlloc);
+    vkDestroyImageView(m_device, m_diffuseIrradianceCubemapImgView, nullptr);
+    vkDestroySampler(m_device, m_diffuseIrradianceCubemapSampler, nullptr);
+
+    vmaDestroyImage(*m_pAllocator, m_prefilterEnvCubemap, m_prefilterEnvCubemapAlloc);
+    vkDestroyImageView(m_device, m_prefilterEnvCubemapView, nullptr);
+    vkDestroySampler(m_device, m_prefilterEnvCubemapSampler, nullptr);
+
+    vmaDestroyImage(*m_pAllocator, m_envBrdfImg, m_envBrdfImgAlloc);
+    vkDestroyImageView(m_device, m_envBrdfImgView, nullptr);
+    vkDestroySampler(m_device, m_envBrdfImgSampler, nullptr);
+
     vmaDestroyImage(*m_pAllocator, m_hdrCubeMapImage, m_hdrCubeMapAlloc);
     vkDestroyImageView(m_device, m_hdrCubeMapView, nullptr);
     vkDestroySampler(m_device, m_hdrSampler, nullptr);
@@ -80,7 +113,7 @@ void PBRIBLApp::DestroyCameraUboObjects()
 // ================================================================================================================
 VkDeviceSize PBRIBLApp::GetHdrByteNum()
 {
-    return 3 * sizeof(float) * m_hdrImgWidth * m_hdrImgHeight;
+    return 3 * sizeof(float) * m_hdrImgCubemap.pixWith * m_hdrImgCubemap.pixHeight;
 }
 
 // ================================================================================================================
@@ -121,78 +154,311 @@ void PBRIBLApp::InitHdrRenderObjects()
 {
     // Load the HDRI image into RAM
     std::string hdriFilePath = SOURCE_PATH;
-    hdriFilePath += "/../data/output_cubemap.hdr";
-    // hdriFilePath += "/../data/little_paris_eiffel_tower_4k_cubemap.hdr";
+    hdriFilePath += "/../data/";
 
-    int width, height, nrComponents;
-    m_hdrImgData = stbi_loadf(hdriFilePath.c_str(), &width, &height, &nrComponents, 0);
-
-    m_hdrImgWidth = (uint32_t)width;
-    m_hdrImgHeight = (uint32_t)height;
-
-    VmaAllocationCreateInfo hdrAllocInfo{};
+    // Read in and init background cubemap
     {
-        hdrAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        hdrAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+        std::string cubemapPathName = hdriFilePath + "output_cubemap.hdr";
+
+        int width, height, nrComponents;
+        m_hdrImgCubemap.pData = stbi_loadf(cubemapPathName.c_str(), &width, &height, &nrComponents, 0);
+
+        m_hdrImgCubemap.pixWith = (uint32_t)width;
+        m_hdrImgCubemap.pixHeight = (uint32_t)height;
+
+        VmaAllocationCreateInfo hdrAllocInfo{};
+        {
+            hdrAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+            hdrAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+        }
+
+        VkExtent3D extent{};
+        {
+            // extent.width = m_hdrImgWidth / 6;
+            // extent.height = m_hdrImgHeight;
+            extent.width = m_hdrImgCubemap.pixWith;
+            extent.height = m_hdrImgCubemap.pixWith;
+            extent.depth = 1;
+        }
+
+        VkImageCreateInfo cubeMapImgInfo{};
+        {
+            cubeMapImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+            cubeMapImgInfo.imageType = VK_IMAGE_TYPE_2D;
+            cubeMapImgInfo.format = VK_FORMAT_R32G32B32_SFLOAT;
+            cubeMapImgInfo.extent = extent;
+            cubeMapImgInfo.mipLevels = 1;
+            cubeMapImgInfo.arrayLayers = 6;
+            cubeMapImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+            cubeMapImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
+            cubeMapImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+            cubeMapImgInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+            cubeMapImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        }
+
+        VK_CHECK(vmaCreateImage(*m_pAllocator,
+            &cubeMapImgInfo,
+            &hdrAllocInfo,
+            &m_hdrCubeMapImage,
+            &m_hdrCubeMapAlloc,
+            nullptr));
+
+        VkImageViewCreateInfo info{};
+        {
+            info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            info.image = m_hdrCubeMapImage;
+            info.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+            info.format = VK_FORMAT_R32G32B32_SFLOAT;
+            info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            info.subresourceRange.levelCount = 1;
+            info.subresourceRange.layerCount = 6;
+        }
+        VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_hdrCubeMapView));
+
+        VkSamplerCreateInfo sampler_info{};
+        {
+            sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+            sampler_info.magFilter = VK_FILTER_LINEAR;
+            sampler_info.minFilter = VK_FILTER_LINEAR;
+            sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+            sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT; // outside image bounds just use border color
+            sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            sampler_info.minLod = -1000;
+            sampler_info.maxLod = 1000;
+            sampler_info.maxAnisotropy = 1.0f;
+        }
+        VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_hdrSampler));
+    }
+    
+    // Read in and init diffuse irradiance cubemap
+    {
+        std::string diffIrradiancePathName = hdriFilePath + "iblOutput/diffuse_irradiance_cubemap.hdr";
+        int width, height, nrComponents;
+        m_diffuseIrradianceCubemapImgInfo.pData = stbi_loadf(diffIrradiancePathName.c_str(),
+                                                             &width, &height, &nrComponents, 0);
+
+        m_diffuseIrradianceCubemapImgInfo.pixWith = (uint32_t)width;
+        m_diffuseIrradianceCubemapImgInfo.pixHeight = (uint32_t)height;
+
+        VmaAllocationCreateInfo diffIrrAllocInfo{};
+        {
+            diffIrrAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+            diffIrrAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+        }
+
+        VkExtent3D extent{};
+        {
+            extent.width = m_diffuseIrradianceCubemapImgInfo.pixWith;
+            extent.height = m_diffuseIrradianceCubemapImgInfo.pixWith;
+            extent.depth = 1;
+        }
+
+        VkImageCreateInfo cubeMapImgInfo{};
+        {
+            cubeMapImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+            cubeMapImgInfo.imageType = VK_IMAGE_TYPE_2D;
+            cubeMapImgInfo.format = VK_FORMAT_R32G32B32_SFLOAT;
+            cubeMapImgInfo.extent = extent;
+            cubeMapImgInfo.mipLevels = 1;
+            cubeMapImgInfo.arrayLayers = 6;
+            cubeMapImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+            cubeMapImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
+            cubeMapImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+            cubeMapImgInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+            cubeMapImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        }
+
+        VK_CHECK(vmaCreateImage(*m_pAllocator,
+            &cubeMapImgInfo,
+            &diffIrrAllocInfo,
+            &m_diffuseIrradianceCubemap,
+            &m_diffuseIrradianceCubemapAlloc,
+            nullptr));
+
+        VkImageViewCreateInfo info{};
+        {
+            info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            info.image = m_diffuseIrradianceCubemap;
+            info.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+            info.format = VK_FORMAT_R32G32B32_SFLOAT;
+            info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            info.subresourceRange.levelCount = 1;
+            info.subresourceRange.layerCount = 6;
+        }
+        VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_diffuseIrradianceCubemapImgView));
+
+        VkSamplerCreateInfo sampler_info{};
+        {
+            sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+            sampler_info.magFilter = VK_FILTER_LINEAR;
+            sampler_info.minFilter = VK_FILTER_LINEAR;
+            sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+            sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT; // outside image bounds just use border color
+            sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            sampler_info.minLod = -1000;
+            sampler_info.maxLod = 1000;
+            sampler_info.maxAnisotropy = 1.0f;
+        }
+        VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_diffuseIrradianceCubemapSampler));
     }
 
-    VkExtent3D extent{};
+    // Read in and init prefilter environment cubemap
     {
-        // extent.width = m_hdrImgWidth / 6;
-        // extent.height = m_hdrImgHeight;
-        extent.width = m_hdrImgWidth;
-        extent.height = m_hdrImgWidth;
-        extent.depth = 1;
+        std::string prefilterEnvPath = hdriFilePath + "iblOutput/prefilterEnvMaps/";
+        std::vector<std::string> mipImgNames;
+        SharedLib::GetAllFileNames(prefilterEnvPath, mipImgNames);
+
+        const uint32_t mipCnts = mipImgNames.size();
+
+        m_prefilterEnvCubemapImgsInfo.resize(mipCnts);
+
+        for (uint32_t i = 0; i < mipCnts; i++)
+        {
+            int width, height, nrComponents;
+            std::string prefilterEnvMipImgPathName = hdriFilePath +
+                                                     "iblOutput/prefilterEnvMaps/prefilterMip" +
+                                                     std::to_string(i) + ".hdr";
+
+            m_prefilterEnvCubemapImgsInfo[i].pData = stbi_loadf(prefilterEnvMipImgPathName.c_str(),
+                                                                &width, &height, &nrComponents, 0);
+            m_prefilterEnvCubemapImgsInfo[i].pixWith = width;
+            m_prefilterEnvCubemapImgsInfo[i].pixHeight = height;
+        }
+
+        VmaAllocationCreateInfo prefilterEnvCubemapAllocInfo{};
+        {
+            prefilterEnvCubemapAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+            prefilterEnvCubemapAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+        }
+
+        VkExtent3D extent{};
+        {
+            extent.width = m_prefilterEnvCubemapImgsInfo[0].pixWith;
+            extent.height = m_prefilterEnvCubemapImgsInfo[0].pixWith;
+            extent.depth = 1;
+        }
+
+        VkImageCreateInfo cubeMapImgInfo{};
+        {
+            cubeMapImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+            cubeMapImgInfo.imageType = VK_IMAGE_TYPE_2D;
+            cubeMapImgInfo.format = VK_FORMAT_R32G32B32_SFLOAT;
+            cubeMapImgInfo.extent = extent;
+            cubeMapImgInfo.mipLevels = mipCnts;
+            cubeMapImgInfo.arrayLayers = 6;
+            cubeMapImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+            cubeMapImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
+            cubeMapImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+            cubeMapImgInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+            cubeMapImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        }
+
+        VK_CHECK(vmaCreateImage(*m_pAllocator,
+            &cubeMapImgInfo,
+            &prefilterEnvCubemapAllocInfo,
+            &m_prefilterEnvCubemap,
+            &m_prefilterEnvCubemapAlloc,
+            nullptr));
+
+        VkImageViewCreateInfo info{};
+        {
+            info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            info.image = m_prefilterEnvCubemap;
+            info.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+            info.format = VK_FORMAT_R32G32B32_SFLOAT;
+            info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            info.subresourceRange.levelCount = mipCnts;
+            info.subresourceRange.layerCount = 6;
+        }
+        VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_diffuseIrradianceCubemapImgView));
+
+        VkSamplerCreateInfo sampler_info{};
+        {
+            sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+            sampler_info.magFilter = VK_FILTER_LINEAR;
+            sampler_info.minFilter = VK_FILTER_LINEAR;
+            sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+            sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT; // outside image bounds just use border color
+            sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            sampler_info.minLod = -1000;
+            sampler_info.maxLod = 1000;
+            sampler_info.maxAnisotropy = 1.0f;
+        }
+        VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_diffuseIrradianceCubemapSampler));
     }
 
-    VkImageCreateInfo cubeMapImgInfo{};
+    // Read in and init environment brdf map
     {
-        cubeMapImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-        cubeMapImgInfo.imageType = VK_IMAGE_TYPE_2D;
-        cubeMapImgInfo.format = VK_FORMAT_R32G32B32_SFLOAT;
-        cubeMapImgInfo.extent = extent;
-        cubeMapImgInfo.mipLevels = 1;
-        cubeMapImgInfo.arrayLayers = 6;
-        cubeMapImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-        cubeMapImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
-        cubeMapImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-        cubeMapImgInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-        cubeMapImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    }
+        std::string envBrdfMapPathName = hdriFilePath + "iblOutput/envBrdf.hdr";
+        int width, height, nrComponents;
+        m_envBrdfImgInfo.pData = stbi_loadf(envBrdfMapPathName.c_str(), &width, &height, &nrComponents, 0);
+        m_envBrdfImgInfo.pixWith = width;
+        m_envBrdfImgInfo.pixHeight = height;
 
-    VK_CHECK(vmaCreateImage(*m_pAllocator,
-                            &cubeMapImgInfo,
-                            &hdrAllocInfo,
-                            &m_hdrCubeMapImage,
-                            &m_hdrCubeMapAlloc,
-                            nullptr));
+        VmaAllocationCreateInfo envBrdfMapAllocInfo{};
+        {
+            envBrdfMapAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+            envBrdfMapAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+        }
 
-    VkImageViewCreateInfo info{};
-    {
-        info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        info.image = m_hdrCubeMapImage;
-        info.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
-        info.format = VK_FORMAT_R32G32B32_SFLOAT;
-        info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        info.subresourceRange.levelCount = 1;
-        info.subresourceRange.layerCount = 6;
-    }
-    VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_hdrCubeMapView));
+        VkExtent3D extent{};
+        {
+            extent.width = m_envBrdfImgInfo.pixWith;
+            extent.height = m_envBrdfImgInfo.pixHeight;
+            extent.depth = 1;
+        }
 
-    VkSamplerCreateInfo sampler_info{};
-    {
-        sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-        sampler_info.magFilter = VK_FILTER_LINEAR;
-        sampler_info.minFilter = VK_FILTER_LINEAR;
-        sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-        sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT; // outside image bounds just use border color
-        sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        sampler_info.minLod = -1000;
-        sampler_info.maxLod = 1000;
-        sampler_info.maxAnisotropy = 1.0f;
+        VkImageCreateInfo envBrdfImgInfo{};
+        {
+            envBrdfImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+            envBrdfImgInfo.imageType = VK_IMAGE_TYPE_2D;
+            envBrdfImgInfo.format = VK_FORMAT_R32G32B32_SFLOAT;
+            envBrdfImgInfo.extent = extent;
+            envBrdfImgInfo.mipLevels = 1;
+            envBrdfImgInfo.arrayLayers = 1;
+            envBrdfImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+            envBrdfImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
+            envBrdfImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+            envBrdfImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        }
+
+        VK_CHECK(vmaCreateImage(*m_pAllocator,
+            &envBrdfImgInfo,
+            &envBrdfMapAllocInfo,
+            &m_envBrdfImg,
+            &m_envBrdfImgAlloc,
+            nullptr));
+
+        VkImageViewCreateInfo info{};
+        {
+            info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            info.image = m_prefilterEnvCubemap;
+            info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            info.format = VK_FORMAT_R32G32B32_SFLOAT;
+            info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            info.subresourceRange.levelCount = 1;
+            info.subresourceRange.layerCount = 1;
+        }
+        VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_envBrdfImgView));
+
+        VkSamplerCreateInfo sampler_info{};
+        {
+            sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+            sampler_info.magFilter = VK_FILTER_LINEAR;
+            sampler_info.minFilter = VK_FILTER_LINEAR;
+            sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+            sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT; // outside image bounds just use border color
+            sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            sampler_info.minLod = -1000;
+            sampler_info.maxLod = 1000;
+            sampler_info.maxAnisotropy = 1.0f;
+        }
+        VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_envBrdfImgSampler));
     }
-    VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_hdrSampler));
 }
 
 // ================================================================================================================
@@ -375,6 +641,20 @@ void PBRIBLApp::InitSkyboxPipeline()
 }
 
 // ================================================================================================================
+void PBRIBLApp::DestroySkyboxPipelineRes()
+{
+    // Destroy shader modules
+    vkDestroyShaderModule(m_device, m_vsSkyboxShaderModule, nullptr);
+    vkDestroyShaderModule(m_device, m_psSkyboxShaderModule, nullptr);
+
+    // Destroy the pipeline layout
+    vkDestroyPipelineLayout(m_device, m_skyboxPipelineLayout, nullptr);
+
+    // Destroy the descriptor set layout
+    vkDestroyDescriptorSetLayout(m_device, m_skyboxPipelineDesSet0Layout, nullptr);
+}
+
+// ================================================================================================================
 void PBRIBLApp::AppInit()
 {
     glfwInit();
@@ -431,4 +711,50 @@ void PBRIBLApp::AppInit()
     InitCameraUboObjects();
     InitSkyboxPipelineDescriptorSets();
     InitSwapchainSyncObjects();
+}
+
+// ================================================================================================================
+void PBRIBLApp::InitIblPipeline()
+{
+
+}
+
+// ================================================================================================================
+void PBRIBLApp::InitIblPipelineDescriptorSetLayout()
+{
+
+}
+
+// ================================================================================================================
+void PBRIBLApp::InitIblPipelineLayout()
+{
+
+}
+
+// ================================================================================================================
+void PBRIBLApp::InitIblShaderModules()
+{
+
+}
+
+// ================================================================================================================
+void PBRIBLApp::InitIblPipelineDescriptorSets()
+{
+
+}
+
+// ================================================================================================================
+void PBRIBLApp::DestroyIblPipelineRes()
+{
+    /*
+    // Destroy shader modules
+    vkDestroyShaderModule(m_device, m_vsIblShaderModule, nullptr);
+    vkDestroyShaderModule(m_device, m_psIblShaderModule, nullptr);
+
+    // Destroy the pipeline layout
+    vkDestroyPipelineLayout(m_device, m_iblPipelineLayout, nullptr);
+
+    // Destroy the descriptor set layout
+    vkDestroyDescriptorSetLayout(m_device, m_iblPipelineDesSet0Layout, nullptr);
+    */
 }

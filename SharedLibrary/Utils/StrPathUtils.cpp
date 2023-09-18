@@ -1,4 +1,5 @@
 #include "StrPathUtils.h"
+#include <vector>
 #include <filesystem>
 #include <algorithm>
 
@@ -66,6 +67,16 @@ namespace SharedLib
 
             output = workPathStr + pathNameSubStr;
             return true;
+        }
+    }
+
+    void GetAllFileNames(
+        const std::string& dir,
+        std::vector<std::string>& outputVec)
+    {
+        for (const auto& entry : std::filesystem::directory_iterator(dir))
+        {
+            outputVec.push_back(entry.path().filename().string());
         }
     }
 }
