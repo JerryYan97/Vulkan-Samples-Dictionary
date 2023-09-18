@@ -31,6 +31,7 @@ public:
     VkImage GetCubeMapImage() { return m_hdrCubeMapImage; }
     VkExtent2D GetHdrImgExtent() 
         { return VkExtent2D{ m_hdrImgCubemap.pixWith, m_hdrImgCubemap.pixHeight }; }
+    ImgInfo GetBackgroundCubemapInfo() { return m_hdrImgCubemap; }
 
     VkFence GetFence(uint32_t i) { return m_inFlightFences[i]; }
 

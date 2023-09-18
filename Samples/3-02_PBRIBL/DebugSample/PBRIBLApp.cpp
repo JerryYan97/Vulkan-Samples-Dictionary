@@ -372,7 +372,7 @@ void PBRIBLApp::InitHdrRenderObjects()
             info.subresourceRange.levelCount = mipCnts;
             info.subresourceRange.layerCount = 6;
         }
-        VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_diffuseIrradianceCubemapImgView));
+        VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_prefilterEnvCubemapView));
 
         VkSamplerCreateInfo sampler_info{};
         {
@@ -387,7 +387,7 @@ void PBRIBLApp::InitHdrRenderObjects()
             sampler_info.maxLod = 1000;
             sampler_info.maxAnisotropy = 1.0f;
         }
-        VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_diffuseIrradianceCubemapSampler));
+        VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_prefilterEnvCubemapSampler));
     }
 
     // Read in and init environment brdf map
@@ -435,7 +435,7 @@ void PBRIBLApp::InitHdrRenderObjects()
         VkImageViewCreateInfo info{};
         {
             info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            info.image = m_prefilterEnvCubemap;
+            info.image = m_envBrdfImg;
             info.viewType = VK_IMAGE_VIEW_TYPE_2D;
             info.format = VK_FORMAT_R32G32B32_SFLOAT;
             info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;

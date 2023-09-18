@@ -2,6 +2,7 @@
 
 #include "PBRIBLApp.h"
 #include "../../../SharedLibrary/Utils/VulkanDbgUtils.h"
+#include "../../../SharedLibrary/Utils/CmdBufUtils.h"
 
 #include <vulkan/vulkan.h>
 
@@ -19,95 +20,64 @@ int main()
         swapchainPresentSubResRange.layerCount = 1;
     }
 
-    // Send the HDR cubemap image to GPU:
-    // - Copy RAM to GPU staging buffer;
-    // - Copy buffer to image;
+    // Send image and buffer data to GPU:
+    // - Copy background cubemap to vulkan image;
     // - Copy Camera parameters to the GPU buffer;
+    // - Copy IBL images to vulkan images;
     {
-        // Create the staging buffer
-        VkBuffer      stagingBuffer;
-        VmaAllocation stagingBufAlloc;
+        // Shared resources
         VmaAllocator* pAllocator = app.GetVmaAllocator();
         VkCommandBuffer stagingCmdBuffer = app.GetGfxCmdBuffer(0);
-        VkExtent2D hdrImgExtent = app.GetHdrImgExtent();
-        VkImage cubeMapImage = app.GetCubeMapImage();
-        VkFence stagingFence = app.GetFence(0);
+        VkQueue gfxQueue = app.GetGfxQueue();
+        VkExtent2D backgroundImgExtent = app.GetHdrImgExtent();
+        VkDevice device = app.GetVkDevice();
 
-        app.CreateVmaVkBuffer(VMA_MEMORY_USAGE_AUTO, 
-                              VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
-                              VK_SHARING_MODE_EXCLUSIVE,
-                              VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                              app.GetHdrByteNum(),
-                              &stagingBuffer,
-                              &stagingBufAlloc);
-
-        // Copy the RAM data to the staging buffer
-        app.CopyRamDataToGpuBuffer(app.GetHdrDataPointer(), stagingBuffer, stagingBufAlloc, app.GetHdrByteNum());
-
-        /* Send staging buffer data to the GPU image. */
-        VkCommandBufferBeginInfo beginInfo{};
-        {
-            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        }
-        VK_CHECK(vkBeginCommandBuffer(stagingCmdBuffer, &beginInfo));
+        // Background cubemap image info
+        ImgInfo backgroundCubemapImgInfo = app.GetBackgroundCubemapInfo();
+        VkExtent2D backgroundCubemapExtent = app.GetHdrImgExtent();
+        VkImage backgroundCubemapImage = app.GetCubeMapImage();
+        uint32_t backgroundCubemapDwords = 3 * backgroundCubemapExtent.width * backgroundCubemapExtent.height;
 
         // Cubemap's 6 layers SubresourceRange
-        VkImageSubresourceRange cubemapSubResRange{};
+        VkImageSubresourceRange backgroundCubemapSubResRange{};
         {
-            cubemapSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            cubemapSubResRange.baseMipLevel = 0;
-            cubemapSubResRange.levelCount = 1;
-            cubemapSubResRange.baseArrayLayer = 0;
-            cubemapSubResRange.layerCount = 6;
+            backgroundCubemapSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            backgroundCubemapSubResRange.baseMipLevel = 0;
+            backgroundCubemapSubResRange.levelCount = 1;
+            backgroundCubemapSubResRange.baseArrayLayer = 0;
+            backgroundCubemapSubResRange.layerCount = 6;
         }
-
-        // Transform the layout of the image to copy destination
-        VkImageMemoryBarrier hdrUndefToDstBarrier{};
-        {
-            hdrUndefToDstBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            hdrUndefToDstBarrier.image = cubeMapImage;
-            hdrUndefToDstBarrier.subresourceRange = cubemapSubResRange;
-            hdrUndefToDstBarrier.srcAccessMask = 0;
-            hdrUndefToDstBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            hdrUndefToDstBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-            hdrUndefToDstBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        }
-        
-        vkCmdPipelineBarrier(
-            stagingCmdBuffer,
-            VK_PIPELINE_STAGE_HOST_BIT, 
-            VK_PIPELINE_STAGE_TRANSFER_BIT,
-            0,
-            0, nullptr,
-            0, nullptr,
-            1, &hdrUndefToDstBarrier);
 
         // Copy the data from buffer to the image
         // - Our tool outputs vStrip, which is more convenient for IO. This example also uses vStrip.
-        VkBufferImageCopy hdrBufToImgCopie{};
+        VkBufferImageCopy backgroundBufToImgCopy{};
         {
             VkExtent3D extent{};
             {
-                extent.width = hdrImgExtent.width;
-                extent.height = hdrImgExtent.height / 6;
+                extent.width = backgroundImgExtent.width;
+                extent.height = backgroundImgExtent.height / 6;
                 extent.depth = 1;
             }
 
-            hdrBufToImgCopie.bufferRowLength = hdrImgExtent.width;
-            hdrBufToImgCopie.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            hdrBufToImgCopie.imageSubresource.mipLevel = 0;
-            hdrBufToImgCopie.imageSubresource.baseArrayLayer = 0;
-            hdrBufToImgCopie.imageSubresource.layerCount = 6;
-            hdrBufToImgCopie.imageExtent = extent;
+            backgroundBufToImgCopy.bufferRowLength = backgroundImgExtent.width;
+            backgroundBufToImgCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            backgroundBufToImgCopy.imageSubresource.mipLevel = 0;
+            backgroundBufToImgCopy.imageSubresource.baseArrayLayer = 0;
+            backgroundBufToImgCopy.imageSubresource.layerCount = 6;
+            backgroundBufToImgCopy.imageExtent = extent;
         }
 
-        vkCmdCopyBufferToImage(
-            stagingCmdBuffer,
-            stagingBuffer,
-            cubeMapImage,
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            1, &hdrBufToImgCopie);
-        
+        SharedLib::SendImgDataToGpu(stagingCmdBuffer, 
+                                    device,
+                                    gfxQueue,
+                                    backgroundCubemapImgInfo.pData,
+                                    backgroundCubemapDwords * sizeof(float),
+                                    app.GetCubeMapImage(),
+                                    backgroundCubemapSubResRange,
+                                    VK_IMAGE_LAYOUT_UNDEFINED,
+                                    backgroundBufToImgCopy,
+                                    *pAllocator);
+
         // - In the `cmftStudio`, you can choose hStrip. The code below is an example of using the hStrip.
         // - The buffer data of the image cannot be interleaved (The data of a separate image should be continues in the buffer address space.)
         // - However, our cubemap data (hStrip) is interleaved. 
@@ -145,12 +115,19 @@ int main()
             6, hdrBufToImgCopies);
         */
 
+        VkCommandBufferBeginInfo beginInfo{};
+        {
+            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        }
+        VK_CHECK(vkBeginCommandBuffer(stagingCmdBuffer, &beginInfo));
+
+
         // Transform the layout of the image to shader access resource
         VkImageMemoryBarrier hdrDstToShaderBarrier{};
         {
             hdrDstToShaderBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            hdrDstToShaderBarrier.image = cubeMapImage;
-            hdrDstToShaderBarrier.subresourceRange = cubemapSubResRange;
+            hdrDstToShaderBarrier.image = app.GetCubeMapImage();
+            hdrDstToShaderBarrier.subresourceRange = backgroundCubemapSubResRange;
             hdrDstToShaderBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
             hdrDstToShaderBarrier.dstAccessMask = VK_ACCESS_NONE;
             hdrDstToShaderBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
@@ -169,16 +146,15 @@ int main()
         // End the command buffer and submit the packets
         vkEndCommandBuffer(stagingCmdBuffer);
 
-        app.SubmitCmdBufToGfxQueue(stagingCmdBuffer, stagingFence);
-
-        // Destroy temp resources
-        vmaDestroyBuffer(*pAllocator, stagingBuffer, stagingBufAlloc);
+        SharedLib::SubmitCmdBufferAndWait(device, gfxQueue, stagingCmdBuffer);
 
         // Copy camera data to ubo buffer
         for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
         {
             app.SendCameraDataToBuffer(i);
         }
+
+        // Copy IBL images to VkImage
     }
 
     // Main Loop
