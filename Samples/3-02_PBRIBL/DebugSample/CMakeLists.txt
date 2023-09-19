@@ -15,6 +15,8 @@ include_directories(${StbImagePath})
 set(TinyObjPath ../../../ThirdPartyLibs/TinyObj)
 include_directories(${TinyObjPath})
 
+include_directories(../../../ThirdPartyLibs/RenderDoc/renderdoc/api/app)
+
 link_directories("$ENV{VULKAN_SDK}/lib")
 link_directories("../../../ThirdPartyLibs/glfw/build/src/Debug/")
 

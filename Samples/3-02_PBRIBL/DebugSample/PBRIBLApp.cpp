@@ -113,7 +113,7 @@ void PBRIBLApp::DestroyCameraUboObjects()
 // ================================================================================================================
 VkDeviceSize PBRIBLApp::GetHdrByteNum()
 {
-    return 3 * sizeof(float) * m_hdrImgCubemap.pixWith * m_hdrImgCubemap.pixHeight;
+    return 3 * sizeof(float) * m_hdrImgCubemap.pixWidth * m_hdrImgCubemap.pixHeight;
 }
 
 // ================================================================================================================
@@ -163,7 +163,7 @@ void PBRIBLApp::InitHdrRenderObjects()
         int width, height, nrComponents;
         m_hdrImgCubemap.pData = stbi_loadf(cubemapPathName.c_str(), &width, &height, &nrComponents, 0);
 
-        m_hdrImgCubemap.pixWith = (uint32_t)width;
+        m_hdrImgCubemap.pixWidth = (uint32_t)width;
         m_hdrImgCubemap.pixHeight = (uint32_t)height;
 
         VmaAllocationCreateInfo hdrAllocInfo{};
@@ -176,8 +176,8 @@ void PBRIBLApp::InitHdrRenderObjects()
         {
             // extent.width = m_hdrImgWidth / 6;
             // extent.height = m_hdrImgHeight;
-            extent.width = m_hdrImgCubemap.pixWith;
-            extent.height = m_hdrImgCubemap.pixWith;
+            extent.width = m_hdrImgCubemap.pixWidth;
+            extent.height = m_hdrImgCubemap.pixWidth;
             extent.depth = 1;
         }
 
@@ -238,7 +238,7 @@ void PBRIBLApp::InitHdrRenderObjects()
         m_diffuseIrradianceCubemapImgInfo.pData = stbi_loadf(diffIrradiancePathName.c_str(),
                                                              &width, &height, &nrComponents, 0);
 
-        m_diffuseIrradianceCubemapImgInfo.pixWith = (uint32_t)width;
+        m_diffuseIrradianceCubemapImgInfo.pixWidth = (uint32_t)width;
         m_diffuseIrradianceCubemapImgInfo.pixHeight = (uint32_t)height;
 
         VmaAllocationCreateInfo diffIrrAllocInfo{};
@@ -249,8 +249,8 @@ void PBRIBLApp::InitHdrRenderObjects()
 
         VkExtent3D extent{};
         {
-            extent.width = m_diffuseIrradianceCubemapImgInfo.pixWith;
-            extent.height = m_diffuseIrradianceCubemapImgInfo.pixWith;
+            extent.width = m_diffuseIrradianceCubemapImgInfo.pixWidth;
+            extent.height = m_diffuseIrradianceCubemapImgInfo.pixWidth;
             extent.depth = 1;
         }
 
@@ -323,7 +323,7 @@ void PBRIBLApp::InitHdrRenderObjects()
 
             m_prefilterEnvCubemapImgsInfo[i].pData = stbi_loadf(prefilterEnvMipImgPathName.c_str(),
                                                                 &width, &height, &nrComponents, 0);
-            m_prefilterEnvCubemapImgsInfo[i].pixWith = width;
+            m_prefilterEnvCubemapImgsInfo[i].pixWidth = width;
             m_prefilterEnvCubemapImgsInfo[i].pixHeight = height;
         }
 
@@ -335,8 +335,8 @@ void PBRIBLApp::InitHdrRenderObjects()
 
         VkExtent3D extent{};
         {
-            extent.width = m_prefilterEnvCubemapImgsInfo[0].pixWith;
-            extent.height = m_prefilterEnvCubemapImgsInfo[0].pixWith;
+            extent.width = m_prefilterEnvCubemapImgsInfo[0].pixWidth;
+            extent.height = m_prefilterEnvCubemapImgsInfo[0].pixWidth;
             extent.depth = 1;
         }
 
@@ -395,7 +395,7 @@ void PBRIBLApp::InitHdrRenderObjects()
         std::string envBrdfMapPathName = hdriFilePath + "iblOutput/envBrdf.hdr";
         int width, height, nrComponents;
         m_envBrdfImgInfo.pData = stbi_loadf(envBrdfMapPathName.c_str(), &width, &height, &nrComponents, 0);
-        m_envBrdfImgInfo.pixWith = width;
+        m_envBrdfImgInfo.pixWidth = width;
         m_envBrdfImgInfo.pixHeight = height;
 
         VmaAllocationCreateInfo envBrdfMapAllocInfo{};
@@ -406,7 +406,7 @@ void PBRIBLApp::InitHdrRenderObjects()
 
         VkExtent3D extent{};
         {
-            extent.width = m_envBrdfImgInfo.pixWith;
+            extent.width = m_envBrdfImgInfo.pixWidth;
             extent.height = m_envBrdfImgInfo.pixHeight;
             extent.depth = 1;
         }

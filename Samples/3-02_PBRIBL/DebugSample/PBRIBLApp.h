@@ -11,7 +11,7 @@ namespace SharedLib
 
 struct ImgInfo
 {
-    uint32_t pixWith;
+    uint32_t pixWidth;
     uint32_t pixHeight;
     float* pData;
 };
@@ -30,8 +30,14 @@ public:
     void* GetHdrDataPointer() { return m_hdrImgCubemap.pData; }
     VkImage GetCubeMapImage() { return m_hdrCubeMapImage; }
     VkExtent2D GetHdrImgExtent() 
-        { return VkExtent2D{ m_hdrImgCubemap.pixWith, m_hdrImgCubemap.pixHeight }; }
+        { return VkExtent2D{ m_hdrImgCubemap.pixWidth, m_hdrImgCubemap.pixHeight }; }
     ImgInfo GetBackgroundCubemapInfo() { return m_hdrImgCubemap; }
+    ImgInfo GetDiffuseIrradianceImgInfo() { return m_diffuseIrradianceCubemapImgInfo; }
+    VkImage GetDiffuseIrradianceCubemap() { return m_diffuseIrradianceCubemap; }
+    std::vector<ImgInfo> GetPrefilterEnvImgsInfo() { return m_prefilterEnvCubemapImgsInfo; }
+    VkImage GetPrefilterEnvCubemap() { return m_prefilterEnvCubemap; }
+    ImgInfo GetEnvBrdfImgInfo() { return m_envBrdfImgInfo; }
+    VkImage GetEnvBrdf() { return m_envBrdfImg; }
 
     VkFence GetFence(uint32_t i) { return m_inFlightFences[i]; }
 

@@ -4,7 +4,10 @@
 #include "../../../SharedLibrary/Utils/VulkanDbgUtils.h"
 #include "../../../SharedLibrary/Utils/CmdBufUtils.h"
 
+#include "renderdoc_app.h"
 #include <vulkan/vulkan.h>
+#include <Windows.h>
+#include <cassert>
 
 int main()
 {
@@ -18,6 +21,23 @@ int main()
         swapchainPresentSubResRange.levelCount = 1;
         swapchainPresentSubResRange.baseArrayLayer = 0;
         swapchainPresentSubResRange.layerCount = 1;
+    }
+
+    // RenderDoc debug starts
+    RENDERDOC_API_1_6_0* rdoc_api = NULL;
+    {
+        if (HMODULE mod = GetModuleHandleA("renderdoc.dll"))
+        {
+            pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
+            int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_6_0, (void**)&rdoc_api);
+            assert(ret == 1);
+        }
+
+        if (rdoc_api)
+        {
+            std::cout << "Frame capture starts." << std::endl;
+            rdoc_api->StartFrameCapture(NULL, NULL);
+        }
     }
 
     // Send image and buffer data to GPU:
@@ -36,16 +56,16 @@ int main()
         ImgInfo backgroundCubemapImgInfo = app.GetBackgroundCubemapInfo();
         VkExtent2D backgroundCubemapExtent = app.GetHdrImgExtent();
         VkImage backgroundCubemapImage = app.GetCubeMapImage();
-        uint32_t backgroundCubemapDwords = 3 * backgroundCubemapExtent.width * backgroundCubemapExtent.height;
+        const uint32_t backgroundCubemapDwords = 3 * backgroundCubemapExtent.width * backgroundCubemapExtent.height;
 
         // Cubemap's 6 layers SubresourceRange
-        VkImageSubresourceRange backgroundCubemapSubResRange{};
+        VkImageSubresourceRange cubemap1MipSubResRange{};
         {
-            backgroundCubemapSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            backgroundCubemapSubResRange.baseMipLevel = 0;
-            backgroundCubemapSubResRange.levelCount = 1;
-            backgroundCubemapSubResRange.baseArrayLayer = 0;
-            backgroundCubemapSubResRange.layerCount = 6;
+            cubemap1MipSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            cubemap1MipSubResRange.baseMipLevel = 0;
+            cubemap1MipSubResRange.levelCount = 1;
+            cubemap1MipSubResRange.baseArrayLayer = 0;
+            cubemap1MipSubResRange.layerCount = 6;
         }
 
         // Copy the data from buffer to the image
@@ -73,7 +93,7 @@ int main()
                                     backgroundCubemapImgInfo.pData,
                                     backgroundCubemapDwords * sizeof(float),
                                     app.GetCubeMapImage(),
-                                    backgroundCubemapSubResRange,
+                                    cubemap1MipSubResRange,
                                     VK_IMAGE_LAYOUT_UNDEFINED,
                                     backgroundBufToImgCopy,
                                     *pAllocator);
@@ -115,23 +135,183 @@ int main()
             6, hdrBufToImgCopies);
         */
 
+        // Copy IBL images to VkImage
+        // Diffuse Irradiance
+        ImgInfo diffIrrImgInfo = app.GetDiffuseIrradianceImgInfo();
+        VkImage diffIrrCubemap = app.GetDiffuseIrradianceCubemap();
+        const uint32_t diffIrrDwords = diffIrrImgInfo.pixWidth * diffIrrImgInfo.pixHeight * 3;
+
+        VkBufferImageCopy diffIrrBufToImgCopy{};
+        {
+            VkExtent3D extent{};
+            {
+                extent.width = diffIrrImgInfo.pixWidth;
+                extent.height = diffIrrImgInfo.pixWidth;
+                extent.depth = 1;
+            }
+
+            diffIrrBufToImgCopy.bufferRowLength = extent.width;
+            diffIrrBufToImgCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            diffIrrBufToImgCopy.imageSubresource.mipLevel = 0;
+            diffIrrBufToImgCopy.imageSubresource.baseArrayLayer = 0;
+            diffIrrBufToImgCopy.imageSubresource.layerCount = 6;
+            diffIrrBufToImgCopy.imageExtent = extent;
+        }
+
+        SharedLib::SendImgDataToGpu(stagingCmdBuffer, 
+                                    device,
+                                    gfxQueue,
+                                    diffIrrImgInfo.pData,
+                                    diffIrrDwords * sizeof(float),
+                                    diffIrrCubemap,
+                                    cubemap1MipSubResRange,
+                                    VK_IMAGE_LAYOUT_UNDEFINED,
+                                    diffIrrBufToImgCopy,
+                                    *pAllocator);
+
+        // Prefilter environment
+        std::vector<ImgInfo> prefilterEnvMips = app.GetPrefilterEnvImgsInfo();
+        VkImage prefilterEnvCubemap = app.GetPrefilterEnvCubemap();
+        const uint32_t mipLevelCnt = prefilterEnvMips.size();
+
+        for (uint32_t i = 0; i < prefilterEnvMips.size(); i++)
+        {
+            ImgInfo mipImgInfo = prefilterEnvMips[i];
+            uint32_t mipDwordsCnt = 3 * mipImgInfo.pixWidth * mipImgInfo.pixHeight;
+
+            VkImageSubresourceRange prefilterEnvMipISubResRange{};
+            {
+                prefilterEnvMipISubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                prefilterEnvMipISubResRange.baseMipLevel = i;
+                prefilterEnvMipISubResRange.levelCount = 1;
+                prefilterEnvMipISubResRange.baseArrayLayer = 0;
+                prefilterEnvMipISubResRange.layerCount = 6;
+            }
+
+            VkBufferImageCopy prefilterEnvMipIBufToImgCopy{};
+            {
+                VkExtent3D extent{};
+                {
+                    extent.width = mipImgInfo.pixWidth;
+                    extent.height = mipImgInfo.pixWidth;
+                    extent.depth = 1;
+                }
+
+                prefilterEnvMipIBufToImgCopy.bufferRowLength = mipImgInfo.pixWidth;
+                prefilterEnvMipIBufToImgCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                prefilterEnvMipIBufToImgCopy.imageSubresource.mipLevel = i;
+                prefilterEnvMipIBufToImgCopy.imageSubresource.baseArrayLayer = 0;
+                prefilterEnvMipIBufToImgCopy.imageSubresource.layerCount = 6;
+                prefilterEnvMipIBufToImgCopy.imageExtent = extent;
+            }
+
+            SharedLib::SendImgDataToGpu(stagingCmdBuffer,
+                                        device,
+                                        gfxQueue,
+                                        mipImgInfo.pData,
+                                        mipDwordsCnt * sizeof(float),
+                                        prefilterEnvCubemap,
+                                        prefilterEnvMipISubResRange,
+                                        VK_IMAGE_LAYOUT_UNDEFINED,
+                                        prefilterEnvMipIBufToImgCopy,
+                                        *pAllocator);
+        }
+
+        // Environment BRDF
+        ImgInfo envBrdfImgInfo = app.GetEnvBrdfImgInfo();
+        VkImage envBrdfImg = app.GetEnvBrdf();
+        const uint32_t envBrdfDwordsCnt = 3 * envBrdfImgInfo.pixHeight * envBrdfImgInfo.pixWidth;
+
+        // The envBrdf 2D texture SubresourceRange
+        VkImageSubresourceRange tex2dSubResRange{};
+        {
+            tex2dSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            tex2dSubResRange.baseMipLevel = 0;
+            tex2dSubResRange.levelCount = 1;
+            tex2dSubResRange.baseArrayLayer = 0;
+            tex2dSubResRange.layerCount = 1;
+        }
+
+        VkBufferImageCopy envBrdfBufToImgCopy{};
+        {
+            VkExtent3D extent{};
+            {
+                extent.width = envBrdfImgInfo.pixWidth;
+                extent.height = envBrdfImgInfo.pixWidth;
+                extent.depth = 1;
+            }
+
+            envBrdfBufToImgCopy.bufferRowLength = extent.width;
+            envBrdfBufToImgCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            envBrdfBufToImgCopy.imageSubresource.mipLevel = 0;
+            envBrdfBufToImgCopy.imageSubresource.baseArrayLayer = 0;
+            envBrdfBufToImgCopy.imageSubresource.layerCount = 1;
+            envBrdfBufToImgCopy.imageExtent = extent;
+        }
+
+        SharedLib::SendImgDataToGpu(stagingCmdBuffer, 
+                                    device,
+                                    gfxQueue,
+                                    envBrdfImgInfo.pData,
+                                    envBrdfDwordsCnt * sizeof(float),
+                                    envBrdfImg,
+                                    tex2dSubResRange,
+                                    VK_IMAGE_LAYOUT_UNDEFINED,
+                                    envBrdfBufToImgCopy,
+                                    *pAllocator);
+
+
+        // Transform all images layout to shader read optimal.
         VkCommandBufferBeginInfo beginInfo{};
         {
             beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         }
         VK_CHECK(vkBeginCommandBuffer(stagingCmdBuffer, &beginInfo));
 
-
         // Transform the layout of the image to shader access resource
-        VkImageMemoryBarrier hdrDstToShaderBarrier{};
+        VkImageMemoryBarrier imgResMemBarriers[4] = {};
         {
-            hdrDstToShaderBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            hdrDstToShaderBarrier.image = app.GetCubeMapImage();
-            hdrDstToShaderBarrier.subresourceRange = backgroundCubemapSubResRange;
-            hdrDstToShaderBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            hdrDstToShaderBarrier.dstAccessMask = VK_ACCESS_NONE;
-            hdrDstToShaderBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-            hdrDstToShaderBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            // Background cubemap
+            imgResMemBarriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            imgResMemBarriers[0].image = app.GetCubeMapImage();
+            imgResMemBarriers[0].subresourceRange = cubemap1MipSubResRange;
+            imgResMemBarriers[0].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            imgResMemBarriers[0].dstAccessMask = VK_ACCESS_NONE;
+            imgResMemBarriers[0].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            imgResMemBarriers[0].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+            // Diffuse irradiance
+            imgResMemBarriers[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            imgResMemBarriers[1].image = diffIrrCubemap;
+            imgResMemBarriers[1].subresourceRange = cubemap1MipSubResRange;
+            imgResMemBarriers[1].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            imgResMemBarriers[1].dstAccessMask = VK_ACCESS_NONE;
+            imgResMemBarriers[1].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            imgResMemBarriers[1].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+            // Prefilter environment map
+            imgResMemBarriers[2].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            imgResMemBarriers[2].image = prefilterEnvCubemap;
+            {
+                imgResMemBarriers[2].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                imgResMemBarriers[2].subresourceRange.baseArrayLayer = 0;
+                imgResMemBarriers[2].subresourceRange.layerCount = 6;
+                imgResMemBarriers[2].subresourceRange.baseMipLevel = 0;
+                imgResMemBarriers[2].subresourceRange.levelCount = mipLevelCnt;
+            }
+            imgResMemBarriers[2].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            imgResMemBarriers[2].dstAccessMask = VK_ACCESS_NONE;
+            imgResMemBarriers[2].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            imgResMemBarriers[2].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+            // Environment brdf
+            imgResMemBarriers[3].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            imgResMemBarriers[3].image = envBrdfImg;
+            imgResMemBarriers[3].subresourceRange = tex2dSubResRange;
+            imgResMemBarriers[3].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            imgResMemBarriers[3].dstAccessMask = VK_ACCESS_NONE;
+            imgResMemBarriers[3].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            imgResMemBarriers[3].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         }
 
         vkCmdPipelineBarrier(
@@ -141,7 +321,7 @@ int main()
             0,
             0, nullptr,
             0, nullptr,
-            1, &hdrDstToShaderBarrier);
+            4, imgResMemBarriers);
 
         // End the command buffer and submit the packets
         vkEndCommandBuffer(stagingCmdBuffer);
@@ -153,9 +333,16 @@ int main()
         {
             app.SendCameraDataToBuffer(i);
         }
-
-        // Copy IBL images to VkImage
     }
+
+    // End RenderDoc debug
+    if (rdoc_api)
+    {
+        std::cout << "Frame capture ends." << std::endl;
+        rdoc_api->EndFrameCapture(NULL, NULL);
+    }
+
+    /**/
 
     // Main Loop
     // Two draws. First draw draws triangle into an image with window 1 window size.
