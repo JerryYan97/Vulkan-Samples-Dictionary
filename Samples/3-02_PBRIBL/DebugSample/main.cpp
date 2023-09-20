@@ -426,6 +426,7 @@ int main()
 
         vkCmdBeginRendering(currentCmdBuffer, &renderInfo);
 
+        // Render background cubemap
         // Bind the skybox pipeline descriptor sets
         vkCmdBindDescriptorSets(currentCmdBuffer,
                                 VK_PIPELINE_BIND_POINT_GRAPHICS, 
@@ -456,6 +457,9 @@ int main()
         }
 
         vkCmdDraw(currentCmdBuffer, 6, 1, 0, 0);
+
+        // Render spheres
+
 
         vkCmdEndRendering(currentCmdBuffer);
 

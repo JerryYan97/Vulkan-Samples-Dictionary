@@ -76,6 +76,7 @@ PBRIBLApp::~PBRIBLApp()
     vkDeviceWaitIdle(m_device);
     delete m_pCamera;
 
+    DestroyVpMatBuffer();
     DestroyHdrRenderObjs();
     DestroyCameraUboObjects();
 
@@ -852,31 +853,156 @@ void PBRIBLApp::InitIblPipeline()
 // ================================================================================================================
 void PBRIBLApp::InitIblPipelineDescriptorSetLayout()
 {
+    // Create pipeline binding and descriptor objects for the camera parameters
+    VkDescriptorSetLayoutBinding vpMatUboBinding{};
+    {
+        vpMatUboBinding.binding = 0;
+        vpMatUboBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        vpMatUboBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        vpMatUboBinding.descriptorCount = 1;
+    }
 
+    VkDescriptorSetLayoutBinding diffuseIrradianceBinding{};
+    {
+        diffuseIrradianceBinding.binding = 1;
+        diffuseIrradianceBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        diffuseIrradianceBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        diffuseIrradianceBinding.descriptorCount = 1;
+    }
+
+    VkDescriptorSetLayoutBinding prefilterEnvBinding{};
+    {
+        prefilterEnvBinding.binding = 2;
+        prefilterEnvBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        prefilterEnvBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        prefilterEnvBinding.descriptorCount = 1;
+    }
+
+    VkDescriptorSetLayoutBinding envBrdfBinding{};
+    {
+        envBrdfBinding.binding = 3;
+        envBrdfBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        envBrdfBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        envBrdfBinding.descriptorCount = 1;
+    }
+
+    // Create pipeline's descriptors layout
+    // The Vulkan spec states: The VkDescriptorSetLayoutBinding::binding members of the elements of the pBindings array 
+    // must each have different values 
+    // (https://vulkan.lunarg.com/doc/view/1.3.236.0/windows/1.3-extensions/vkspec.html#VUID-VkDescriptorSetLayoutCreateInfo-binding-00279)
+    VkDescriptorSetLayoutBinding pipelineDesSetLayoutBindings[4] = { vpMatUboBinding,
+                                                                     diffuseIrradianceBinding,
+                                                                     prefilterEnvBinding,
+                                                                     envBrdfBinding };
+
+    VkDescriptorSetLayoutCreateInfo pipelineDesSetLayoutInfo{};
+    {
+        pipelineDesSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        pipelineDesSetLayoutInfo.bindingCount = 4;
+        pipelineDesSetLayoutInfo.pBindings = pipelineDesSetLayoutBindings;
+    }
+
+    VK_CHECK(vkCreateDescriptorSetLayout(m_device,
+                                         &pipelineDesSetLayoutInfo,
+                                         nullptr,
+                                         &m_iblPipelineDesSet0Layout));
 }
 
 // ================================================================================================================
 void PBRIBLApp::InitIblPipelineLayout()
 {
+    // Create pipeline layout
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+    {
+        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        pipelineLayoutInfo.setLayoutCount = 1;
+        pipelineLayoutInfo.pSetLayouts = &m_iblPipelineDesSet0Layout;
+        pipelineLayoutInfo.pushConstantRangeCount = 0;
+    }
 
+    VK_CHECK(vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_iblPipelineLayout));
 }
 
 // ================================================================================================================
 void PBRIBLApp::InitIblShaderModules()
 {
-
+    m_vsIblShaderModule = CreateShaderModule("./hlsl/ibl_vert.spv");
+    m_psIblShaderModule = CreateShaderModule("./hlsl/ibl_frag.spv");
 }
 
 // ================================================================================================================
 void PBRIBLApp::InitIblPipelineDescriptorSets()
 {
+    // Create pipeline descirptor
+    VkDescriptorSetAllocateInfo pipelineDesSet0AllocInfo{};
+    {
+        pipelineDesSet0AllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        pipelineDesSet0AllocInfo.descriptorPool = m_descriptorPool;
+        pipelineDesSet0AllocInfo.pSetLayouts = &m_iblPipelineDesSet0Layout;
+        pipelineDesSet0AllocInfo.descriptorSetCount = 1;
+    }
 
+    VK_CHECK(vkAllocateDescriptorSets(m_device,
+                                      &pipelineDesSet0AllocInfo,
+                                      &m_iblPipelineDescriptorSet0));
+
+    // Link descriptors to the buffer and image
+    VkDescriptorBufferInfo vpMatDesBufInfo{};
+    {
+        vpMatDesBufInfo.buffer = m_vpMatUboBuffer;
+        vpMatDesBufInfo.offset = 0;
+        vpMatDesBufInfo.range = VpMatBytesCnt;
+    }
+
+    VkDescriptorImageInfo diffIrrDesImgInfo{};
+    {
+        diffIrrDesImgInfo.imageView = m_diffuseIrradianceCubemapImgView;
+        diffIrrDesImgInfo.sampler = m_diffuseIrradianceCubemapSampler;
+        diffIrrDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    }
+
+    VkDescriptorImageInfo prefilterEnvDesImgInfo{};
+    {
+        prefilterEnvDesImgInfo.imageView = m_prefilterEnvCubemapView;
+        prefilterEnvDesImgInfo.sampler = m_prefilterEnvCubemapSampler;
+        prefilterEnvDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    }
+
+    VkDescriptorImageInfo envBrdfDesImgInfo{};
+    {
+        envBrdfDesImgInfo.imageView = m_envBrdfImgView;
+        envBrdfDesImgInfo.sampler = m_envBrdfImgSampler;
+        envBrdfDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    }
+
+    VkWriteDescriptorSet writeUboBufDesSet{};
+    {
+        writeUboBufDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeUboBufDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        writeUboBufDesSet.dstSet = m_diffIrrPreFilterEnvMapDesSet0;
+        writeUboBufDesSet.dstBinding = 1;
+        writeUboBufDesSet.descriptorCount = 1;
+        writeUboBufDesSet.pBufferInfo = &cameraScreenBufferInfo;
+    }
+
+    VkWriteDescriptorSet writeHdrDesSet{};
+    {
+        writeHdrDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeHdrDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writeHdrDesSet.dstSet = m_diffIrrPreFilterEnvMapDesSet0;
+        writeHdrDesSet.dstBinding = 0;
+        writeHdrDesSet.pImageInfo = &hdriDesImgInfo;
+        writeHdrDesSet.descriptorCount = 1;
+    }
+
+    // Linking pipeline descriptors: cubemap and scene buffer descriptors to their GPU memory and info.
+    VkWriteDescriptorSet writeSkyboxPipelineDescriptors[2] = { writeHdrDesSet, writeUboBufDesSet };
+    vkUpdateDescriptorSets(m_device, 2, writeSkyboxPipelineDescriptors, 0, NULL);
 }
 
 // ================================================================================================================
 void PBRIBLApp::DestroyIblPipelineRes()
 {
-    /*
     // Destroy shader modules
     vkDestroyShaderModule(m_device, m_vsIblShaderModule, nullptr);
     vkDestroyShaderModule(m_device, m_psIblShaderModule, nullptr);
@@ -886,5 +1012,12 @@ void PBRIBLApp::DestroyIblPipelineRes()
 
     // Destroy the descriptor set layout
     vkDestroyDescriptorSetLayout(m_device, m_iblPipelineDesSet0Layout, nullptr);
-    */
 }
+
+// ================================================================================================================
+void PBRIBLApp::InitVpMatBuffer()
+{}
+
+// ================================================================================================================
+void PBRIBLApp::DestroyVpMatBuffer()
+{}

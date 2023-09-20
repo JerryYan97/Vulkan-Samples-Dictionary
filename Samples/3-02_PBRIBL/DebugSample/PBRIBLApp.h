@@ -16,6 +16,8 @@ struct ImgInfo
     float* pData;
 };
 
+const uint32_t VpMatBytesCnt = 4 * 4 * sizeof(float);
+
 class PBRIBLApp : public SharedLib::GlfwApplication
 {
 public:
@@ -73,6 +75,9 @@ private:
     void InitIblPipelineDescriptorSets();
     void DestroyIblPipelineRes();
 
+    void InitVpMatBuffer();
+    void DestroyVpMatBuffer();
+
     // Shared resources init and destroy.
     void InitHdrRenderObjects();
     void InitCameraUboObjects();
@@ -94,6 +99,9 @@ private:
     VkBuffer              m_idxBuffer;
     VmaAllocation         m_idxBufferAlloc;
 
+    VkBuffer      m_vpMatUboBuffer;
+    VmaAllocation m_vpMatUboAlloc;
+
     SharedLib::Camera*           m_pCamera;
     std::vector<VkBuffer>        m_cameraParaBuffers;
     std::vector<VmaAllocation>   m_cameraParaBufferAllocs;
@@ -110,6 +118,7 @@ private:
     VkShaderModule        m_psIblShaderModule;
     VkDescriptorSetLayout m_iblPipelineDesSet0Layout;
     VkPipelineLayout      m_iblPipelineLayout;
+    VkDescriptorSet       m_iblPipelineDescriptorSet0;
     SharedLib::Pipeline   m_iblPipeline;
 
     VkImage       m_diffuseIrradianceCubemap;
