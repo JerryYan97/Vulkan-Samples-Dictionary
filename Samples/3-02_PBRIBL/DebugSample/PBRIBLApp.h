@@ -53,6 +53,10 @@ public:
     void SendCameraDataToBuffer(uint32_t i);
 
 private:
+    // Init mesh data
+    void InitSphereVertexIndexBuffers();
+    void DestroySphereVertexIndexBuffers();
+
     // Skybox pipeline resources init.
     void InitSkyboxPipeline();
     void InitSkyboxPipelineDescriptorSetLayout();
@@ -82,6 +86,13 @@ private:
     VmaAllocation   m_hdrCubeMapAlloc;
 
     ImgInfo m_hdrImgCubemap;
+
+    std::vector<float>    m_vertBufferData;
+    std::vector<uint32_t> m_idxBufferData;
+    VkBuffer              m_vertBuffer;
+    VmaAllocation         m_vertBufferAlloc;
+    VkBuffer              m_idxBuffer;
+    VmaAllocation         m_idxBufferAlloc;
 
     SharedLib::Camera*           m_pCamera;
     std::vector<VkBuffer>        m_cameraParaBuffers;
