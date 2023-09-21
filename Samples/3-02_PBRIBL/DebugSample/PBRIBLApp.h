@@ -52,6 +52,16 @@ public:
 
     void GetCameraData(float* pBuffer);
 
+    VkDescriptorSet GetIblCurrentFrameDescriptorSet0() 
+        { return m_iblPipelineDescriptorSet0s[m_currentFrame]; }
+
+    VkBuffer GetIblVertBuffer() { return m_vertBuffer; }
+    VkBuffer GetIblIdxBuffer() { return m_idxBuffer; }
+    uint32_t GetIdxCnt() { return m_idxBufferData.size(); }
+
+    VkPipeline GetIblPipeline() { return m_iblPipeline.GetVkPipeline(); }
+    VkPipelineLayout GetIblPipelineLayout() { return m_iblPipelineLayout; }
+    
     void SendCameraDataToBuffer(uint32_t i);
 
 private:

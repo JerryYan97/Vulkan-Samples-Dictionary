@@ -353,7 +353,10 @@ int main()
         VkFence inFlightFence = app.GetCurrentFrameFence();
         VkCommandBuffer currentCmdBuffer = app.GetCurrentFrameGfxCmdBuffer();
         VkDescriptorSet currentSkyboxPipelineDesSet0 = app.GetSkyboxCurrentFrameDescriptorSet0();
+        VkDescriptorSet currentIblPipelineDesSet0 = app.GetIblCurrentFrameDescriptorSet0();
         VkExtent2D swapchainImageExtent = app.GetSwapchainImageExtent();
+        VkBuffer vertBuffer = app.GetIblVertBuffer();
+        VkBuffer idxBuffer = app.GetIblIdxBuffer();
 
         app.FrameStart();
 
@@ -422,6 +425,7 @@ int main()
             renderInfo.layerCount = 1;
             renderInfo.colorAttachmentCount = 1;
             renderInfo.pColorAttachments = &renderAttachmentInfo;
+            renderInfo.pDepthAttachment = nullptr; // TODO: Rendering sphere needs a depth attachment.
         }
 
         vkCmdBeginRendering(currentCmdBuffer, &renderInfo);
@@ -453,13 +457,37 @@ int main()
         {
             scissor.offset = { 0, 0 };
             scissor.extent = swapchainImageExtent;
-            vkCmdSetScissor(currentCmdBuffer, 0, 1, &scissor);
         }
+        vkCmdSetScissor(currentCmdBuffer, 0, 1, &scissor);
 
         vkCmdDraw(currentCmdBuffer, 6, 1, 0, 0);
 
         // Render spheres
+        // Let IBL render in the color attachment after the skybox rendering completes.
+        vkCmdPipelineBarrier(currentCmdBuffer,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            0,
+            0, nullptr,
+            0, nullptr,
+            0, nullptr);
 
+        vkCmdBindDescriptorSets(currentCmdBuffer,
+                                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                app.GetIblPipelineLayout(),
+                                0, 1, &currentIblPipelineDesSet0, 0, NULL);
+
+        // Bind the graphics pipeline
+        vkCmdBindPipeline(currentCmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, app.GetIblPipeline());
+
+        vkCmdSetViewport(currentCmdBuffer, 0, 1, &viewport);
+        vkCmdSetScissor(currentCmdBuffer, 0, 1, &scissor);
+
+        VkDeviceSize vbOffset = 0;
+        vkCmdBindVertexBuffers(currentCmdBuffer, 0, 1, &vertBuffer, &vbOffset);
+        vkCmdBindIndexBuffer(currentCmdBuffer, idxBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+        vkCmdDrawIndexed(currentCmdBuffer, app.GetIdxCnt(), 14, 0, 0, 0);
 
         vkCmdEndRendering(currentCmdBuffer);
 
