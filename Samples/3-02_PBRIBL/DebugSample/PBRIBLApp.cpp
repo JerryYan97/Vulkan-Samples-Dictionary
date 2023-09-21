@@ -721,9 +721,15 @@ void PBRIBLApp::AppInit()
     InitSkyboxPipelineLayout();
     InitSkyboxPipeline();
 
+    InitIblShaderModules();
+    InitIblPipelineDescriptorSetLayout();
+    InitIblPipelineLayout();
+    InitIblPipeline();
+
     InitHdrRenderObjects();
     InitCameraUboObjects();
     InitSkyboxPipelineDescriptorSets();
+    InitIblPipelineDescriptorSets();
     InitSwapchainSyncObjects();
 }
 
@@ -853,6 +859,7 @@ void PBRIBLApp::InitIblPipeline()
         pipelineRenderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
         pipelineRenderCreateInfo.colorAttachmentCount = 1;
         pipelineRenderCreateInfo.pColorAttachmentFormats = &m_choisenSurfaceFormat.format;
+        pipelineRenderCreateInfo.depthAttachmentFormat = VK_FORMAT_D16_UNORM;
     }
 
     m_iblPipeline.SetPNext(&pipelineRenderCreateInfo);
@@ -860,6 +867,12 @@ void PBRIBLApp::InitIblPipeline()
     VkPipelineShaderStageCreateInfo shaderStgsInfo[2] = {};
     shaderStgsInfo[0] = CreateDefaultShaderStgCreateInfo(m_vsIblShaderModule, VK_SHADER_STAGE_VERTEX_BIT);
     shaderStgsInfo[1] = CreateDefaultShaderStgCreateInfo(m_psIblShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT);
+
+    VkPipelineVertexInputStateCreateInfo vertInputInfo = CreatePipelineVertexInputInfo();
+    m_iblPipeline.SetVertexInputInfo(&vertInputInfo);
+
+    VkPipelineDepthStencilStateCreateInfo depthStencilInfo = CreateDepthStencilStateInfo();
+    m_iblPipeline.SetDepthStencilStateInfo(&depthStencilInfo);
 
     m_iblPipeline.SetShaderStageInfo(shaderStgsInfo, 2);
     m_iblPipeline.SetPipelineLayout(m_iblPipelineLayout);
@@ -979,6 +992,8 @@ void PBRIBLApp::InitIblPipelineDescriptorSets()
         envBrdfDesImgInfo.sampler = m_envBrdfImgSampler;
         envBrdfDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     }
+
+    m_iblPipelineDescriptorSet0s.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
 
     for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
     {
@@ -1106,4 +1121,63 @@ void PBRIBLApp::DestroyVpMatBuffer()
     {
         vmaDestroyBuffer(*m_pAllocator, m_vpMatUboBuffer[i], m_vpMatUboAlloc[i]);
     }
+}
+
+// ================================================================================================================
+VkPipelineVertexInputStateCreateInfo PBRIBLApp::CreatePipelineVertexInputInfo()
+{
+    // Specifying all kinds of pipeline states
+    // Vertex input state
+    VkVertexInputBindingDescription* pVertBindingDesc = new VkVertexInputBindingDescription();
+    memset(pVertBindingDesc, 0, sizeof(VkVertexInputBindingDescription));
+    {
+        pVertBindingDesc->binding = 0;
+        pVertBindingDesc->stride = 6 * sizeof(float);
+        pVertBindingDesc->inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    }
+    m_heapMemPtrVec.push_back(pVertBindingDesc);
+
+    VkVertexInputAttributeDescription* pVertAttrDescs = new VkVertexInputAttributeDescription[2];
+    memset(pVertAttrDescs, 0, sizeof(VkVertexInputAttributeDescription) * 2);
+    {
+        // Position
+        pVertAttrDescs[0].location = 0;
+        pVertAttrDescs[0].binding = 0;
+        pVertAttrDescs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+        pVertAttrDescs[0].offset = 0;
+        // Normal
+        pVertAttrDescs[1].location = 1;
+        pVertAttrDescs[1].binding = 0;
+        pVertAttrDescs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+        pVertAttrDescs[1].offset = 3 * sizeof(float);
+    }
+    m_heapArrayMemPtrVec.push_back(pVertAttrDescs);
+
+    VkPipelineVertexInputStateCreateInfo vertInputInfo{};
+    {
+        vertInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        vertInputInfo.pNext = nullptr;
+        vertInputInfo.vertexBindingDescriptionCount = 1;
+        vertInputInfo.pVertexBindingDescriptions = pVertBindingDesc;
+        vertInputInfo.vertexAttributeDescriptionCount = 2;
+        vertInputInfo.pVertexAttributeDescriptions = pVertAttrDescs;
+    }
+
+    return vertInputInfo;
+}
+
+// ================================================================================================================
+VkPipelineDepthStencilStateCreateInfo PBRIBLApp::CreateDepthStencilStateInfo()
+{
+    VkPipelineDepthStencilStateCreateInfo depthStencilInfo{};
+    {
+        depthStencilInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+        depthStencilInfo.depthTestEnable = VK_TRUE;
+        depthStencilInfo.depthWriteEnable = VK_TRUE;
+        depthStencilInfo.depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL; // Reverse depth for higher precision. 
+        depthStencilInfo.depthBoundsTestEnable = VK_FALSE;
+        depthStencilInfo.stencilTestEnable = VK_FALSE;
+    }
+
+    return depthStencilInfo;
 }

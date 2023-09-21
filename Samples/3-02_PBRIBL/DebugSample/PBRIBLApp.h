@@ -65,6 +65,9 @@ public:
     void SendCameraDataToBuffer(uint32_t i);
 
 private:
+    VkPipelineVertexInputStateCreateInfo CreatePipelineVertexInputInfo();
+    VkPipelineDepthStencilStateCreateInfo CreateDepthStencilStateInfo();
+
     // Init mesh data
     void InitSphereVertexIndexBuffers();
     void DestroySphereVertexIndexBuffers();

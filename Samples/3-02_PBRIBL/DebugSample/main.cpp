@@ -407,28 +407,49 @@ int main()
         // Draw the scene
         VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
 
-        VkRenderingAttachmentInfoKHR renderAttachmentInfo{};
+        VkRenderingAttachmentInfoKHR renderBackgroundAttachmentInfo{};
         {
-            renderAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-            renderAttachmentInfo.imageView = app.GetSwapchainColorImageView(imageIndex);
-            renderAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
-            renderAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            renderAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-            renderAttachmentInfo.clearValue = clearColor;
+            renderBackgroundAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+            renderBackgroundAttachmentInfo.imageView = app.GetSwapchainColorImageView(imageIndex);
+            renderBackgroundAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
+            renderBackgroundAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            renderBackgroundAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            renderBackgroundAttachmentInfo.clearValue = clearColor;
         }
 
-        VkRenderingInfoKHR renderInfo{};
+        VkRenderingAttachmentInfoKHR renderSpheresAttachmentInfo{};
         {
-            renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
-            renderInfo.renderArea.offset = { 0, 0 };
-            renderInfo.renderArea.extent = swapchainImageExtent;
-            renderInfo.layerCount = 1;
-            renderInfo.colorAttachmentCount = 1;
-            renderInfo.pColorAttachments = &renderAttachmentInfo;
-            renderInfo.pDepthAttachment = nullptr; // TODO: Rendering sphere needs a depth attachment.
+            renderSpheresAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+            renderSpheresAttachmentInfo.imageView = app.GetSwapchainColorImageView(imageIndex);
+            renderSpheresAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
+            renderSpheresAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+            renderSpheresAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            renderSpheresAttachmentInfo.clearValue = clearColor;
         }
 
-        vkCmdBeginRendering(currentCmdBuffer, &renderInfo);
+        VkClearValue depthClearVal{};
+        depthClearVal.depthStencil.depth = 0.f;
+        VkRenderingAttachmentInfoKHR depthAttachmentInfo{};
+        {
+            depthAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+            depthAttachmentInfo.imageView = app.GetSwapchainDepthImageView(imageIndex);
+            depthAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
+            depthAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            depthAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            depthAttachmentInfo.clearValue = depthClearVal;
+        }
+
+        VkRenderingInfoKHR renderBackgroundInfo{};
+        {
+            renderBackgroundInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+            renderBackgroundInfo.renderArea.offset = { 0, 0 };
+            renderBackgroundInfo.renderArea.extent = swapchainImageExtent;
+            renderBackgroundInfo.layerCount = 1;
+            renderBackgroundInfo.colorAttachmentCount = 1;
+            renderBackgroundInfo.pColorAttachments = &renderBackgroundAttachmentInfo;
+        }
+
+        vkCmdBeginRendering(currentCmdBuffer, &renderBackgroundInfo);
 
         // Render background cubemap
         // Bind the skybox pipeline descriptor sets
@@ -462,6 +483,8 @@ int main()
 
         vkCmdDraw(currentCmdBuffer, 6, 1, 0, 0);
 
+        vkCmdEndRendering(currentCmdBuffer);
+
         // Render spheres
         // Let IBL render in the color attachment after the skybox rendering completes.
         vkCmdPipelineBarrier(currentCmdBuffer,
@@ -476,6 +499,19 @@ int main()
                                 VK_PIPELINE_BIND_POINT_GRAPHICS,
                                 app.GetIblPipelineLayout(),
                                 0, 1, &currentIblPipelineDesSet0, 0, NULL);
+
+        VkRenderingInfoKHR renderSpheresInfo{};
+        {
+            renderSpheresInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+            renderSpheresInfo.renderArea.offset = { 0, 0 };
+            renderSpheresInfo.renderArea.extent = swapchainImageExtent;
+            renderSpheresInfo.layerCount = 1;
+            renderSpheresInfo.colorAttachmentCount = 1;
+            renderSpheresInfo.pColorAttachments = &renderSpheresAttachmentInfo;
+            renderSpheresInfo.pDepthAttachment = &depthAttachmentInfo;
+        }
+
+        vkCmdBeginRendering(currentCmdBuffer, &renderSpheresInfo);
 
         // Bind the graphics pipeline
         vkCmdBindPipeline(currentCmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, app.GetIblPipeline());
