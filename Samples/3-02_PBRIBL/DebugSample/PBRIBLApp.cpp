@@ -713,6 +713,7 @@ void PBRIBLApp::AppInit()
 
     InitSwapchain();
     InitSphereVertexIndexBuffers();
+    InitVpMatBuffer();
 
     // Create the graphics pipeline
     InitSkyboxShaderModules();
@@ -847,7 +848,22 @@ void PBRIBLApp::DestroySphereVertexIndexBuffers()
 // ================================================================================================================
 void PBRIBLApp::InitIblPipeline()
 {
+    VkPipelineRenderingCreateInfoKHR pipelineRenderCreateInfo{};
+    {
+        pipelineRenderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+        pipelineRenderCreateInfo.colorAttachmentCount = 1;
+        pipelineRenderCreateInfo.pColorAttachmentFormats = &m_choisenSurfaceFormat.format;
+    }
 
+    m_iblPipeline.SetPNext(&pipelineRenderCreateInfo);
+
+    VkPipelineShaderStageCreateInfo shaderStgsInfo[2] = {};
+    shaderStgsInfo[0] = CreateDefaultShaderStgCreateInfo(m_vsIblShaderModule, VK_SHADER_STAGE_VERTEX_BIT);
+    shaderStgsInfo[1] = CreateDefaultShaderStgCreateInfo(m_psIblShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT);
+
+    m_iblPipeline.SetShaderStageInfo(shaderStgsInfo, 2);
+    m_iblPipeline.SetPipelineLayout(m_iblPipelineLayout);
+    m_iblPipeline.CreatePipeline(m_device);
 }
 
 // ================================================================================================================
@@ -942,18 +958,7 @@ void PBRIBLApp::InitIblPipelineDescriptorSets()
         pipelineDesSet0AllocInfo.descriptorSetCount = 1;
     }
 
-    VK_CHECK(vkAllocateDescriptorSets(m_device,
-                                      &pipelineDesSet0AllocInfo,
-                                      &m_iblPipelineDescriptorSet0));
-
     // Link descriptors to the buffer and image
-    VkDescriptorBufferInfo vpMatDesBufInfo{};
-    {
-        vpMatDesBufInfo.buffer = m_vpMatUboBuffer;
-        vpMatDesBufInfo.offset = 0;
-        vpMatDesBufInfo.range = VpMatBytesCnt;
-    }
-
     VkDescriptorImageInfo diffIrrDesImgInfo{};
     {
         diffIrrDesImgInfo.imageView = m_diffuseIrradianceCubemapImgView;
@@ -975,29 +980,67 @@ void PBRIBLApp::InitIblPipelineDescriptorSets()
         envBrdfDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     }
 
-    VkWriteDescriptorSet writeUboBufDesSet{};
+    for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
     {
-        writeUboBufDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeUboBufDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        writeUboBufDesSet.dstSet = m_diffIrrPreFilterEnvMapDesSet0;
-        writeUboBufDesSet.dstBinding = 1;
-        writeUboBufDesSet.descriptorCount = 1;
-        writeUboBufDesSet.pBufferInfo = &cameraScreenBufferInfo;
-    }
+        VkDescriptorBufferInfo vpMatDesBufInfo{};
+        {
+            vpMatDesBufInfo.buffer = m_vpMatUboBuffer[i];
+            vpMatDesBufInfo.offset = 0;
+            vpMatDesBufInfo.range = VpMatBytesCnt;
+        }
 
-    VkWriteDescriptorSet writeHdrDesSet{};
-    {
-        writeHdrDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeHdrDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        writeHdrDesSet.dstSet = m_diffIrrPreFilterEnvMapDesSet0;
-        writeHdrDesSet.dstBinding = 0;
-        writeHdrDesSet.pImageInfo = &hdriDesImgInfo;
-        writeHdrDesSet.descriptorCount = 1;
-    }
+        VK_CHECK(vkAllocateDescriptorSets(m_device,
+                                          &pipelineDesSet0AllocInfo,
+                                          &m_iblPipelineDescriptorSet0s[i]));
 
-    // Linking pipeline descriptors: cubemap and scene buffer descriptors to their GPU memory and info.
-    VkWriteDescriptorSet writeSkyboxPipelineDescriptors[2] = { writeHdrDesSet, writeUboBufDesSet };
-    vkUpdateDescriptorSets(m_device, 2, writeSkyboxPipelineDescriptors, 0, NULL);
+        VkWriteDescriptorSet writeVpMatUboBufDesSet{};
+        {
+            writeVpMatUboBufDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writeVpMatUboBufDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            writeVpMatUboBufDesSet.dstSet = m_iblPipelineDescriptorSet0s[i];
+            writeVpMatUboBufDesSet.dstBinding = 0;
+            writeVpMatUboBufDesSet.descriptorCount = 1;
+            writeVpMatUboBufDesSet.pBufferInfo = &vpMatDesBufInfo;
+        }
+
+        VkWriteDescriptorSet writeDiffIrrDesSet{};
+        {
+            writeDiffIrrDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writeDiffIrrDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            writeDiffIrrDesSet.dstSet = m_iblPipelineDescriptorSet0s[i];
+            writeDiffIrrDesSet.dstBinding = 1;
+            writeDiffIrrDesSet.pImageInfo = &diffIrrDesImgInfo;
+            writeDiffIrrDesSet.descriptorCount = 1;
+        }
+
+        VkWriteDescriptorSet writePrefilterEnvDesSet{};
+        {
+            writePrefilterEnvDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writePrefilterEnvDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            writePrefilterEnvDesSet.dstSet = m_iblPipelineDescriptorSet0s[i];
+            writePrefilterEnvDesSet.dstBinding = 2;
+            writePrefilterEnvDesSet.pImageInfo = &prefilterEnvDesImgInfo;
+            writePrefilterEnvDesSet.descriptorCount = 1;
+        }
+
+        VkWriteDescriptorSet writeEnvBrdfDesSet{};
+        {
+            writeEnvBrdfDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writeEnvBrdfDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            writeEnvBrdfDesSet.dstSet = m_iblPipelineDescriptorSet0s[i];
+            writeEnvBrdfDesSet.dstBinding = 3;
+            writeEnvBrdfDesSet.pImageInfo = &envBrdfDesImgInfo;
+            writeEnvBrdfDesSet.descriptorCount = 1;
+        }
+
+        // Linking pipeline descriptors: cubemap and scene buffer descriptors to their GPU memory and info.
+        VkWriteDescriptorSet writeIblPipelineDescriptors[4] = { writeVpMatUboBufDesSet,
+                                                                writeDiffIrrDesSet,
+                                                                writePrefilterEnvDesSet,
+                                                                writeEnvBrdfDesSet };
+
+        vkUpdateDescriptorSets(m_device, 4, writeIblPipelineDescriptors, 0, NULL);
+    }
 }
 
 // ================================================================================================================
@@ -1016,8 +1059,51 @@ void PBRIBLApp::DestroyIblPipelineRes()
 
 // ================================================================================================================
 void PBRIBLApp::InitVpMatBuffer()
-{}
+{
+    VkBufferCreateInfo bufferInfo{};
+    {
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = 16 * sizeof(float);
+        bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    }
+
+    VmaAllocationCreateInfo bufferAllocInfo{};
+    {
+        bufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        bufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
+                                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    }
+
+    m_vpMatUboBuffer.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
+    m_vpMatUboAlloc.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
+
+    float vpMatData[16] = {};
+    float tmpViewMatData[16] = {};
+    float tmpPersMatData[16] = {};
+    m_pCamera->GenViewPerspectiveMatrices(tmpViewMatData, tmpPersMatData, vpMatData);
+
+    for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        vmaCreateBuffer(*m_pAllocator,
+                        &bufferInfo,
+                        &bufferAllocInfo,
+                        &m_vpMatUboBuffer[i],
+                        &m_vpMatUboAlloc[i],
+                        nullptr);
+
+        CopyRamDataToGpuBuffer(vpMatData,
+                               m_vpMatUboBuffer[i],
+                               m_vpMatUboAlloc[i],
+                               sizeof(vpMatData));
+    }
+}
 
 // ================================================================================================================
 void PBRIBLApp::DestroyVpMatBuffer()
-{}
+{
+    for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        vmaDestroyBuffer(*m_pAllocator, m_vpMatUboBuffer[i], m_vpMatUboAlloc[i]);
+    }
+}

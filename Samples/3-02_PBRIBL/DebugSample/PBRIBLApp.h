@@ -99,8 +99,8 @@ private:
     VkBuffer              m_idxBuffer;
     VmaAllocation         m_idxBufferAlloc;
 
-    VkBuffer      m_vpMatUboBuffer;
-    VmaAllocation m_vpMatUboAlloc;
+    std::vector<VkBuffer>      m_vpMatUboBuffer;
+    std::vector<VmaAllocation> m_vpMatUboAlloc;
 
     SharedLib::Camera*           m_pCamera;
     std::vector<VkBuffer>        m_cameraParaBuffers;
@@ -114,12 +114,12 @@ private:
     SharedLib::Pipeline   m_skyboxPipeline;
 
     // Sphere rendering
-    VkShaderModule        m_vsIblShaderModule;
-    VkShaderModule        m_psIblShaderModule;
-    VkDescriptorSetLayout m_iblPipelineDesSet0Layout;
-    VkPipelineLayout      m_iblPipelineLayout;
-    VkDescriptorSet       m_iblPipelineDescriptorSet0;
-    SharedLib::Pipeline   m_iblPipeline;
+    VkShaderModule               m_vsIblShaderModule;
+    VkShaderModule               m_psIblShaderModule;
+    VkDescriptorSetLayout        m_iblPipelineDesSet0Layout;
+    VkPipelineLayout             m_iblPipelineLayout;
+    std::vector<VkDescriptorSet> m_iblPipelineDescriptorSet0s; // For different frames.
+    SharedLib::Pipeline          m_iblPipeline;
 
     VkImage       m_diffuseIrradianceCubemap;
     VkImageView   m_diffuseIrradianceCubemapImgView;
