@@ -146,11 +146,18 @@ void PBRIBLApp::SendCameraDataToBuffer(
 
     m_pCamera->GetNearPlane(cameraData[12], cameraData[13], cameraData[11]);
 
+    float vpMatData[16] = {};
+    float tmpViewMat[16] = {};
+    float tmpPersMat[16] = {};
+    m_pCamera->GenViewPerspectiveMatrices(tmpViewMat, tmpPersMat, vpMatData);
+    SharedLib::MatTranspose(vpMatData, 4);
+
     VkExtent2D swapchainImgExtent = GetSwapchainImageExtent();
     cameraData[14] = swapchainImgExtent.width;
     cameraData[15] = swapchainImgExtent.height;
 
     CopyRamDataToGpuBuffer(cameraData, m_cameraParaBuffers[i], m_cameraParaBufferAllocs[i], sizeof(cameraData));
+    CopyRamDataToGpuBuffer(vpMatData, m_vpMatUboBuffer[i], m_vpMatUboAlloc[i], sizeof(vpMatData));
 }
 
 // ================================================================================================================
@@ -1097,6 +1104,7 @@ void PBRIBLApp::InitVpMatBuffer()
     float tmpViewMatData[16] = {};
     float tmpPersMatData[16] = {};
     m_pCamera->GenViewPerspectiveMatrices(tmpViewMatData, tmpPersMatData, vpMatData);
+    SharedLib::MatTranspose(vpMatData, 4);
 
     for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
     {
