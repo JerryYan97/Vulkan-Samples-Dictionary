@@ -34,7 +34,7 @@ static const float3 g_sphereWorldPos[14] = {
     float3(15.0,  -2.5, -8.0 + 6.0 * (16.0 / 6.0))
 };
 
-cbuffer UBO0 : register(b0) { VertUBO i_vertUbo;}
+cbuffer UBO0 : register(b0) { VertUBO i_vertUbo; }
 
 float4x4 PosToModelMat(float3 pos)
 {

@@ -1,5 +1,8 @@
 #include <GGXModel.hlsl>
 
+const static float3 F0 = float3(1.0, 1.0, 1.0);
+const static float3 Albedo = float3(1.0, 1.0, 1.0); 
+
 struct SceneInfoUbo
 {
     float maxMipLevel;
@@ -29,12 +32,19 @@ float4 main(
     float metalic = i_params[0];
     float roughness = i_params[1];
 
-    float3 diffuse = i_diffuseCubeMapTexture.Sample(i_diffuseCubemapSamplerState, R).xyz;
+    float3 diffuseIrradiance = i_diffuseCubeMapTexture.Sample(i_diffuseCubemapSamplerState, N).xyz;
 
     float3 prefilterEnv = i_prefilterEnvCubeMapTexture.SampleLevel(i_prefilterEnvCubeMapSamplerState,
                                                                    R, roughness * i_sceneInfo.maxMipLevel).xyz;
 
     float2 envBrdf = i_envBrdfTexture.Sample(i_envBrdfSamplerState, float2(NoV, roughness)).xy;
 
-    return float4(envBrdf, 0.0, 1.0);
+    float3 Ks = fresnelSchlickRoughness(NoV, F0, roughness);
+    float3 Kd = float3(1.0, 1.0, 1.0) - Ks;
+    Kd *= (1.0 - metalic);
+
+    float3 diffuse = Kd * diffuseIrradiance * Albedo;
+    float3 specular = prefilterEnv * (F0 * envBrdf.x + envBrdf.y);
+
+    return float4(diffuse + specular, 1.0);
 }

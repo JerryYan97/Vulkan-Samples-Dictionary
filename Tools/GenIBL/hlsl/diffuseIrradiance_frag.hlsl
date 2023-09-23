@@ -66,8 +66,8 @@ float4 main(
             float3 sampleDir = tangentSample.x * right + tangentSample.y * up + tangentSample.z * normal;
             sampleDir = normalize(sampleDir);
 
-            // float3 sampledIrradiance = i_cubeMapTexture.Sample(samplerState, sampleDir).xyz;
-            float3 sampledIrradiance = i_cubeMapTexture.SampleLevel(samplerState, sampleDir, 4.5f).xyz;
+            float3 sampledIrradiance = i_cubeMapTexture.Sample(samplerState, sampleDir).xyz;
+            // float3 sampledIrradiance = i_cubeMapTexture.SampleLevel(samplerState, sampleDir, 1.5f).xyz;
 
             irradiance += (sampledIrradiance * cos(theta) * sin(theta));
             nrSamples += 1.f;

@@ -75,9 +75,9 @@ void DataPreprosess(
 {
     for (uint32_t i = 0; i < width * height * 3; i++)
     {
-        if (pData[i] > 500.f)
+        if (pData[i] > 50.f)
         {
-            pData[i] = 500.f;
+            pData[i] = 50.f;
         }
     }
 }
