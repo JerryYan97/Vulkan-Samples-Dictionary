@@ -28,6 +28,9 @@ public:
 
     void UpdateCameraAndGpuBuffer();
 
+    void GetCameraPos(float* pOut);
+    uint32_t GetMaxMipLevel() { return m_prefilterEnvCubemapImgsInfo.size(); }
+
     VkDeviceSize GetHdrByteNum();
     void* GetHdrDataPointer() { return m_hdrImgCubemap.pData; }
     VkImage GetCubeMapImage() { return m_hdrCubeMapImage; }

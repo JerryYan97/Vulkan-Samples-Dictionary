@@ -42,4 +42,9 @@ float GeometrySmith(float3 N, float3 V, float3 L, float roughness)
     float ggx1 = GeometrySchlickGGX(NdotL, roughness);
 
     return ggx1 * ggx2;
-}  
+}
+
+float3 FresnelSchlick(float lightCosTheta, float3 F0)
+{
+    return F0 + (1.0 - F0) * pow(clamp(1.0 - lightCosTheta, 0.0, 1.0), 5.0);
+}

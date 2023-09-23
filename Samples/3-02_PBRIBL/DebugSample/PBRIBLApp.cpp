@@ -169,6 +169,13 @@ void PBRIBLApp::UpdateCameraAndGpuBuffer()
 }
 
 // ================================================================================================================
+void PBRIBLApp::GetCameraPos(
+    float* pOut)
+{
+    m_pCamera->GetPos(pOut);
+}
+
+// ================================================================================================================
 void PBRIBLApp::InitHdrRenderObjects()
 {
     // Load the HDRI image into RAM
@@ -240,9 +247,9 @@ void PBRIBLApp::InitHdrRenderObjects()
             sampler_info.magFilter = VK_FILTER_LINEAR;
             sampler_info.minFilter = VK_FILTER_LINEAR;
             sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-            sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT; // outside image bounds just use border color
-            sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-            sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
             sampler_info.minLod = -1000;
             sampler_info.maxLod = 1000;
             sampler_info.maxAnisotropy = 1.0f;
@@ -313,9 +320,9 @@ void PBRIBLApp::InitHdrRenderObjects()
             sampler_info.magFilter = VK_FILTER_LINEAR;
             sampler_info.minFilter = VK_FILTER_LINEAR;
             sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-            sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT; // outside image bounds just use border color
-            sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-            sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
             sampler_info.minLod = -1000;
             sampler_info.maxLod = 1000;
             sampler_info.maxAnisotropy = 1.0f;
@@ -399,9 +406,9 @@ void PBRIBLApp::InitHdrRenderObjects()
             sampler_info.magFilter = VK_FILTER_LINEAR;
             sampler_info.minFilter = VK_FILTER_LINEAR;
             sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-            sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT; // outside image bounds just use border color
-            sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-            sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
             sampler_info.minLod = -1000;
             sampler_info.maxLod = 1000;
             sampler_info.maxAnisotropy = 1.0f;
@@ -469,9 +476,9 @@ void PBRIBLApp::InitHdrRenderObjects()
             sampler_info.magFilter = VK_FILTER_LINEAR;
             sampler_info.minFilter = VK_FILTER_LINEAR;
             sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-            sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT; // outside image bounds just use border color
-            sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-            sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
             sampler_info.minLod = -1000;
             sampler_info.maxLod = 1000;
             sampler_info.maxAnisotropy = 1.0f;
@@ -947,13 +954,21 @@ void PBRIBLApp::InitIblPipelineDescriptorSetLayout()
 // ================================================================================================================
 void PBRIBLApp::InitIblPipelineLayout()
 {
+    VkPushConstantRange range = {};
+    {
+        range.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        range.offset = 0;
+        range.size = sizeof(float); // Camera position.
+    }
+
     // Create pipeline layout
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     {
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pipelineLayoutInfo.setLayoutCount = 1;
         pipelineLayoutInfo.pSetLayouts = &m_iblPipelineDesSet0Layout;
-        pipelineLayoutInfo.pushConstantRangeCount = 0;
+        pipelineLayoutInfo.pushConstantRangeCount = 1;
+        pipelineLayoutInfo.pPushConstantRanges = &range;
     }
 
     VK_CHECK(vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_iblPipelineLayout));

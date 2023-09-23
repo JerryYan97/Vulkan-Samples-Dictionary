@@ -523,6 +523,12 @@ int main()
         vkCmdBindVertexBuffers(currentCmdBuffer, 0, 1, &vertBuffer, &vbOffset);
         vkCmdBindIndexBuffer(currentCmdBuffer, idxBuffer, 0, VK_INDEX_TYPE_UINT32);
 
+        float maxMipLevels = static_cast<float>(app.GetMaxMipLevel());
+        vkCmdPushConstants(currentCmdBuffer,
+                           app.GetIblPipelineLayout(),
+                           VK_SHADER_STAGE_FRAGMENT_BIT,
+                           0, sizeof(float), &maxMipLevels);
+
         vkCmdDrawIndexed(currentCmdBuffer, app.GetIdxCnt(), 14, 0, 0, 0);
 
         vkCmdEndRendering(currentCmdBuffer);
