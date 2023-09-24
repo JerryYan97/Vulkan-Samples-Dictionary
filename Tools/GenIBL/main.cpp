@@ -11,6 +11,7 @@
 #include "renderdoc_app.h"
 #include <Windows.h>
 #include <cassert>
+#include <filesystem>
 
 // Adjustable Parameters:
 // * The input HDRI color clamp.
@@ -26,7 +27,7 @@ int main(
     args::CompletionFlag completion(parser, { "complete" });
 
     args::ValueFlag<std::string> inputPath(parser, "", "The input cubemap image.", { 'i', "srcPath" });
-    args::ValueFlag<std::string> outputPath(parser, "", "The output image based lighting data output folder.", { 'i', "dstPath" });
+    args::ValueFlag<std::string> outputPath(parser, "", "The output image based lighting data output folder.", { 'o', "dstPath" });
 
     try
     {
@@ -585,6 +586,12 @@ int main(
 
             delete[] pEnvBrdfMapData;
             delete[] pEnvBrdfOutputData;
+        }
+
+        // Copy and paste the input cubemap to the package
+        {
+            std::string backgroundCubemapOutputPathName = outputDir + "/background_cubemap.hdr";
+            std::filesystem::copy_file(inputPathName, backgroundCubemapOutputPathName);
         }
 
         // End RenderDoc debug

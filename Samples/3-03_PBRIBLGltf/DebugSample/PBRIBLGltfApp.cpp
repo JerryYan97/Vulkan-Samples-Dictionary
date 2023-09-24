@@ -184,7 +184,7 @@ void PBRIBLApp::InitHdrRenderObjects()
 
     // Read in and init background cubemap
     {
-        std::string cubemapPathName = hdriFilePath + "iblOutput/background_cubemap.hdr";
+        std::string cubemapPathName = hdriFilePath + "output_cubemap.hdr";
 
         int width, height, nrComponents;
         m_hdrImgCubemap.pData = stbi_loadf(cubemapPathName.c_str(), &width, &height, &nrComponents, 0);
