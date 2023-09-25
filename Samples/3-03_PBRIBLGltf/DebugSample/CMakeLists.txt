@@ -1,19 +1,16 @@
 # Debug version
 include(../../../CMakeFuncSupport/CMakeUtil.cmake)
-set(MY_APP_NAME "PBRIBL")
+set(MY_APP_NAME "PBRIBLGltf")
 CheckVulkanSDK()
 cmake_minimum_required(VERSION 3.5)
-project(PBRIBL VERSION 0.1 LANGUAGES CXX)
+project(PBRIBLGltf VERSION 0.1 LANGUAGES CXX)
 
 include_directories("$ENV{VULKAN_SDK}/Include" "../../../ThirdPartyLibs/VMA")
 include_directories(../../../ThirdPartyLibs/glfw/include/GLFW)
 include_directories(../../../ThirdPartyLibs/glfw/include)
 
-set(StbImagePath ../../../ThirdPartyLibs/stb)
-include_directories(${StbImagePath})
-
-set(TinyObjPath ../../../ThirdPartyLibs/TinyObj)
-include_directories(${TinyObjPath})
+set(TinyGltfPath ../../../ThirdPartyLibs/TinyGltf)
+include_directories(${TinyGltfPath})
 
 include_directories(../../../ThirdPartyLibs/RenderDoc/renderdoc/api/app)
 
@@ -22,12 +19,13 @@ link_directories("../../../ThirdPartyLibs/glfw/build/src/Debug/")
 
 add_definitions(-DSOURCE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}\")
 add_executable(${MY_APP_NAME} "main.cpp"
-                              ${CMAKE_CURRENT_SOURCE_DIR}/PBRIBLApp.h
-                              ${CMAKE_CURRENT_SOURCE_DIR}/PBRIBLApp.cpp)
+                              ${CMAKE_CURRENT_SOURCE_DIR}/PBRIBLGltfApp.h
+                              ${CMAKE_CURRENT_SOURCE_DIR}/PBRIBLGltfApp.cpp)
 
 # Load the shared library.
 set(SHARED_LIB_GLFW TRUE)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../SharedLibrary ${CMAKE_CURRENT_BINARY_DIR}/SharedLibrary)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../SharedLibrary
+                 ${CMAKE_CURRENT_BINARY_DIR}/SharedLibrary)
 
 get_target_property(APP_SRC_LIST ${MY_APP_NAME} SOURCES)
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/../../../ FILES ${APP_SRC_LIST})
@@ -64,12 +62,3 @@ add_custom_target(SHADER_COMPILE
     DEPENDS DUMMY_FILE)
 
 add_dependencies(${MY_APP_NAME} SHADER_COMPILE)
-
-# execute_process(COMMAND glslc ./glsl/skybox.vert -o skybox_vert.spv
-#         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-# execute_process(COMMAND glslc ./glsl/skybox.frag -o skybox_frag.spv
-#         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-# execute_process(COMMAND glslc ./glsl/sphere.vert -o sphere_vert.spv
-#         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-# execute_process(COMMAND glslc ./glsl/sphere.frag -o sphere_frag.spv
-#         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})

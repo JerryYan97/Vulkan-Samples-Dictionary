@@ -16,13 +16,18 @@ struct ImgInfo
     float* pData;
 };
 
+struct Mesh
+{
+
+};
+
 const uint32_t VpMatBytesCnt = 4 * 4 * sizeof(float);
 
-class PBRIBLApp : public SharedLib::GlfwApplication
+class PBRIBLGltfApp : public SharedLib::GlfwApplication
 {
 public:
-    PBRIBLApp();
-    ~PBRIBLApp();
+    PBRIBLGltfApp();
+    ~PBRIBLGltfApp();
 
     virtual void AppInit() override;
 
@@ -72,8 +77,10 @@ private:
     VkPipelineDepthStencilStateCreateInfo CreateDepthStencilStateInfo();
 
     // Init mesh data
-    void InitSphereVertexIndexBuffers();
-    void DestroySphereVertexIndexBuffers();
+    // void InitSphereVertexIndexBuffers();
+    // void DestroySphereVertexIndexBuffers();
+    void InitModelInfo();
+    void DestroyModelInfo();
 
     // Skybox pipeline resources init.
     void InitSkyboxPipeline();

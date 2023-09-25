@@ -1,6 +1,6 @@
 #include "vk_mem_alloc.h"
 
-#include "PBRIBLApp.h"
+#include "PBRIBLGltfApp.h"
 #include "../../../SharedLibrary/Utils/VulkanDbgUtils.h"
 #include "../../../SharedLibrary/Utils/CmdBufUtils.h"
 
@@ -11,7 +11,7 @@
 
 int main()
 {
-    PBRIBLApp app;
+    PBRIBLGltfApp app;
     app.AppInit();
 
     VkImageSubresourceRange swapchainPresentSubResRange{};
@@ -97,43 +97,6 @@ int main()
                                     VK_IMAGE_LAYOUT_UNDEFINED,
                                     backgroundBufToImgCopy,
                                     *pAllocator);
-
-        // - In the `cmftStudio`, you can choose hStrip. The code below is an example of using the hStrip.
-        // - The buffer data of the image cannot be interleaved (The data of a separate image should be continues in the buffer address space.)
-        // - However, our cubemap data (hStrip) is interleaved. 
-        // - So, we have multiple choices to put them into the cubemap image. Here, I choose to offset the buffer starting point, specify the
-        // -     long row length and copy that for 6 times.
-        /*
-        VkBufferImageCopy hdrBufToImgCopies[6];
-        memset(hdrBufToImgCopies, 0, sizeof(hdrBufToImgCopies));
-        for (uint32_t i = 0; i < 6; i++)
-        {
-            VkExtent3D extent{};
-            {
-                extent.width = hdrImgExtent.width / 6;
-                extent.height = hdrImgExtent.height;
-                extent.depth = 1;
-            }
-
-            hdrBufToImgCopies[i].bufferRowLength = hdrImgExtent.width;
-            // hdrBufToImgCopies[i].bufferImageHeight = hdrImgExtent.height;
-            hdrBufToImgCopies[i].imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            hdrBufToImgCopies[i].imageSubresource.mipLevel = 0;
-            hdrBufToImgCopies[i].imageSubresource.baseArrayLayer = i;
-            hdrBufToImgCopies[i].imageSubresource.layerCount = 1;
-
-            hdrBufToImgCopies[i].imageExtent = extent;
-            // In the unit of bytes:
-            hdrBufToImgCopies[i].bufferOffset = i * (hdrImgExtent.width / 6) * sizeof(float) * 3;
-        }
-
-        vkCmdCopyBufferToImage(
-            stagingCmdBuffer,
-            stagingBuffer,
-            cubeMapImage,
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            6, hdrBufToImgCopies);
-        */
 
         // Copy IBL images to VkImage
         // Diffuse Irradiance

@@ -22,3 +22,6 @@
 [submodule "ThirdPartyLibs/RenderDoc"]
 	path = ThirdPartyLibs/RenderDoc
 	url = https://github.com/baldurk/renderdoc.git
+[submodule "ThirdPartyLibs/TinyGltf"]
+	path = ThirdPartyLibs/TinyGltf
+	url = https://github.com/syoyo/tinygltf.git

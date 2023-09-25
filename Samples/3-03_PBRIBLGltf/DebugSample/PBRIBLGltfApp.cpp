@@ -1,15 +1,15 @@
-#include "PBRIBLApp.h"
+#include "PBRIBLGltfApp.h"
 #include <glfw3.h>
 #include "../../../SharedLibrary/Utils/VulkanDbgUtils.h"
 #include "../../../SharedLibrary/Camera/Camera.h"
 #include "../../../SharedLibrary/Event/Event.h"
 #include "../../../SharedLibrary/Utils/StrPathUtils.h"
 
-#define TINYOBJLOADER_IMPLEMENTATION
-#include "tiny_obj_loader.h"
-
+#define TINYGLTF_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+// #define TINYGLTF_NOEXCEPTION // optional. disable exception handling.
+#include "tiny_gltf.h"
 
 #include "vk_mem_alloc.h"
 
@@ -29,7 +29,7 @@ static void MouseButtonCallback(GLFWwindow* window, int button, int action, int 
 }
 
 // ================================================================================================================
-PBRIBLApp::PBRIBLApp() : 
+PBRIBLGltfApp::PBRIBLGltfApp() : 
     GlfwApplication(),
     m_hdrCubeMapImage(VK_NULL_HANDLE),
     m_hdrCubeMapView(VK_NULL_HANDLE),
@@ -71,7 +71,7 @@ PBRIBLApp::PBRIBLApp() :
 }
 
 // ================================================================================================================
-PBRIBLApp::~PBRIBLApp()
+PBRIBLGltfApp::~PBRIBLGltfApp()
 {
     vkDeviceWaitIdle(m_device);
     delete m_pCamera;
@@ -85,9 +85,9 @@ PBRIBLApp::~PBRIBLApp()
 }
 
 // ================================================================================================================
-void PBRIBLApp::DestroyHdrRenderObjs()
+void PBRIBLGltfApp::DestroyHdrRenderObjs()
 {
-    DestroySphereVertexIndexBuffers();
+    DestroyModelInfo();
 
     delete m_diffuseIrradianceCubemapImgInfo.pData;
     for (auto itr : m_prefilterEnvCubemapImgsInfo)
@@ -114,7 +114,7 @@ void PBRIBLApp::DestroyHdrRenderObjs()
 }
 
 // ================================================================================================================
-void PBRIBLApp::DestroyCameraUboObjects()
+void PBRIBLGltfApp::DestroyCameraUboObjects()
 {
     for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
     {
@@ -123,20 +123,20 @@ void PBRIBLApp::DestroyCameraUboObjects()
 }
 
 // ================================================================================================================
-VkDeviceSize PBRIBLApp::GetHdrByteNum()
+VkDeviceSize PBRIBLGltfApp::GetHdrByteNum()
 {
     return 3 * sizeof(float) * m_hdrImgCubemap.pixWidth * m_hdrImgCubemap.pixHeight;
 }
 
 // ================================================================================================================
-void PBRIBLApp::GetCameraData(
+void PBRIBLGltfApp::GetCameraData(
     float* pBuffer)
 {
     
 }
 
 // ================================================================================================================
-void PBRIBLApp::SendCameraDataToBuffer(
+void PBRIBLGltfApp::SendCameraDataToBuffer(
     uint32_t i)
 {
     float cameraData[16] = {};
@@ -161,7 +161,7 @@ void PBRIBLApp::SendCameraDataToBuffer(
 }
 
 // ================================================================================================================
-void PBRIBLApp::UpdateCameraAndGpuBuffer()
+void PBRIBLGltfApp::UpdateCameraAndGpuBuffer()
 {
     SharedLib::HEvent midMouseDownEvent = CreateMiddleMouseEvent(g_isDown);
     m_pCamera->OnEvent(midMouseDownEvent);
@@ -169,14 +169,14 @@ void PBRIBLApp::UpdateCameraAndGpuBuffer()
 }
 
 // ================================================================================================================
-void PBRIBLApp::GetCameraPos(
+void PBRIBLGltfApp::GetCameraPos(
     float* pOut)
 {
     m_pCamera->GetPos(pOut);
 }
 
 // ================================================================================================================
-void PBRIBLApp::InitHdrRenderObjects()
+void PBRIBLGltfApp::InitHdrRenderObjects()
 {
     // Load the HDRI image into RAM
     std::string hdriFilePath = SOURCE_PATH;
@@ -488,7 +488,7 @@ void PBRIBLApp::InitHdrRenderObjects()
 }
 
 // ================================================================================================================
-void PBRIBLApp::InitCameraUboObjects()
+void PBRIBLGltfApp::InitCameraUboObjects()
 {
     // The alignment of a vec3 is 4 floats and the element alignment of a struct is the largest element alignment,
     // which is also the 4 float. Therefore, we need 16 floats as the buffer to store the Camera's parameters.
@@ -523,7 +523,7 @@ void PBRIBLApp::InitCameraUboObjects()
 
 // ================================================================================================================
 // TODO: I may need to put most the content in this function to CreateXXXX(...) in the parent class.
-void PBRIBLApp::InitSkyboxPipelineDescriptorSets()
+void PBRIBLGltfApp::InitSkyboxPipelineDescriptorSets()
 {
     // Create pipeline descirptor
     VkDescriptorSetAllocateInfo skyboxPipelineDesSet0AllocInfo{};
@@ -587,7 +587,7 @@ void PBRIBLApp::InitSkyboxPipelineDescriptorSets()
 }
 
 // ================================================================================================================
-void PBRIBLApp::InitSkyboxPipelineLayout()
+void PBRIBLGltfApp::InitSkyboxPipelineLayout()
 {
     // Create pipeline layout
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
@@ -602,7 +602,7 @@ void PBRIBLApp::InitSkyboxPipelineLayout()
 }
 
 // ================================================================================================================
-void PBRIBLApp::InitSkyboxShaderModules()
+void PBRIBLGltfApp::InitSkyboxShaderModules()
 {
     // Create Shader Modules.
     m_vsSkyboxShaderModule = CreateShaderModule("./hlsl/skybox_vert.spv");
@@ -610,7 +610,7 @@ void PBRIBLApp::InitSkyboxShaderModules()
 }
 
 // ================================================================================================================
-void PBRIBLApp::InitSkyboxPipelineDescriptorSetLayout()
+void PBRIBLGltfApp::InitSkyboxPipelineDescriptorSetLayout()
 {
     // Create pipeline binding and descriptor objects for the camera parameters
     VkDescriptorSetLayoutBinding cameraUboBinding{};
@@ -646,7 +646,7 @@ void PBRIBLApp::InitSkyboxPipelineDescriptorSetLayout()
 }
 
 // ================================================================================================================
-void PBRIBLApp::InitSkyboxPipeline()
+void PBRIBLGltfApp::InitSkyboxPipeline()
 {
     VkPipelineRenderingCreateInfoKHR pipelineRenderCreateInfo{};
     {
@@ -667,7 +667,7 @@ void PBRIBLApp::InitSkyboxPipeline()
 }
 
 // ================================================================================================================
-void PBRIBLApp::DestroySkyboxPipelineRes()
+void PBRIBLGltfApp::DestroySkyboxPipelineRes()
 {
     // Destroy shader modules
     vkDestroyShaderModule(m_device, m_vsSkyboxShaderModule, nullptr);
@@ -681,7 +681,7 @@ void PBRIBLApp::DestroySkyboxPipelineRes()
 }
 
 // ================================================================================================================
-void PBRIBLApp::AppInit()
+void PBRIBLGltfApp::AppInit()
 {
     glfwInit();
     uint32_t glfwExtensionCount = 0;
@@ -726,7 +726,7 @@ void PBRIBLApp::AppInit()
     InitGfxCommandBuffers(SharedLib::MAX_FRAMES_IN_FLIGHT);
 
     InitSwapchain();
-    InitSphereVertexIndexBuffers();
+    InitModelInfo();
     InitVpMatBuffer();
 
     // Create the graphics pipeline
@@ -748,22 +748,33 @@ void PBRIBLApp::AppInit()
 }
 
 // ================================================================================================================
-void PBRIBLApp::InitSphereVertexIndexBuffers()
+void PBRIBLGltfApp::InitModelInfo()
 {
     std::string inputfile = SOURCE_PATH;
-    inputfile += "/../data/uvNormalSphere.obj";
+    inputfile += "/../data/glTF/FlightHelmet.gltf";
 
-    tinyobj::ObjReaderConfig readerConfig;
-    tinyobj::ObjReader sphereObjReader;
+    tinygltf::Model model;
+    tinygltf::TinyGLTF loader;
+    std::string err;
+    std::string warn;
 
-    sphereObjReader.ParseFromFile(inputfile, readerConfig);
+    bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, inputfile);
+    //bool ret = loader.LoadBinaryFromFile(&model, &err, &warn, argv[1]); // for binary glTF(.glb)
 
-    auto& shapes = sphereObjReader.GetShapes();
-    auto& attrib = sphereObjReader.GetAttrib();
+    if (!warn.empty()) {
+        printf("Warn: %s\n", warn.c_str());
+    }
 
-    // We assume that this test only has one shape
-    assert(shapes.size() == 1, "This application only accepts one shape!");
+    if (!err.empty()) {
+        printf("Err: %s\n", err.c_str());
+    }
 
+    if (!ret) {
+        printf("Failed to parse glTF\n");
+        exit(1);
+    }
+
+    /*
     for (uint32_t s = 0; s < shapes.size(); s++)
     {
         // Loop over faces(polygon)
@@ -856,17 +867,18 @@ void PBRIBLApp::InitSphereVertexIndexBuffers()
     // Send sphere data to the GPU buffers
     CopyRamDataToGpuBuffer(m_vertBufferData.data(), m_vertBuffer, m_vertBufferAlloc, vertBufferByteCnt);
     CopyRamDataToGpuBuffer(m_idxBufferData.data(), m_idxBuffer, m_idxBufferAlloc, idxBufferByteCnt);
+    */
 }
 
 // ================================================================================================================
-void PBRIBLApp::DestroySphereVertexIndexBuffers()
+void PBRIBLGltfApp::DestroyModelInfo()
 {
     vmaDestroyBuffer(*m_pAllocator, m_vertBuffer, m_vertBufferAlloc);
     vmaDestroyBuffer(*m_pAllocator, m_idxBuffer, m_idxBufferAlloc);
 }
 
 // ================================================================================================================
-void PBRIBLApp::InitIblPipeline()
+void PBRIBLGltfApp::InitIblPipeline()
 {
     VkPipelineRenderingCreateInfoKHR pipelineRenderCreateInfo{};
     {
@@ -894,7 +906,7 @@ void PBRIBLApp::InitIblPipeline()
 }
 
 // ================================================================================================================
-void PBRIBLApp::InitIblPipelineDescriptorSetLayout()
+void PBRIBLGltfApp::InitIblPipelineDescriptorSetLayout()
 {
     // Create pipeline binding and descriptor objects for the camera parameters
     VkDescriptorSetLayoutBinding vpMatUboBinding{};
@@ -952,7 +964,7 @@ void PBRIBLApp::InitIblPipelineDescriptorSetLayout()
 }
 
 // ================================================================================================================
-void PBRIBLApp::InitIblPipelineLayout()
+void PBRIBLGltfApp::InitIblPipelineLayout()
 {
     VkPushConstantRange range = {};
     {
@@ -975,14 +987,14 @@ void PBRIBLApp::InitIblPipelineLayout()
 }
 
 // ================================================================================================================
-void PBRIBLApp::InitIblShaderModules()
+void PBRIBLGltfApp::InitIblShaderModules()
 {
     m_vsIblShaderModule = CreateShaderModule("./hlsl/ibl_vert.spv");
     m_psIblShaderModule = CreateShaderModule("./hlsl/ibl_frag.spv");
 }
 
 // ================================================================================================================
-void PBRIBLApp::InitIblPipelineDescriptorSets()
+void PBRIBLGltfApp::InitIblPipelineDescriptorSets()
 {
     // Create pipeline descirptor
     VkDescriptorSetAllocateInfo pipelineDesSet0AllocInfo{};
@@ -1081,7 +1093,7 @@ void PBRIBLApp::InitIblPipelineDescriptorSets()
 }
 
 // ================================================================================================================
-void PBRIBLApp::DestroyIblPipelineRes()
+void PBRIBLGltfApp::DestroyIblPipelineRes()
 {
     // Destroy shader modules
     vkDestroyShaderModule(m_device, m_vsIblShaderModule, nullptr);
@@ -1095,7 +1107,7 @@ void PBRIBLApp::DestroyIblPipelineRes()
 }
 
 // ================================================================================================================
-void PBRIBLApp::InitVpMatBuffer()
+void PBRIBLGltfApp::InitVpMatBuffer()
 {
     VkBufferCreateInfo bufferInfo{};
     {
@@ -1138,7 +1150,7 @@ void PBRIBLApp::InitVpMatBuffer()
 }
 
 // ================================================================================================================
-void PBRIBLApp::DestroyVpMatBuffer()
+void PBRIBLGltfApp::DestroyVpMatBuffer()
 {
     for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
     {
@@ -1147,7 +1159,7 @@ void PBRIBLApp::DestroyVpMatBuffer()
 }
 
 // ================================================================================================================
-VkPipelineVertexInputStateCreateInfo PBRIBLApp::CreatePipelineVertexInputInfo()
+VkPipelineVertexInputStateCreateInfo PBRIBLGltfApp::CreatePipelineVertexInputInfo()
 {
     // Specifying all kinds of pipeline states
     // Vertex input state
@@ -1190,7 +1202,7 @@ VkPipelineVertexInputStateCreateInfo PBRIBLApp::CreatePipelineVertexInputInfo()
 }
 
 // ================================================================================================================
-VkPipelineDepthStencilStateCreateInfo PBRIBLApp::CreateDepthStencilStateInfo()
+VkPipelineDepthStencilStateCreateInfo PBRIBLGltfApp::CreateDepthStencilStateInfo()
 {
     VkPipelineDepthStencilStateCreateInfo depthStencilInfo{};
     {
