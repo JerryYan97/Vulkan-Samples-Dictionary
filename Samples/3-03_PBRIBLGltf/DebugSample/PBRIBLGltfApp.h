@@ -18,7 +18,35 @@ struct ImgInfo
 
 struct Mesh
 {
+    float worldPos[4];
+    std::vector<float>    vertData;
+    std::vector<uint32_t> idxData;
 
+    ImgInfo baseColorTex;
+    ImgInfo metallicRoughnessTex;
+    ImgInfo normalTex;
+    ImgInfo occlusionTex;
+    ImgInfo emissiveTex;
+
+    VkBuffer      modelVertBuffer;
+    VmaAllocation modelVertBufferAlloc;
+    VkBuffer      modelIdxBuffer;
+    VmaAllocation modelIdxBufferAlloc;
+
+    VkImage       baseColorImg;
+    VmaAllocation baseColorImgAlloc;
+
+    VkImage       metallicRoughnessImg;
+    VmaAllocation metallicRoughnessImgAlloc;
+
+    VkImage       normalImg;
+    VmaAllocation normalImgAlloc;
+
+    VkImage       occlusionImg;
+    VmaAllocation occlusionImgAlloc;
+
+    VkImage       emissiveImg;
+    VmaAllocation emissiveImgAlloc;
 };
 
 const uint32_t VpMatBytesCnt = 4 * 4 * sizeof(float);
@@ -161,4 +189,6 @@ private:
     VkSampler     m_envBrdfImgSampler;
     VmaAllocation m_envBrdfImgAlloc;
     ImgInfo       m_envBrdfImgInfo;
+
+    std::vector<Mesh> m_gltfModel;
 };

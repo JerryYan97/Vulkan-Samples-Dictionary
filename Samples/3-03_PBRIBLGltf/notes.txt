@@ -20,3 +20,7 @@ PBS Physics math note x1
 
 Vulkan HLSL matrix:
 https://www.lei.chat/posts/hlsl-for-vulkan-matrices/
+
+Gltf:
+https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html
+

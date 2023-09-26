@@ -748,6 +748,9 @@ void PBRIBLGltfApp::AppInit()
 }
 
 // ================================================================================================================
+// NOTE: Currently, we don't support gltf nodes's position, rotation and scale information. 
+//       * We only support triangle.
+// TODO: A formal gltf model loader should load a model from it's node and apply its attributes recursively.
 void PBRIBLGltfApp::InitModelInfo()
 {
     std::string inputfile = SOURCE_PATH;
@@ -772,6 +775,19 @@ void PBRIBLGltfApp::InitModelInfo()
     if (!ret) {
         printf("Failed to parse glTF\n");
         exit(1);
+    }
+
+    uint32_t meshCnt = model.meshes.size();
+    m_gltfModel.resize(meshCnt);
+    for (uint32_t i = 0; i < meshCnt; i++)
+    {
+        const auto& mesh = model.meshes[i];
+        int posIdx = mesh.primitives[0].attributes.at("POSITION");
+        int normalIdx = mesh.primitives[0].attributes.at("NORMAL");
+        int tangentIdx = mesh.primitives[0].attributes.at("TANGENT");
+        int uvIdx = mesh.primitives[0].attributes.at("TEXCOORD_0");
+        int indicesIdx = mesh.primitives[0].indices;
+        int materialIdx = mesh.primitives[0].material;
     }
 
     /*
