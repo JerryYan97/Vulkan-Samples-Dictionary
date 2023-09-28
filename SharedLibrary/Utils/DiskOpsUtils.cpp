@@ -1,5 +1,6 @@
 #include "DiskOpsUtils.h"
 #include <iostream>
+#include <fstream>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -37,5 +38,22 @@ namespace SharedLib
         {
             std::cout << "Img fails to save." << std::endl;
         }
+    }
+
+    // ================================================================================================================
+    void ReadBinaryFile(
+        const std::string& namePath,
+        std::vector<char>& oData)
+    {
+        std::ifstream ifd(namePath, std::ios::binary | std::ios::ate);
+
+        // Set the file read pointer to the end of the file to 
+        int size = ifd.tellg();
+
+        // Set the file read pointer back to the start
+        ifd.seekg(0, std::ios::beg);
+        
+        oData.resize(size); // << resize not reserve
+        ifd.read(oData.data(), size);
     }
 }

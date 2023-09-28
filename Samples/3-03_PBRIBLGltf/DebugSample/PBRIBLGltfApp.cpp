@@ -4,10 +4,11 @@
 #include "../../../SharedLibrary/Camera/Camera.h"
 #include "../../../SharedLibrary/Event/Event.h"
 #include "../../../SharedLibrary/Utils/StrPathUtils.h"
+#include "../../../SharedLibrary/Utils/DiskOpsUtils.h"
 
 #define TINYGLTF_IMPLEMENTATION
-#define STB_IMAGE_IMPLEMENTATION
-#define STB_IMAGE_WRITE_IMPLEMENTATION
+// #define STB_IMAGE_IMPLEMENTATION
+// #define STB_IMAGE_WRITE_IMPLEMENTATION
 // #define TINYGLTF_NOEXCEPTION // optional. disable exception handling.
 #include "tiny_gltf.h"
 
@@ -751,10 +752,14 @@ void PBRIBLGltfApp::AppInit()
 // NOTE: Currently, we don't support gltf nodes's position, rotation and scale information. 
 //       * We only support triangle.
 // TODO: A formal gltf model loader should load a model from it's node and apply its attributes recursively.
+// TODO: The gltf model loader should put into the shared library.
 void PBRIBLGltfApp::InitModelInfo()
 {
     std::string inputfile = SOURCE_PATH;
     inputfile += "/../data/glTF/FlightHelmet.gltf";
+
+    std::string modelPath = SOURCE_PATH;
+    modelPath += "/../data/glTF/";
 
     tinygltf::Model model;
     tinygltf::TinyGLTF loader;
@@ -763,7 +768,6 @@ void PBRIBLGltfApp::InitModelInfo()
 
     bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, inputfile);
     //bool ret = loader.LoadBinaryFromFile(&model, &err, &warn, argv[1]); // for binary glTF(.glb)
-
     if (!warn.empty()) {
         printf("Warn: %s\n", warn.c_str());
     }
@@ -777,8 +781,12 @@ void PBRIBLGltfApp::InitModelInfo()
         exit(1);
     }
 
+    // NOTE: TinyGltf loader has already loaded the binary buffer data and the images data.
+    const auto& binaryBuffer = model.buffers[0].data;
+    const unsigned char* pBufferData = binaryBuffer.data();
+
     uint32_t meshCnt = model.meshes.size();
-    m_gltfModel.resize(meshCnt);
+    m_gltfModeMeshes.resize(meshCnt);
     for (uint32_t i = 0; i < meshCnt; i++)
     {
         const auto& mesh = model.meshes[i];
@@ -788,6 +796,84 @@ void PBRIBLGltfApp::InitModelInfo()
         int uvIdx = mesh.primitives[0].attributes.at("TEXCOORD_0");
         int indicesIdx = mesh.primitives[0].indices;
         int materialIdx = mesh.primitives[0].material;
+
+        // Elements notes:
+        // Position: float3, normal: float3, tangent: float4, texcoord: float2.
+
+        // Setup the vertex buffer and the index buffer
+        const auto& posAccessor = model.accessors[posIdx];
+        int posAccessorByteOffset = posAccessor.byteOffset;
+        int posAccessorEleCnt = posAccessor.count; // Assume a position element is a float3.
+
+        const auto& normalAccessor = model.accessors[normalIdx];
+        int normalAccessorByteOffset = normalAccessor.byteOffset;
+        int normalAccessorEleCnt = normalAccessor.count;
+
+        const auto& tangentAccessor = model.accessors[tangentIdx];
+        int tangentAccessorByteOffset = tangentAccessor.byteOffset;
+        int tangentAccessorEleCnt = tangentAccessor.count;
+
+        const auto& uvAccessor = model.accessors[uvIdx];
+        int uvAccessorByteOffset = uvAccessor.byteOffset;
+        int uvAccessorEleCnt = uvAccessor.count;
+
+        const auto& idxAccessor = model.accessors[indicesIdx];
+        int idxAccessorByteOffset = idxAccessor.byteOffset;
+        int idxAccessorEleCnt = idxAccessor.count;
+
+        // NOTE: Buffer views are just division of the buffer for the flight helmet model.
+        // SCALAR is in one buffer view. FLOAT2 in one. FLOAT3 in one. and FLOAT3 in one...
+        // Maybe they can be more
+        // A buffer view represents a contiguous segment of data in a buffer, defined by a byte offset into the buffer specified 
+        // in the byteOffset property and a total byte length specified by the byteLength property of the buffer view.
+        const auto& posBufferView = model.bufferViews[posAccessor.bufferView];
+        const auto& normalBufferView = model.bufferViews[normalAccessor.bufferView];
+        const auto& tangentBufferView = model.bufferViews[tangentAccessor.bufferView];
+        const auto& uvBufferView = model.bufferViews[uvAccessor.bufferView];
+        const auto& idxBufferView = model.bufferViews[idxAccessor.bufferView];
+
+        // We assume that the idx, position, normal, uv and tangent are not interleaved.
+        // TODO: Even though they are interleaved, we can use a function to read out the data by making use of the stride bytes count.
+
+        // Assmue the data and element type of the index is uint16_t.
+        int idxBufferOffset = idxAccessorByteOffset + idxBufferView.byteOffset;
+        int idxBufferByteCnt = sizeof(uint16_t) * idxAccessor.count;
+        m_gltfModeMeshes[i].idxData.resize(idxAccessor.count);
+        memcpy(m_gltfModeMeshes[i].idxData.data(), &pBufferData[idxBufferOffset], idxBufferByteCnt);
+        
+        // Assmue the data and element type of the position is float3
+        int posBufferOffset = posAccessorByteOffset + posBufferView.byteOffset;
+        int posBufferByteCnt = sizeof(float) * 3 * posAccessor.count;
+        m_gltfModeMeshes[i].vertData.resize(3 * posAccessor.count);
+        memcpy(m_gltfModeMeshes[i].vertData.data(), &pBufferData[posBufferOffset], posBufferByteCnt);
+
+        // Assmue the data and element 
+
+        // Send image info to GPU and set relevant data
+        const auto& material = model.materials[materialIdx];
+
+        // A texture binding is defined by an index of a texture object and an optional index of texture coordinates.
+        // Its green channel contains roughness values and its blue channel contains metalness values.
+        int baseColorTexIdx = material.pbrMetallicRoughness.baseColorTexture.index;
+        int metallicRoughnessTexIdx = material.pbrMetallicRoughness.metallicRoughnessTexture.index;
+        int occlusionTexIdx = material.occlusionTexture.index;
+        int normalTexIdx = material.normalTexture.index;
+        // material.emissiveTexture -- Let forget emissive. The renderer doesn't support emissive textures.
+
+        const auto& baseColorTex = model.textures[baseColorTexIdx];
+        const auto& metallicRoughnessTex = model.textures[metallicRoughnessTexIdx];
+        const auto& occlusionTex = model.textures[occlusionTexIdx];
+        const auto& normalTex = model.textures[normalTexIdx];
+
+        int baseColorTexImgIdx = baseColorTex.source;
+        int metallicRoughnessTexImgIdx = metallicRoughnessTex.source;
+        int occlusionTexImgIdx = occlusionTex.source;
+        int normalTexImgIdx = normalTex.source;
+
+        const auto& baseColorImg = model.images[baseColorTexImgIdx];
+        const auto& metalllicRoughnessImg = model.images[metallicRoughnessTexImgIdx];
+        const auto& occlusionImg = model.images[occlusionTexImgIdx];
+        const auto& normalImg = model.images[normalTexImgIdx];
     }
 
     /*

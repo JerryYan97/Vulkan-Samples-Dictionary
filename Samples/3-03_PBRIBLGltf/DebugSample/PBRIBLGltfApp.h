@@ -13,6 +13,13 @@ struct ImgInfo
 {
     uint32_t pixWidth;
     uint32_t pixHeight;
+    uint32_t componentCnt;
+    float* pData;
+};
+
+struct BinBufferInfo
+{
+    uint32_t byteCnt;
     float* pData;
 };
 
@@ -20,7 +27,7 @@ struct Mesh
 {
     float worldPos[4];
     std::vector<float>    vertData;
-    std::vector<uint32_t> idxData;
+    std::vector<uint16_t> idxData;
 
     ImgInfo baseColorTex;
     ImgInfo metallicRoughnessTex;
@@ -48,6 +55,18 @@ struct Mesh
     VkImage       emissiveImg;
     VmaAllocation emissiveImgAlloc;
 };
+
+/*
+enum GLTF_ACCESSOR_DATA_TYPE
+{
+    SIGNED_BYTE = 5120,
+    UNSIGNED_BYTE,
+    SIGNED_SHORT,
+    UNSIGNED_SHORT,
+    UNSIGNED_INT = 5125,
+    FLOAT
+};
+*/
 
 const uint32_t VpMatBytesCnt = 4 * 4 * sizeof(float);
 
@@ -190,5 +209,5 @@ private:
     VmaAllocation m_envBrdfImgAlloc;
     ImgInfo       m_envBrdfImgInfo;
 
-    std::vector<Mesh> m_gltfModel;
+    std::vector<Mesh> m_gltfModeMeshes;
 };
