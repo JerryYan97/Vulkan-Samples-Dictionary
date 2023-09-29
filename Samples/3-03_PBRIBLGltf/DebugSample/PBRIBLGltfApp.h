@@ -109,11 +109,12 @@ public:
 
     VkDescriptorSet GetIblCurrentFrameDescriptorSet0() 
         { return m_iblPipelineDescriptorSet0s[m_currentFrame]; }
-    /*
-    VkBuffer GetIblVertBuffer() { return m_vertBuffer; }
-    VkBuffer GetIblIdxBuffer() { return m_idxBuffer; }
-    uint32_t GetIdxCnt() { return m_idxBufferData.size(); }
-    */
+    
+    // NOTE: Temp functions to make compilation work.
+    VkBuffer GetIblVertBuffer() { return m_vpMatUboBuffer[0]; }
+    VkBuffer GetIblIdxBuffer() { return m_vpMatUboBuffer[0]; }
+    uint32_t GetIdxCnt() { return 0; }
+    
 
     VkPipeline GetIblPipeline() { return m_iblPipeline.GetVkPipeline(); }
     VkPipelineLayout GetIblPipelineLayout() { return m_iblPipelineLayout; }

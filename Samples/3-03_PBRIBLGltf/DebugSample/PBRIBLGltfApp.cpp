@@ -60,13 +60,7 @@ PBRIBLGltfApp::PBRIBLGltfApp() :
     m_envBrdfImgAlloc(VK_NULL_HANDLE),
     m_hdrImgCubemap(),
     m_diffuseIrradianceCubemapImgInfo(),
-    m_envBrdfImgInfo(),
-    m_vertBufferData(),
-    m_idxBufferData(),
-    m_vertBuffer(VK_NULL_HANDLE),
-    m_vertBufferAlloc(VK_NULL_HANDLE),
-    m_idxBuffer(VK_NULL_HANDLE),
-    m_idxBufferAlloc(VK_NULL_HANDLE)
+    m_envBrdfImgInfo()
 {
     m_pCamera = new SharedLib::Camera();
 }
@@ -921,7 +915,7 @@ void PBRIBLGltfApp::InitModelInfo()
                             &m_gltfModeMeshes[i].modelIdxBuffer,
                             &m_gltfModeMeshes[i].modelIdxBufferAlloc,
                             nullptr);
-        }        
+        }
 
         // Create the VkBuffer for the vert buffer.
         {
@@ -970,6 +964,7 @@ void PBRIBLGltfApp::InitModelInfo()
         int normalTexIdx = material.normalTexture.index;
         // material.emissiveTexture -- Let forget emissive. The renderer doesn't support emissive textures.
 
+        // A texture is defined by an image index, denoted by the source property and a sampler index (sampler).
         const auto& baseColorTex = model.textures[baseColorTexIdx];
         const auto& metallicRoughnessTex = model.textures[metallicRoughnessTexIdx];
         const auto& occlusionTex = model.textures[occlusionTexIdx];
@@ -984,6 +979,10 @@ void PBRIBLGltfApp::InitModelInfo()
         const auto& metalllicRoughnessImg = model.images[metallicRoughnessTexImgIdx];
         const auto& occlusionImg = model.images[occlusionTexImgIdx];
         const auto& normalImg = model.images[normalTexImgIdx];
+
+        m_gltfModeMeshes[i].baseColorTex.pixWidth = baseColorImg.width;
+        m_gltfModeMeshes[i].baseColorTex.pixHeight = baseColorImg.height;
+        // baseColorImg.
     }
 
     /*
@@ -1085,8 +1084,36 @@ void PBRIBLGltfApp::InitModelInfo()
 // ================================================================================================================
 void PBRIBLGltfApp::DestroyModelInfo()
 {
-    vmaDestroyBuffer(*m_pAllocator, m_vertBuffer, m_vertBufferAlloc);
-    vmaDestroyBuffer(*m_pAllocator, m_idxBuffer, m_idxBufferAlloc);
+    for (const auto& mesh : m_gltfModeMeshes)
+    {
+        vmaDestroyBuffer(*m_pAllocator, mesh.modelIdxBuffer, mesh.modelIdxBufferAlloc);
+        vmaDestroyBuffer(*m_pAllocator, mesh.modelVertBuffer, mesh.modelVertBufferAlloc);
+
+        if (mesh.baseColorImg != VK_NULL_HANDLE)
+        {
+            vmaDestroyImage(*m_pAllocator, mesh.baseColorImg, mesh.baseColorImgAlloc);
+        }
+
+        if (mesh.normalImg != VK_NULL_HANDLE)
+        {
+            vmaDestroyImage(*m_pAllocator, mesh.normalImg, mesh.normalImgAlloc);
+        }
+
+        if (mesh.metallicRoughnessImg != VK_NULL_HANDLE)
+        {
+            vmaDestroyImage(*m_pAllocator, mesh.metallicRoughnessImg, mesh.metallicRoughnessImgAlloc);
+        }
+
+        if (mesh.occlusionImg != VK_NULL_HANDLE)
+        {
+            vmaDestroyImage(*m_pAllocator, mesh.occlusionImg, mesh.occlusionImgAlloc);
+        }
+
+        if (mesh.emissiveImg != VK_NULL_HANDLE)
+        {
+            vmaDestroyImage(*m_pAllocator, mesh.emissiveImg, mesh.emissiveImgAlloc);
+        }
+    }
 }
 
 // ================================================================================================================
