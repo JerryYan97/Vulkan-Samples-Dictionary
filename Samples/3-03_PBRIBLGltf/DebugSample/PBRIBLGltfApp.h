@@ -109,10 +109,11 @@ public:
 
     VkDescriptorSet GetIblCurrentFrameDescriptorSet0() 
         { return m_iblPipelineDescriptorSet0s[m_currentFrame]; }
-
+    /*
     VkBuffer GetIblVertBuffer() { return m_vertBuffer; }
     VkBuffer GetIblIdxBuffer() { return m_idxBuffer; }
     uint32_t GetIdxCnt() { return m_idxBufferData.size(); }
+    */
 
     VkPipeline GetIblPipeline() { return m_iblPipeline.GetVkPipeline(); }
     VkPipelineLayout GetIblPipelineLayout() { return m_iblPipelineLayout; }
@@ -161,13 +162,6 @@ private:
     VmaAllocation   m_hdrCubeMapAlloc;
 
     ImgInfo m_hdrImgCubemap;
-
-    std::vector<float>    m_vertBufferData;
-    std::vector<uint32_t> m_idxBufferData;
-    VkBuffer              m_vertBuffer;
-    VmaAllocation         m_vertBufferAlloc;
-    VkBuffer              m_idxBuffer;
-    VmaAllocation         m_idxBufferAlloc;
 
     std::vector<VkBuffer>      m_vpMatUboBuffer;
     std::vector<VmaAllocation> m_vpMatUboAlloc;

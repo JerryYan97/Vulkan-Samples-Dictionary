@@ -844,10 +844,120 @@ void PBRIBLGltfApp::InitModelInfo()
         // Assmue the data and element type of the position is float3
         int posBufferOffset = posAccessorByteOffset + posBufferView.byteOffset;
         int posBufferByteCnt = sizeof(float) * 3 * posAccessor.count;
-        m_gltfModeMeshes[i].vertData.resize(3 * posAccessor.count);
-        memcpy(m_gltfModeMeshes[i].vertData.data(), &pBufferData[posBufferOffset], posBufferByteCnt);
+        float* pPosData = new float[3 * posAccessor.count];
+        memcpy(pPosData, &pBufferData[posBufferOffset], posBufferByteCnt);
 
-        // Assmue the data and element 
+        // Assmue the data and element type of the normal is float3.
+        int normalBufferOffset = normalAccessorByteOffset + normalBufferView.byteOffset;
+        int normalBufferByteCnt = sizeof(float) * 3 * normalAccessor.count;
+        float* pNomralData = new float[3 * normalAccessor.count];
+        memcpy(pNomralData, &pBufferData[normalBufferOffset], normalBufferByteCnt);
+
+        // Assmue the data and element type of the tangent is float4.
+        int tangentBufferOffset = tangentAccessorByteOffset + tangentBufferView.byteOffset;
+        int tangentBufferByteCnt = sizeof(float) * 4 * tangentAccessor.count;
+        float* pTangentData = new float[4 * tangentAccessor.count];
+        memcpy(pTangentData, &pBufferData[tangentBufferOffset], tangentBufferByteCnt);
+
+        // Assume the data and element type of the texcoord is float2.
+        int uvBufferOffset = uvAccessorByteOffset + uvBufferView.byteOffset;
+        int uvBufferByteCnt = sizeof(float) * 2 * uvAccessor.count;
+        float* pUvData = new float[2 * uvAccessor.count];
+        memcpy(pUvData, &pBufferData[uvBufferOffset], uvBufferByteCnt);
+
+        // Assemble the vert buffer, fill the mesh information and send vert buffer and idx buffer to VkBuffer.
+
+        // Fill the vert buffer
+        int vertBufferByteCnt = posBufferByteCnt + normalBufferByteCnt + tangentBufferByteCnt + uvBufferByteCnt;
+        int vertBufferDwordCnt = vertBufferByteCnt / sizeof(float);
+        
+        m_gltfModeMeshes[i].vertData.resize(vertBufferDwordCnt);
+
+        // The count of [pos, normal, tangent, uv] is equal to posAccessor/normalAccessor/tangentAccessor/uvAccessor.count.
+        // [3 floats, 3 floats, 4 floats, 2 floats] --> 12 floats.
+        for (uint32_t vertIdx = 0; vertIdx < posAccessor.count; vertIdx++)
+        {
+            // pos -- 3 floats
+            m_gltfModeMeshes[i].vertData[12 * vertIdx] = pPosData[3 * vertIdx];
+            m_gltfModeMeshes[i].vertData[12 * vertIdx + 1] = pPosData[3 * vertIdx + 1];
+            m_gltfModeMeshes[i].vertData[12 * vertIdx + 2] = pPosData[3 * vertIdx + 2];
+
+            // normal -- 3 floats
+            m_gltfModeMeshes[i].vertData[12 * vertIdx + 3] = pNomralData[3 * vertIdx];
+            m_gltfModeMeshes[i].vertData[12 * vertIdx + 4] = pNomralData[3 * vertIdx + 1];
+            m_gltfModeMeshes[i].vertData[12 * vertIdx + 5] = pNomralData[3 * vertIdx + 2];
+
+            // tangent -- 4 floats
+            m_gltfModeMeshes[i].vertData[12 * vertIdx + 6] = pTangentData[4 * vertIdx];
+            m_gltfModeMeshes[i].vertData[12 * vertIdx + 7] = pTangentData[4 * vertIdx + 1];
+            m_gltfModeMeshes[i].vertData[12 * vertIdx + 8] = pTangentData[4 * vertIdx + 2];
+            m_gltfModeMeshes[i].vertData[12 * vertIdx + 9] = pTangentData[4 * vertIdx + 3];
+
+            // uv -- 2 floats
+            m_gltfModeMeshes[i].vertData[12 * vertIdx + 10] = pTangentData[2 * vertIdx];
+            m_gltfModeMeshes[i].vertData[12 * vertIdx + 11] = pTangentData[2 * vertIdx + 1];
+        }
+
+        // Create the VkBuffer for the idx buffer.
+        {
+            VkBufferCreateInfo idxBufferInfo{};
+            {
+                idxBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+                idxBufferInfo.size = idxBufferByteCnt;
+                idxBufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+                idxBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+            }
+
+            VmaAllocationCreateInfo idxBufferAllocInfo{};
+            {
+                idxBufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+                idxBufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
+                                           VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+            }
+
+            vmaCreateBuffer(*m_pAllocator,
+                            &idxBufferInfo,
+                            &idxBufferAllocInfo,
+                            &m_gltfModeMeshes[i].modelIdxBuffer,
+                            &m_gltfModeMeshes[i].modelIdxBufferAlloc,
+                            nullptr);
+        }        
+
+        // Create the VkBuffer for the vert buffer.
+        {
+            VkBufferCreateInfo vertBufferInfo{};
+            {
+                vertBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+                vertBufferInfo.size = vertBufferByteCnt;
+                vertBufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+                vertBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+            }
+
+            VmaAllocationCreateInfo vertBufferAllocInfo{};
+            {
+                vertBufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+                vertBufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
+                                            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+            }
+
+            vmaCreateBuffer(*m_pAllocator,
+                            &vertBufferInfo,
+                            &vertBufferAllocInfo,
+                            &m_gltfModeMeshes[i].modelVertBuffer,
+                            &m_gltfModeMeshes[i].modelVertBufferAlloc,
+                            nullptr);
+        }
+
+        // Send idx data and vert data to their VkBuffers.
+        CopyRamDataToGpuBuffer(m_gltfModeMeshes[i].vertData.data(),
+                               m_gltfModeMeshes[i].modelVertBuffer,
+                               m_gltfModeMeshes[i].modelVertBufferAlloc,
+                               vertBufferByteCnt);
+
+        CopyRamDataToGpuBuffer(m_gltfModeMeshes[i].idxData.data(),
+                               m_gltfModeMeshes[i].modelIdxBuffer,
+                               m_gltfModeMeshes[i].modelIdxBufferAlloc,
+                               idxBufferByteCnt);
 
         // Send image info to GPU and set relevant data
         const auto& material = model.materials[materialIdx];
