@@ -965,6 +965,7 @@ void PBRIBLGltfApp::InitModelInfo()
         // material.emissiveTexture -- Let forget emissive. The renderer doesn't support emissive textures.
 
         // A texture is defined by an image index, denoted by the source property and a sampler index (sampler).
+        // Assmue that all textures are 8 bits per channel. They are all xxx / 255. They all have 4 components.
         const auto& baseColorTex = model.textures[baseColorTexIdx];
         const auto& metallicRoughnessTex = model.textures[metallicRoughnessTexIdx];
         const auto& occlusionTex = model.textures[occlusionTexIdx];
@@ -980,9 +981,285 @@ void PBRIBLGltfApp::InitModelInfo()
         const auto& occlusionImg = model.images[occlusionTexImgIdx];
         const auto& normalImg = model.images[normalTexImgIdx];
 
-        m_gltfModeMeshes[i].baseColorTex.pixWidth = baseColorImg.width;
-        m_gltfModeMeshes[i].baseColorTex.pixHeight = baseColorImg.height;
-        // baseColorImg.
+        // Base Color Img
+        {
+            m_gltfModeMeshes[i].baseColorTex.pixWidth = baseColorImg.width;
+            m_gltfModeMeshes[i].baseColorTex.pixHeight = baseColorImg.height;
+            m_gltfModeMeshes[i].baseColorTex.componentCnt = 4;
+            m_gltfModeMeshes[i].baseColorTex.dataVec.resize(baseColorImg.width * baseColorImg.height * 4);
+            m_gltfModeMeshes[i].baseColorTex.dataVec = baseColorImg.image;
+            
+            VmaAllocationCreateInfo baseColorAllocInfo{};
+            {
+                baseColorAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+                baseColorAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+            }
+
+            VkExtent3D extent{};
+            {
+                extent.width = baseColorImg.width;
+                extent.height = baseColorImg.height;
+                extent.depth = 1;
+            }
+
+            VkImageCreateInfo baseColorImgInfo{};
+            {
+                baseColorImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+                baseColorImgInfo.imageType = VK_IMAGE_TYPE_2D;
+                baseColorImgInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+                baseColorImgInfo.extent = extent;
+                baseColorImgInfo.mipLevels = 1;
+                baseColorImgInfo.arrayLayers = 1;
+                baseColorImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+                baseColorImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
+                baseColorImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+                baseColorImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            }
+
+            vmaCreateImage(*m_pAllocator,
+                           &baseColorImgInfo,
+                           &baseColorAllocInfo,
+                           &m_gltfModeMeshes[i].baseColorImg,
+                           &m_gltfModeMeshes[i].baseColorImgAlloc,
+                           nullptr);
+
+            VkImageViewCreateInfo info{};
+            {
+                info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+                info.image = m_gltfModeMeshes[i].baseColorImg;
+                info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+                info.format = VK_FORMAT_R8G8B8A8_SRGB;
+                info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                info.subresourceRange.levelCount = 1;
+                info.subresourceRange.layerCount = 1;
+            }
+            VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_gltfModeMeshes[i].baseColorImgView));
+
+            VkSamplerCreateInfo sampler_info{};
+            {
+                sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+                sampler_info.magFilter = VK_FILTER_LINEAR;
+                sampler_info.minFilter = VK_FILTER_LINEAR;
+                sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+                sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+                sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+                sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+                sampler_info.minLod = -1000;
+                sampler_info.maxLod = 1000;
+                sampler_info.maxAnisotropy = 1.0f;
+            }
+            VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_gltfModeMeshes[i].baseColorImgSampler));
+        }
+
+        // Metallic roughness
+        {
+            m_gltfModeMeshes[i].metallicRoughnessTex.pixWidth = metalllicRoughnessImg.width;
+            m_gltfModeMeshes[i].metallicRoughnessTex.pixHeight = metalllicRoughnessImg.height;
+            m_gltfModeMeshes[i].metallicRoughnessTex.componentCnt = 4;
+            m_gltfModeMeshes[i].metallicRoughnessTex.dataVec.resize(metalllicRoughnessImg.width * metalllicRoughnessImg.height * 4);
+            m_gltfModeMeshes[i].metallicRoughnessTex.dataVec = metalllicRoughnessImg.image;
+
+            VmaAllocationCreateInfo metallicRoughnessAllocInfo{};
+            {
+                metallicRoughnessAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+                metallicRoughnessAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+            }
+
+            VkExtent3D extent{};
+            {
+                extent.width = metalllicRoughnessImg.width;
+                extent.height = metalllicRoughnessImg.height;
+                extent.depth = 1;
+            }
+
+            VkImageCreateInfo metalllicRoughnessImgInfo{};
+            {
+                metalllicRoughnessImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+                metalllicRoughnessImgInfo.imageType = VK_IMAGE_TYPE_2D;
+                metalllicRoughnessImgInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+                metalllicRoughnessImgInfo.extent = extent;
+                metalllicRoughnessImgInfo.mipLevels = 1;
+                metalllicRoughnessImgInfo.arrayLayers = 1;
+                metalllicRoughnessImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+                metalllicRoughnessImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
+                metalllicRoughnessImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+                metalllicRoughnessImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            }
+
+            vmaCreateImage(*m_pAllocator,
+                           &metalllicRoughnessImgInfo,
+                           &metallicRoughnessAllocInfo,
+                           &m_gltfModeMeshes[i].metallicRoughnessImg,
+                           &m_gltfModeMeshes[i].metallicRoughnessImgAlloc,
+                           nullptr);
+
+            VkImageViewCreateInfo info{};
+            {
+                info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+                info.image = m_gltfModeMeshes[i].metallicRoughnessImg;
+                info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+                info.format = VK_FORMAT_R8G8B8A8_UNORM;
+                info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                info.subresourceRange.levelCount = 1;
+                info.subresourceRange.layerCount = 1;
+            }
+            VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_gltfModeMeshes[i].metallicRoughnessImgView));
+
+            VkSamplerCreateInfo sampler_info{};
+            {
+                sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+                sampler_info.magFilter = VK_FILTER_LINEAR;
+                sampler_info.minFilter = VK_FILTER_LINEAR;
+                sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+                sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+                sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+                sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+                sampler_info.minLod = -1000;
+                sampler_info.maxLod = 1000;
+                sampler_info.maxAnisotropy = 1.0f;
+            }
+            VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_gltfModeMeshes[i].metallicRoughnessImgSampler));
+        }
+
+        // Occlusion
+        {
+            m_gltfModeMeshes[i].occlusionTex.pixWidth = occlusionImg.width;
+            m_gltfModeMeshes[i].occlusionTex.pixHeight = occlusionImg.height;
+            m_gltfModeMeshes[i].occlusionTex.componentCnt = 4;
+            m_gltfModeMeshes[i].occlusionTex.dataVec.resize(occlusionImg.width * occlusionImg.height * 4);
+            m_gltfModeMeshes[i].occlusionTex.dataVec = occlusionImg.image;
+
+            VmaAllocationCreateInfo occlusionAllocInfo{};
+            {
+                occlusionAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+                occlusionAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+            }
+
+            VkExtent3D extent{};
+            {
+                extent.width = occlusionImg.width;
+                extent.height = occlusionImg.height;
+                extent.depth = 1;
+            }
+
+            VkImageCreateInfo occlusionImgInfo{};
+            {
+                occlusionImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+                occlusionImgInfo.imageType = VK_IMAGE_TYPE_2D;
+                occlusionImgInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+                occlusionImgInfo.extent = extent;
+                occlusionImgInfo.mipLevels = 1;
+                occlusionImgInfo.arrayLayers = 1;
+                occlusionImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+                occlusionImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
+                occlusionImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+                occlusionImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            }
+
+            vmaCreateImage(*m_pAllocator,
+                           &occlusionImgInfo,
+                           &occlusionAllocInfo,
+                           &m_gltfModeMeshes[i].occlusionImg,
+                           &m_gltfModeMeshes[i].occlusionImgAlloc,
+                           nullptr);
+
+            VkImageViewCreateInfo info{};
+            {
+                info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+                info.image = m_gltfModeMeshes[i].occlusionImg;
+                info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+                info.format = VK_FORMAT_R8G8B8A8_UNORM;
+                info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                info.subresourceRange.levelCount = 1;
+                info.subresourceRange.layerCount = 1;
+            }
+            VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_gltfModeMeshes[i].occlusionImgView));
+
+            VkSamplerCreateInfo sampler_info{};
+            {
+                sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+                sampler_info.magFilter = VK_FILTER_LINEAR;
+                sampler_info.minFilter = VK_FILTER_LINEAR;
+                sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+                sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+                sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+                sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+                sampler_info.minLod = -1000;
+                sampler_info.maxLod = 1000;
+                sampler_info.maxAnisotropy = 1.0f;
+            }
+            VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_gltfModeMeshes[i].occlusionImgSampler));
+        }
+
+        // Normal
+        {
+            m_gltfModeMeshes[i].normalTex.pixWidth = normalImg.width;
+            m_gltfModeMeshes[i].normalTex.pixHeight = normalImg.height;
+            m_gltfModeMeshes[i].normalTex.componentCnt = 4;
+            m_gltfModeMeshes[i].normalTex.dataVec.resize(normalImg.width * normalImg.height * 4);
+            m_gltfModeMeshes[i].normalTex.dataVec = normalImg.image;
+
+            VmaAllocationCreateInfo normalAllocInfo{};
+            {
+                normalAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+                normalAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+            }
+
+            VkExtent3D extent{};
+            {
+                extent.width = normalImg.width;
+                extent.height = normalImg.height;
+                extent.depth = 1;
+            }
+
+            VkImageCreateInfo normalImgInfo{};
+            {
+                normalImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+                normalImgInfo.imageType = VK_IMAGE_TYPE_2D;
+                normalImgInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+                normalImgInfo.extent = extent;
+                normalImgInfo.mipLevels = 1;
+                normalImgInfo.arrayLayers = 1;
+                normalImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+                normalImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
+                normalImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+                normalImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            }
+
+            vmaCreateImage(*m_pAllocator,
+                           &normalImgInfo,
+                           &normalAllocInfo,
+                           &m_gltfModeMeshes[i].normalImg,
+                           &m_gltfModeMeshes[i].normalImgAlloc,
+                           nullptr);
+
+            VkImageViewCreateInfo info{};
+            {
+                info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+                info.image = m_gltfModeMeshes[i].normalImg;
+                info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+                info.format = VK_FORMAT_R8G8B8A8_UNORM;
+                info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                info.subresourceRange.levelCount = 1;
+                info.subresourceRange.layerCount = 1;
+            }
+            VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_gltfModeMeshes[i].normalImgView));
+
+            VkSamplerCreateInfo sampler_info{};
+            {
+                sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+                sampler_info.magFilter = VK_FILTER_LINEAR;
+                sampler_info.minFilter = VK_FILTER_LINEAR;
+                sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+                sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+                sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+                sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+                sampler_info.minLod = -1000;
+                sampler_info.maxLod = 1000;
+                sampler_info.maxAnisotropy = 1.0f;
+            }
+            VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_gltfModeMeshes[i].normalImgSampler));
+        }
     }
 
     /*
@@ -1079,6 +1356,13 @@ void PBRIBLGltfApp::InitModelInfo()
     CopyRamDataToGpuBuffer(m_vertBufferData.data(), m_vertBuffer, m_vertBufferAlloc, vertBufferByteCnt);
     CopyRamDataToGpuBuffer(m_idxBufferData.data(), m_idxBuffer, m_idxBufferAlloc, idxBufferByteCnt);
     */
+}
+
+// ================================================================================================================
+void PBRIBLGltfApp::SendModelTexDataToGPU(
+    VkCommandBuffer cmdBuffer)
+{
+
 }
 
 // ================================================================================================================

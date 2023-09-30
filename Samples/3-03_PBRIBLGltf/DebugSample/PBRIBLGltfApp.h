@@ -14,6 +14,7 @@ struct ImgInfo
     uint32_t pixWidth;
     uint32_t pixHeight;
     uint32_t componentCnt;
+    std::vector<uint8_t> dataVec;
     float* pData;
 };
 
@@ -42,18 +43,28 @@ struct Mesh
 
     VkImage       baseColorImg;
     VmaAllocation baseColorImgAlloc;
+    VkImageView   baseColorImgView;
+    VkSampler     baseColorImgSampler;
 
     VkImage       metallicRoughnessImg;
     VmaAllocation metallicRoughnessImgAlloc;
+    VkImageView   metallicRoughnessImgView;
+    VkSampler     metallicRoughnessImgSampler;
 
     VkImage       normalImg;
     VmaAllocation normalImgAlloc;
+    VkImageView   normalImgView;
+    VkSampler     normalImgSampler;
 
     VkImage       occlusionImg;
     VmaAllocation occlusionImgAlloc;
+    VkImageView   occlusionImgView;
+    VkSampler     occlusionImgSampler;
 
     VkImage       emissiveImg;
     VmaAllocation emissiveImgAlloc;
+    VkImageView   emissiveImgView;
+    VkSampler     emissiveImgSampler;
 };
 
 /*
@@ -120,6 +131,9 @@ public:
     VkPipelineLayout GetIblPipelineLayout() { return m_iblPipelineLayout; }
     
     void SendCameraDataToBuffer(uint32_t i);
+    void SendModelTexDataToGPU(VkCommandBuffer cmdBuffer);
+
+    const std::vector<Mesh>& GetModelMeshes() { return m_gltfModeMeshes; }
 
 private:
     VkPipelineVertexInputStateCreateInfo CreatePipelineVertexInputInfo();

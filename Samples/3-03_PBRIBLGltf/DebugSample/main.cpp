@@ -44,6 +44,7 @@ int main()
     // - Copy background cubemap to vulkan image;
     // - Copy Camera parameters to the GPU buffer;
     // - Copy IBL images to vulkan images;
+    // - Copy model textures to vulkan images;
     {
         // Shared resources
         VmaAllocator* pAllocator = app.GetVmaAllocator();
@@ -223,6 +224,36 @@ int main()
                                     envBrdfBufToImgCopy,
                                     *pAllocator);
 
+        // Send model's textures to GPU
+        const std::vector<Mesh>& gltfMeshes = app.GetModelMeshes();
+        for (const auto& mesh : gltfMeshes)
+        {
+            // Base color
+            VkBufferImageCopy baseColorBufToImgCopy{};
+            {
+                VkExtent3D extent{};
+                {
+                    extent.width = mesh.baseColorTex.pixWidth;
+                    extent.height = mesh.baseColorTex.pixWidth;
+                    extent.depth = 1;
+                }
+
+                baseColorBufToImgCopy.bufferRowLength = extent.width;
+                baseColorBufToImgCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                baseColorBufToImgCopy.imageSubresource.mipLevel = 0;
+                baseColorBufToImgCopy.imageSubresource.baseArrayLayer = 0;
+                baseColorBufToImgCopy.imageSubresource.layerCount = 1;
+                baseColorBufToImgCopy.imageExtent = extent;
+            }
+
+            SharedLib::SendImgDataToGpu(stagingCmdBuffer,
+                                        device,
+                                        gfxQueue,
+                                        (void*) mesh.baseColorTex.dataVec.data(),
+                                        mesh.baseColorTex.dataVec.size(),
+                                        );
+
+        }
 
         // Transform all images layout to shader read optimal.
         VkCommandBufferBeginInfo beginInfo{};
