@@ -251,8 +251,98 @@ int main()
                                         gfxQueue,
                                         (void*) mesh.baseColorTex.dataVec.data(),
                                         mesh.baseColorTex.dataVec.size(),
-                                        );
+                                        mesh.baseColorImg,
+                                        tex2dSubResRange,
+                                        VK_IMAGE_LAYOUT_UNDEFINED,
+                                        baseColorBufToImgCopy,
+                                        *pAllocator);
 
+            // Normal
+            VkBufferImageCopy normalBufToImgCopy{};
+            {
+                VkExtent3D extent{};
+                {
+                    extent.width = mesh.normalTex.pixWidth;
+                    extent.height = mesh.normalTex.pixWidth;
+                    extent.depth = 1;
+                }
+
+                normalBufToImgCopy.bufferRowLength = extent.width;
+                normalBufToImgCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                normalBufToImgCopy.imageSubresource.mipLevel = 0;
+                normalBufToImgCopy.imageSubresource.baseArrayLayer = 0;
+                normalBufToImgCopy.imageSubresource.layerCount = 1;
+                normalBufToImgCopy.imageExtent = extent;
+            }
+
+            SharedLib::SendImgDataToGpu(stagingCmdBuffer,
+                                        device,
+                                        gfxQueue,
+                                        (void*) mesh.normalTex.dataVec.data(),
+                                        mesh.normalTex.dataVec.size(),
+                                        mesh.normalImg,
+                                        tex2dSubResRange,
+                                        VK_IMAGE_LAYOUT_UNDEFINED,
+                                        normalBufToImgCopy,
+                                        *pAllocator);
+
+            // Roughness metallic
+            VkBufferImageCopy roughnessMetallicBufToImgCopy{};
+            {
+                VkExtent3D extent{};
+                {
+                    extent.width = mesh.metallicRoughnessTex.pixWidth;
+                    extent.height = mesh.metallicRoughnessTex.pixWidth;
+                    extent.depth = 1;
+                }
+
+                roughnessMetallicBufToImgCopy.bufferRowLength = extent.width;
+                roughnessMetallicBufToImgCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                roughnessMetallicBufToImgCopy.imageSubresource.mipLevel = 0;
+                roughnessMetallicBufToImgCopy.imageSubresource.baseArrayLayer = 0;
+                roughnessMetallicBufToImgCopy.imageSubresource.layerCount = 1;
+                roughnessMetallicBufToImgCopy.imageExtent = extent;
+            }
+
+            SharedLib::SendImgDataToGpu(stagingCmdBuffer,
+                                        device,
+                                        gfxQueue,
+                                        (void*) mesh.metallicRoughnessTex.dataVec.data(),
+                                        mesh.metallicRoughnessTex.dataVec.size(),
+                                        mesh.metallicRoughnessImg,
+                                        tex2dSubResRange,
+                                        VK_IMAGE_LAYOUT_UNDEFINED,
+                                        roughnessMetallicBufToImgCopy,
+                                        *pAllocator);
+
+            // Occlusion
+            VkBufferImageCopy occlusionBufToImgCopy{};
+            {
+                VkExtent3D extent{};
+                {
+                    extent.width = mesh.occlusionTex.pixWidth;
+                    extent.height = mesh.occlusionTex.pixWidth;
+                    extent.depth = 1;
+                }
+
+                occlusionBufToImgCopy.bufferRowLength = extent.width;
+                occlusionBufToImgCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                occlusionBufToImgCopy.imageSubresource.mipLevel = 0;
+                occlusionBufToImgCopy.imageSubresource.baseArrayLayer = 0;
+                occlusionBufToImgCopy.imageSubresource.layerCount = 1;
+                occlusionBufToImgCopy.imageExtent = extent;
+            }
+
+            SharedLib::SendImgDataToGpu(stagingCmdBuffer,
+                                        device,
+                                        gfxQueue,
+                                        (void*) mesh.occlusionTex.dataVec.data(),
+                                        mesh.occlusionTex.dataVec.size(),
+                                        mesh.occlusionImg,
+                                        tex2dSubResRange,
+                                        VK_IMAGE_LAYOUT_UNDEFINED,
+                                        occlusionBufToImgCopy,
+                                        *pAllocator);
         }
 
         // Transform all images layout to shader read optimal.
@@ -263,7 +353,10 @@ int main()
         VK_CHECK(vkBeginCommandBuffer(stagingCmdBuffer, &beginInfo));
 
         // Transform the layout of the image to shader access resource
-        VkImageMemoryBarrier imgResMemBarriers[4] = {};
+        // VkImageMemoryBarrier imgResMemBarriers[4] = {};
+        std::vector<VkImageMemoryBarrier> imgResMemBarriers;
+        uint32_t modelTexCnt = app.GetModelTexCnt();
+        imgResMemBarriers.resize(4 + modelTexCnt);
         {
             // Background cubemap
             imgResMemBarriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -306,6 +399,51 @@ int main()
             imgResMemBarriers[3].dstAccessMask = VK_ACCESS_NONE;
             imgResMemBarriers[3].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
             imgResMemBarriers[3].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+            // Others models' textures
+            uint32_t modelTexTransReadyCnt = 0;
+            for (const auto& mesh : gltfMeshes)
+            {
+                // Base color
+                if (mesh.baseColorImg != VK_NULL_HANDLE)
+                {
+                    imgResMemBarriers[modelTexTransReadyCnt + 4].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+                    imgResMemBarriers[modelTexTransReadyCnt + 4].image = mesh.baseColorImg;
+                    imgResMemBarriers[modelTexTransReadyCnt + 4].subresourceRange = tex2dSubResRange;
+                    imgResMemBarriers[modelTexTransReadyCnt + 4].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                    imgResMemBarriers[modelTexTransReadyCnt + 4].dstAccessMask = VK_ACCESS_NONE;
+                    imgResMemBarriers[modelTexTransReadyCnt + 4].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+                    imgResMemBarriers[modelTexTransReadyCnt + 4].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+                    modelTexTransReadyCnt++;
+                }
+
+                // Normal
+                if (mesh.normalImg != VK_NULL_HANDLE)
+                {
+                    imgResMemBarriers[modelTexTransReadyCnt + 4].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+                    imgResMemBarriers[modelTexTransReadyCnt + 4].image = mesh.normalImg;
+                    imgResMemBarriers[modelTexTransReadyCnt + 4].subresourceRange = tex2dSubResRange;
+                    imgResMemBarriers[modelTexTransReadyCnt + 4].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                    imgResMemBarriers[modelTexTransReadyCnt + 4].dstAccessMask = VK_ACCESS_NONE;
+                    imgResMemBarriers[modelTexTransReadyCnt + 4].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+                    imgResMemBarriers[modelTexTransReadyCnt + 4].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+                    modelTexTransReadyCnt++;
+                }
+
+                // Metallic roughness
+                if (mesh.metallicRoughnessImg != VK_NULL_HANDLE)
+                {
+                    modelTexTransReadyCnt++;
+                }
+
+                // Occlusion
+                if (mesh.occlusionImg != VK_NULL_HANDLE)
+                {
+                    modelTexTransReadyCnt++;
+                }
+            }
         }
 
         vkCmdPipelineBarrier(

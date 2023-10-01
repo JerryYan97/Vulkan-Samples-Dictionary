@@ -1261,101 +1261,39 @@ void PBRIBLGltfApp::InitModelInfo()
             VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_gltfModeMeshes[i].normalImgSampler));
         }
     }
+}
 
-    /*
-    for (uint32_t s = 0; s < shapes.size(); s++)
+// ================================================================================================================
+uint32_t PBRIBLGltfApp::GetModelTexCnt()
+{
+    uint32_t cnt = 0;
+    for (const auto& mesh : m_gltfModeMeshes)
     {
-        // Loop over faces(polygon)
-        uint32_t index_offset = 0;
-        uint32_t idxBufIdx = 0;
-        for (uint32_t f = 0; f < shapes[s].mesh.num_face_vertices.size(); f++)
+        if (mesh.baseColorImg != VK_NULL_HANDLE)
         {
-            uint32_t fv = shapes[s].mesh.num_face_vertices[f];
+            cnt++;
+        }
 
-            // Loop over vertices in the face.
-            for (uint32_t v = 0; v < fv; v++)
-            {
-                // Access to vertex
-                tinyobj::index_t idx = shapes[s].mesh.indices[index_offset + v];
+        if (mesh.normalImg != VK_NULL_HANDLE)
+        {
+            cnt++;
+        }
 
-                float vx = attrib.vertices[3 * size_t(idx.vertex_index) + 0];
-                float vy = attrib.vertices[3 * size_t(idx.vertex_index) + 1];
-                float vz = attrib.vertices[3 * size_t(idx.vertex_index) + 2];
+        if (mesh.metallicRoughnessImg != VK_NULL_HANDLE)
+        {
+            cnt++;
+        }
 
-                // Transfer the vertex buffer's vertex index to the element index -- 6 * vertex index + xxx;
-                m_vertBufferData.push_back(vx);
-                m_vertBufferData.push_back(vy);
-                m_vertBufferData.push_back(vz);
+        if (mesh.occlusionImg != VK_NULL_HANDLE)
+        {
+            cnt++;
+        }
 
-                // Check if `normal_index` is zero or positive. negative = no normal data
-                assert(idx.normal_index >= 0, "The model doesn't have normal information but it is necessary.");
-                float nx = attrib.normals[3 * size_t(idx.normal_index) + 0];
-                float ny = attrib.normals[3 * size_t(idx.normal_index) + 1];
-                float nz = attrib.normals[3 * size_t(idx.normal_index) + 2];
-
-                m_vertBufferData.push_back(nx);
-                m_vertBufferData.push_back(ny);
-                m_vertBufferData.push_back(nz);
-
-                m_idxBufferData.push_back(idxBufIdx);
-                idxBufIdx++;
-            }
-            index_offset += fv;
+        if (mesh.emissiveImg != VK_NULL_HANDLE)
+        {
+            cnt++;
         }
     }
-
-    const uint32_t vertBufferByteCnt = m_vertBufferData.size() * sizeof(float);
-    const uint32_t idxBufferByteCnt = m_idxBufferData.size() * sizeof(uint32_t);
-
-    // Create sphere data GPU buffers
-    VkBufferCreateInfo vertBufferInfo{};
-    {
-        vertBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        vertBufferInfo.size = vertBufferByteCnt;
-        vertBufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-        vertBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    }
-
-    VmaAllocationCreateInfo vertBufferAllocInfo{};
-    {
-        vertBufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        vertBufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
-            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    }
-
-    vmaCreateBuffer(*m_pAllocator,
-        &vertBufferInfo,
-        &vertBufferAllocInfo,
-        &m_vertBuffer,
-        &m_vertBufferAlloc,
-        nullptr);
-
-    VkBufferCreateInfo idxBufferInfo{};
-    {
-        idxBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        idxBufferInfo.size = idxBufferByteCnt;
-        idxBufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-        idxBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    }
-
-    VmaAllocationCreateInfo idxBufferAllocInfo{};
-    {
-        idxBufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        idxBufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
-            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    }
-
-    vmaCreateBuffer(*m_pAllocator,
-        &idxBufferInfo,
-        &idxBufferAllocInfo,
-        &m_idxBuffer,
-        &m_idxBufferAlloc,
-        nullptr);
-
-    // Send sphere data to the GPU buffers
-    CopyRamDataToGpuBuffer(m_vertBufferData.data(), m_vertBuffer, m_vertBufferAlloc, vertBufferByteCnt);
-    CopyRamDataToGpuBuffer(m_idxBufferData.data(), m_idxBuffer, m_idxBufferAlloc, idxBufferByteCnt);
-    */
 }
 
 // ================================================================================================================

@@ -134,6 +134,7 @@ public:
     void SendModelTexDataToGPU(VkCommandBuffer cmdBuffer);
 
     const std::vector<Mesh>& GetModelMeshes() { return m_gltfModeMeshes; }
+    uint32_t GetModelTexCnt();
 
 private:
     VkPipelineVertexInputStateCreateInfo CreatePipelineVertexInputInfo();
