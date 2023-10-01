@@ -435,12 +435,28 @@ int main()
                 // Metallic roughness
                 if (mesh.metallicRoughnessImg != VK_NULL_HANDLE)
                 {
+                    imgResMemBarriers[modelTexTransReadyCnt + 4].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+                    imgResMemBarriers[modelTexTransReadyCnt + 4].image = mesh.metallicRoughnessImg;
+                    imgResMemBarriers[modelTexTransReadyCnt + 4].subresourceRange = tex2dSubResRange;
+                    imgResMemBarriers[modelTexTransReadyCnt + 4].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                    imgResMemBarriers[modelTexTransReadyCnt + 4].dstAccessMask = VK_ACCESS_NONE;
+                    imgResMemBarriers[modelTexTransReadyCnt + 4].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+                    imgResMemBarriers[modelTexTransReadyCnt + 4].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
                     modelTexTransReadyCnt++;
                 }
 
                 // Occlusion
                 if (mesh.occlusionImg != VK_NULL_HANDLE)
                 {
+                    imgResMemBarriers[modelTexTransReadyCnt + 4].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+                    imgResMemBarriers[modelTexTransReadyCnt + 4].image = mesh.occlusionImg;
+                    imgResMemBarriers[modelTexTransReadyCnt + 4].subresourceRange = tex2dSubResRange;
+                    imgResMemBarriers[modelTexTransReadyCnt + 4].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                    imgResMemBarriers[modelTexTransReadyCnt + 4].dstAccessMask = VK_ACCESS_NONE;
+                    imgResMemBarriers[modelTexTransReadyCnt + 4].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+                    imgResMemBarriers[modelTexTransReadyCnt + 4].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
                     modelTexTransReadyCnt++;
                 }
             }
@@ -453,7 +469,8 @@ int main()
             0,
             0, nullptr,
             0, nullptr,
-            4, imgResMemBarriers);
+            imgResMemBarriers.size(),
+            imgResMemBarriers.data());
 
         // End the command buffer and submit the packets
         vkEndCommandBuffer(stagingCmdBuffer);
@@ -474,8 +491,7 @@ int main()
         rdoc_api->EndFrameCapture(NULL, NULL);
     }
 
-    /**/
-
+    /*
     // Main Loop
     // Two draws. First draw draws triangle into an image with window 1 window size.
     // Second draw draws GUI. GUI would use the image drawn from the first draw.
@@ -692,4 +708,5 @@ int main()
 
         app.FrameEnd();
     }
+    */
 }
