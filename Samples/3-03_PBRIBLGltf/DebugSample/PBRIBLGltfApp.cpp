@@ -1621,6 +1621,8 @@ void PBRIBLGltfApp::DestroyVpMatBuffer()
 }
 
 // ================================================================================================================
+// Elements notes:
+// Position: float3, normal: float3, tangent: float4, texcoord: float2.
 VkPipelineVertexInputStateCreateInfo PBRIBLGltfApp::CreatePipelineVertexInputInfo()
 {
     // Specifying all kinds of pipeline states
@@ -1629,13 +1631,13 @@ VkPipelineVertexInputStateCreateInfo PBRIBLGltfApp::CreatePipelineVertexInputInf
     memset(pVertBindingDesc, 0, sizeof(VkVertexInputBindingDescription));
     {
         pVertBindingDesc->binding = 0;
-        pVertBindingDesc->stride = 6 * sizeof(float);
+        pVertBindingDesc->stride = 12 * sizeof(float);
         pVertBindingDesc->inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
     }
     m_heapMemPtrVec.push_back(pVertBindingDesc);
 
-    VkVertexInputAttributeDescription* pVertAttrDescs = new VkVertexInputAttributeDescription[2];
-    memset(pVertAttrDescs, 0, sizeof(VkVertexInputAttributeDescription) * 2);
+    VkVertexInputAttributeDescription* pVertAttrDescs = new VkVertexInputAttributeDescription[4];
+    memset(pVertAttrDescs, 0, sizeof(VkVertexInputAttributeDescription) * 4);
     {
         // Position
         pVertAttrDescs[0].location = 0;
@@ -1647,6 +1649,16 @@ VkPipelineVertexInputStateCreateInfo PBRIBLGltfApp::CreatePipelineVertexInputInf
         pVertAttrDescs[1].binding = 0;
         pVertAttrDescs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
         pVertAttrDescs[1].offset = 3 * sizeof(float);
+        // Tangent
+        pVertAttrDescs[2].location = 2;
+        pVertAttrDescs[2].binding = 0;
+        pVertAttrDescs[2].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        pVertAttrDescs[2].offset = 6 * sizeof(float);
+        // Texcoord
+        pVertAttrDescs[3].location = 3;
+        pVertAttrDescs[3].binding = 0;
+        pVertAttrDescs[3].format = VK_FORMAT_R32G32_SFLOAT;
+        pVertAttrDescs[3].offset = 10 * sizeof(float);
     }
     m_heapArrayMemPtrVec.push_back(pVertAttrDescs);
 
@@ -1656,7 +1668,7 @@ VkPipelineVertexInputStateCreateInfo PBRIBLGltfApp::CreatePipelineVertexInputInf
         vertInputInfo.pNext = nullptr;
         vertInputInfo.vertexBindingDescriptionCount = 1;
         vertInputInfo.pVertexBindingDescriptions = pVertBindingDesc;
-        vertInputInfo.vertexAttributeDescriptionCount = 2;
+        vertInputInfo.vertexAttributeDescriptionCount = 4;
         vertInputInfo.pVertexAttributeDescriptions = pVertAttrDescs;
     }
 
