@@ -179,7 +179,7 @@ void PBRIBLGltfApp::InitHdrRenderObjects()
 
     // Read in and init background cubemap
     {
-        std::string cubemapPathName = hdriFilePath + "output_cubemap.hdr";
+        std::string cubemapPathName = hdriFilePath + "iblOutput/background_cubemap.hdr";
 
         int width, height, nrComponents;
         m_hdrImgCubemap.pData = stbi_loadf(cubemapPathName.c_str(), &width, &height, &nrComponents, 0);
@@ -1315,26 +1315,36 @@ void PBRIBLGltfApp::DestroyModelInfo()
         if (mesh.baseColorImg != VK_NULL_HANDLE)
         {
             vmaDestroyImage(*m_pAllocator, mesh.baseColorImg, mesh.baseColorImgAlloc);
+            vkDestroyImageView(m_device, mesh.baseColorImgView, nullptr);
+            vkDestroySampler(m_device, mesh.baseColorImgSampler, nullptr);
         }
 
         if (mesh.normalImg != VK_NULL_HANDLE)
         {
             vmaDestroyImage(*m_pAllocator, mesh.normalImg, mesh.normalImgAlloc);
+            vkDestroyImageView(m_device, mesh.normalImgView, nullptr);
+            vkDestroySampler(m_device, mesh.normalImgSampler, nullptr);
         }
 
         if (mesh.metallicRoughnessImg != VK_NULL_HANDLE)
         {
             vmaDestroyImage(*m_pAllocator, mesh.metallicRoughnessImg, mesh.metallicRoughnessImgAlloc);
+            vkDestroyImageView(m_device, mesh.metallicRoughnessImgView, nullptr);
+            vkDestroySampler(m_device, mesh.metallicRoughnessImgSampler, nullptr);
         }
 
         if (mesh.occlusionImg != VK_NULL_HANDLE)
         {
             vmaDestroyImage(*m_pAllocator, mesh.occlusionImg, mesh.occlusionImgAlloc);
+            vkDestroyImageView(m_device, mesh.occlusionImgView, nullptr);
+            vkDestroySampler(m_device, mesh.occlusionImgSampler, nullptr);
         }
 
         if (mesh.emissiveImg != VK_NULL_HANDLE)
         {
             vmaDestroyImage(*m_pAllocator, mesh.emissiveImg, mesh.emissiveImgAlloc);
+            vkDestroyImageView(m_device, mesh.emissiveImgView, nullptr);
+            vkDestroySampler(m_device, mesh.emissiveImgSampler, nullptr);
         }
     }
 }
