@@ -1554,6 +1554,8 @@ void PBRIBLGltfApp::InitIblPipelineDescriptorSets()
             writeEnvBrdfDesSet.descriptorCount = 1;
         }
 
+        // VkWriteDescriptorSet writeBaseColorDesSet{}
+
         // Linking pipeline descriptors: cubemap and scene buffer descriptors to their GPU memory and info.
         VkWriteDescriptorSet writeIblPipelineDescriptors[4] = { writeVpMatUboBufDesSet,
                                                                 writeDiffIrrDesSet,

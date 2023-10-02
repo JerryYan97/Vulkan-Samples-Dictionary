@@ -45,6 +45,7 @@ int main()
     // - Copy Camera parameters to the GPU buffer;
     // - Copy IBL images to vulkan images;
     // - Copy model textures to vulkan images;
+    const std::vector<Mesh>& gltfMeshes = app.GetModelMeshes();
     {
         // Shared resources
         VmaAllocator* pAllocator = app.GetVmaAllocator();
@@ -225,7 +226,6 @@ int main()
                                     *pAllocator);
 
         // Send model's textures to GPU
-        const std::vector<Mesh>& gltfMeshes = app.GetModelMeshes();
         for (const auto& mesh : gltfMeshes)
         {
             // Base color
@@ -491,7 +491,6 @@ int main()
         rdoc_api->EndFrameCapture(NULL, NULL);
     }
 
-    /*
     // Main Loop
     // Two draws. First draw draws triangle into an image with window 1 window size.
     // Second draw draws GUI. GUI would use the image drawn from the first draw.
@@ -633,7 +632,7 @@ int main()
 
         vkCmdEndRendering(currentCmdBuffer);
 
-        // Render spheres
+        // Render models' meshes
         // Let IBL render in the color attachment after the skybox rendering completes.
         vkCmdPipelineBarrier(currentCmdBuffer,
             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -643,43 +642,46 @@ int main()
             0, nullptr,
             0, nullptr);
 
-        vkCmdBindDescriptorSets(currentCmdBuffer,
-                                VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                app.GetIblPipelineLayout(),
-                                0, 1, &currentIblPipelineDesSet0, 0, NULL);
-
-        VkRenderingInfoKHR renderSpheresInfo{};
+        for (const auto& mesh : gltfMeshes)
         {
-            renderSpheresInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
-            renderSpheresInfo.renderArea.offset = { 0, 0 };
-            renderSpheresInfo.renderArea.extent = swapchainImageExtent;
-            renderSpheresInfo.layerCount = 1;
-            renderSpheresInfo.colorAttachmentCount = 1;
-            renderSpheresInfo.pColorAttachments = &renderSpheresAttachmentInfo;
-            renderSpheresInfo.pDepthAttachment = &depthAttachmentInfo;
+            vkCmdBindDescriptorSets(currentCmdBuffer,
+                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                app.GetIblPipelineLayout(),
+                0, 1, &currentIblPipelineDesSet0, 0, NULL);
+
+            VkRenderingInfoKHR renderSpheresInfo{};
+            {
+                renderSpheresInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+                renderSpheresInfo.renderArea.offset = { 0, 0 };
+                renderSpheresInfo.renderArea.extent = swapchainImageExtent;
+                renderSpheresInfo.layerCount = 1;
+                renderSpheresInfo.colorAttachmentCount = 1;
+                renderSpheresInfo.pColorAttachments = &renderSpheresAttachmentInfo;
+                renderSpheresInfo.pDepthAttachment = &depthAttachmentInfo;
+            }
+
+            vkCmdBeginRendering(currentCmdBuffer, &renderSpheresInfo);
+
+            // Bind the graphics pipeline
+            vkCmdBindPipeline(currentCmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, app.GetIblPipeline());
+
+            vkCmdSetViewport(currentCmdBuffer, 0, 1, &viewport);
+            vkCmdSetScissor(currentCmdBuffer, 0, 1, &scissor);
+
+            VkDeviceSize vbOffset = 0;
+            vkCmdBindVertexBuffers(currentCmdBuffer, 0, 1, &vertBuffer, &vbOffset);
+            vkCmdBindIndexBuffer(currentCmdBuffer, idxBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+            float maxMipLevels = static_cast<float>(app.GetMaxMipLevel());
+            vkCmdPushConstants(currentCmdBuffer,
+                app.GetIblPipelineLayout(),
+                VK_SHADER_STAGE_FRAGMENT_BIT,
+                0, sizeof(float), &maxMipLevels);
+
+            vkCmdDrawIndexed(currentCmdBuffer, app.GetIdxCnt(), 14, 0, 0, 0);
+
+            vkCmdEndRendering(currentCmdBuffer);
         }
-
-        vkCmdBeginRendering(currentCmdBuffer, &renderSpheresInfo);
-
-        // Bind the graphics pipeline
-        vkCmdBindPipeline(currentCmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, app.GetIblPipeline());
-
-        vkCmdSetViewport(currentCmdBuffer, 0, 1, &viewport);
-        vkCmdSetScissor(currentCmdBuffer, 0, 1, &scissor);
-
-        VkDeviceSize vbOffset = 0;
-        vkCmdBindVertexBuffers(currentCmdBuffer, 0, 1, &vertBuffer, &vbOffset);
-        vkCmdBindIndexBuffer(currentCmdBuffer, idxBuffer, 0, VK_INDEX_TYPE_UINT32);
-
-        float maxMipLevels = static_cast<float>(app.GetMaxMipLevel());
-        vkCmdPushConstants(currentCmdBuffer,
-                           app.GetIblPipelineLayout(),
-                           VK_SHADER_STAGE_FRAGMENT_BIT,
-                           0, sizeof(float), &maxMipLevels);
-
-        vkCmdDrawIndexed(currentCmdBuffer, app.GetIdxCnt(), 14, 0, 0, 0);
-
-        vkCmdEndRendering(currentCmdBuffer);
 
         // Transform the swapchain image layout from render target to present.
         // Transform the layout of the swapchain from undefined to render target.
@@ -708,5 +710,4 @@ int main()
 
         app.FrameEnd();
     }
-    */
 }
