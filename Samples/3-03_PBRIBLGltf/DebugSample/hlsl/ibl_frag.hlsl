@@ -3,6 +3,9 @@
 // const static float3 F0 = float3(1.0, 1.0, 1.0);
 // const static float3 Albedo = float3(1.0, 1.0, 1.0); 
 
+// NOTE: [[vk::binding(X[, Y])]] -- X: binding number, Y: descriptor set.
+// TODO: We'll two descriptor sets since only the camera matrices are needed to be updated.
+
 struct SceneInfoUbo
 {
     float maxMipLevel;

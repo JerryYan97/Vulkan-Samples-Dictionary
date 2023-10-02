@@ -1499,7 +1499,12 @@ void PBRIBLGltfApp::InitIblPipelineDescriptorSets()
         envBrdfDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     }
 
-    m_iblPipelineDescriptorSet0s.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
+    VkDescriptorImageInfo baseColorDesImgInfo{};
+    {
+        baseColorDesImgInfo.imageView = VK_NULL_HANDLE;
+    }
+
+    m_iblPipelineDescriptorSet0s.resize(SharedLib::MAX_FRAMES_IN_FLIGHT * m_gltfModeMeshes.size());
 
     for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
     {
@@ -1514,6 +1519,8 @@ void PBRIBLGltfApp::InitIblPipelineDescriptorSets()
                                           &pipelineDesSet0AllocInfo,
                                           &m_iblPipelineDescriptorSet0s[i]));
 
+        std::vector<VkWriteDescriptorSet> writeIblPipelineDescriptors;
+
         VkWriteDescriptorSet writeVpMatUboBufDesSet{};
         {
             writeVpMatUboBufDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -1523,6 +1530,7 @@ void PBRIBLGltfApp::InitIblPipelineDescriptorSets()
             writeVpMatUboBufDesSet.descriptorCount = 1;
             writeVpMatUboBufDesSet.pBufferInfo = &vpMatDesBufInfo;
         }
+        writeIblPipelineDescriptors.push_back(writeVpMatUboBufDesSet);
 
         VkWriteDescriptorSet writeDiffIrrDesSet{};
         {
@@ -1533,6 +1541,7 @@ void PBRIBLGltfApp::InitIblPipelineDescriptorSets()
             writeDiffIrrDesSet.pImageInfo = &diffIrrDesImgInfo;
             writeDiffIrrDesSet.descriptorCount = 1;
         }
+        writeIblPipelineDescriptors.push_back(writeDiffIrrDesSet);
 
         VkWriteDescriptorSet writePrefilterEnvDesSet{};
         {
@@ -1543,6 +1552,7 @@ void PBRIBLGltfApp::InitIblPipelineDescriptorSets()
             writePrefilterEnvDesSet.pImageInfo = &prefilterEnvDesImgInfo;
             writePrefilterEnvDesSet.descriptorCount = 1;
         }
+        writeIblPipelineDescriptors.push_back(writePrefilterEnvDesSet);
 
         VkWriteDescriptorSet writeEnvBrdfDesSet{};
         {
@@ -1553,8 +1563,20 @@ void PBRIBLGltfApp::InitIblPipelineDescriptorSets()
             writeEnvBrdfDesSet.pImageInfo = &envBrdfDesImgInfo;
             writeEnvBrdfDesSet.descriptorCount = 1;
         }
+        writeIblPipelineDescriptors.push_back(writeEnvBrdfDesSet);
 
-        // VkWriteDescriptorSet writeBaseColorDesSet{}
+        VkWriteDescriptorSet writeBaseColorDesSet{};
+        {
+            writeBaseColorDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writeBaseColorDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            writeBaseColorDesSet.dstSet = m_iblPipelineDescriptorSet0s[i];
+            writeBaseColorDesSet.dstBinding = 4;
+            writeEnvBrdfDesSet.pImageInfo = &;
+            writeEnvBrdfDesSet.descriptorCount = 1;
+        }
+        writeIblPipelineDescriptors.push_back(writeBaseColorDesSet);
+
+
 
         // Linking pipeline descriptors: cubemap and scene buffer descriptors to their GPU memory and info.
         VkWriteDescriptorSet writeIblPipelineDescriptors[4] = { writeVpMatUboBufDesSet,
