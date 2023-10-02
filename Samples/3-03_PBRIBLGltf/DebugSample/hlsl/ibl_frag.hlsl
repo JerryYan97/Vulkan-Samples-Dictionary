@@ -11,20 +11,20 @@ struct SceneInfoUbo
     float maxMipLevel;
 };
 
-TextureCube i_diffuseCubeMapTexture : register(t1);
-SamplerState i_diffuseCubemapSamplerState : register(s1);
+[[vk::binding(0, 1)]] TextureCube i_diffuseCubeMapTexture;
+[[vk::binding(0, 1)]] SamplerState i_diffuseCubemapSamplerState;
 
-TextureCube i_prefilterEnvCubeMapTexture : register(t2);
-SamplerState i_prefilterEnvCubeMapSamplerState : register(s2);
+[[vk::binding(1, 1)]] TextureCube i_prefilterEnvCubeMapTexture;
+[[vk::binding(1, 1)]] SamplerState i_prefilterEnvCubeMapSamplerState;
 
-Texture2D    i_envBrdfTexture : register(t3);
-SamplerState i_envBrdfSamplerState : register(s3);
+[[vk::binding(2, 1)]] Texture2D    i_envBrdfTexture;
+[[vk::binding(2, 1)]] SamplerState i_envBrdfSamplerState;
 
-Texture2D i_baseColorTexture : register(t4);
-SamplerState i_baseColorSamplerState : register(s4);
+[[vk::binding(3, 1)]] Texture2D i_baseColorTexture;
+[[vk::binding(3, 1)]] SamplerState i_baseColorSamplerState;
 
-Texture2D i_normalTexture : register(t5);
-SamplerState i_normalSamplerState : register(s5);
+[[vk::binding(4, 1)]] Texture2D i_normalTexture;
+[[vk::binding(4, 1)]] SamplerState i_normalSamplerState;
 
 // The textures for metalness and roughness properties are packed together in a single texture called
 // metallicRoughnessTexture. Its green channel contains roughness values and its blue channel contains metalness

@@ -21,7 +21,7 @@ struct VertUBO
     float4x4 vpMat;
 };
 
-cbuffer UBO0 : register(b0) { VertUBO i_vertUbo; }
+[[vk::binding(0, 0)]] cbuffer UBO0 { VertUBO i_vertUbo; }
 
 VSOutput main(
     VSInput i_vertInput)

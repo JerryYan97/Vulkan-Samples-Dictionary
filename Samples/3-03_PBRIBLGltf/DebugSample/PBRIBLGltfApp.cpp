@@ -1571,7 +1571,7 @@ void PBRIBLGltfApp::InitIblPipelineDescriptorSets()
             writeBaseColorDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
             writeBaseColorDesSet.dstSet = m_iblPipelineDescriptorSet0s[i];
             writeBaseColorDesSet.dstBinding = 4;
-            writeEnvBrdfDesSet.pImageInfo = &;
+            writeEnvBrdfDesSet.pImageInfo = nullptr;
             writeEnvBrdfDesSet.descriptorCount = 1;
         }
         writeIblPipelineDescriptors.push_back(writeBaseColorDesSet);
@@ -1579,12 +1579,10 @@ void PBRIBLGltfApp::InitIblPipelineDescriptorSets()
 
 
         // Linking pipeline descriptors: cubemap and scene buffer descriptors to their GPU memory and info.
-        VkWriteDescriptorSet writeIblPipelineDescriptors[4] = { writeVpMatUboBufDesSet,
-                                                                writeDiffIrrDesSet,
-                                                                writePrefilterEnvDesSet,
-                                                                writeEnvBrdfDesSet };
 
-        vkUpdateDescriptorSets(m_device, 4, writeIblPipelineDescriptors, 0, NULL);
+        vkUpdateDescriptorSets(m_device,
+                               writeIblPipelineDescriptors.size(),
+                               writeIblPipelineDescriptors.data(), 0, NULL);
     }
 }
 
