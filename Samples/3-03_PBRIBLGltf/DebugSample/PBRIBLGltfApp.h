@@ -196,9 +196,11 @@ private:
     // Sphere rendering
     VkShaderModule               m_vsIblShaderModule;
     VkShaderModule               m_psIblShaderModule;
-    VkDescriptorSetLayout        m_iblPipelineDesSet0Layout;
+    VkDescriptorSetLayout        m_iblPipelineDesSetsLayouts[3]; // 0 -- UBO; 1 -- background textures; 3 -- model textures.
     VkPipelineLayout             m_iblPipelineLayout;
-    std::vector<VkDescriptorSet> m_iblPipelineDescriptorSet0s; // For different frames.
+    std::vector<VkDescriptorSet> m_iblPipelineModelTexDescriptorSets;
+    VkDescriptorSet              m_iblPipelineBackgroundTexDescriptorSet;
+    std::vector<VkDescriptorSet> m_iblPipelineUboDescriptorSets;
     SharedLib::Pipeline          m_iblPipeline;
 
     VkImage       m_diffuseIrradianceCubemap;

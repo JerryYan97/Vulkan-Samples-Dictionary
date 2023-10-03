@@ -43,7 +43,6 @@ PBRIBLGltfApp::PBRIBLGltfApp() :
     m_skyboxPipeline(),
     m_vsIblShaderModule(VK_NULL_HANDLE),
     m_psIblShaderModule(VK_NULL_HANDLE),
-    m_iblPipelineDesSet0Layout(VK_NULL_HANDLE),
     m_iblPipelineLayout(VK_NULL_HANDLE),
     m_iblPipeline(),
     m_diffuseIrradianceCubemap(VK_NULL_HANDLE),
@@ -60,9 +59,11 @@ PBRIBLGltfApp::PBRIBLGltfApp() :
     m_envBrdfImgAlloc(VK_NULL_HANDLE),
     m_hdrImgCubemap(),
     m_diffuseIrradianceCubemapImgInfo(),
-    m_envBrdfImgInfo()
+    m_envBrdfImgInfo(),
+    m_iblPipelineBackgroundTexDescriptorSet(VK_NULL_HANDLE)
 {
     m_pCamera = new SharedLib::Camera();
+    memset(m_iblPipelineDesSetsLayouts, 0, sizeof(m_iblPipelineDesSetsLayouts));
 }
 
 // ================================================================================================================
@@ -1380,6 +1381,11 @@ void PBRIBLGltfApp::InitIblPipeline()
 // ================================================================================================================
 void PBRIBLGltfApp::InitIblPipelineDescriptorSetLayout()
 {
+    // Create pipeline's descriptors layout
+    // The Vulkan spec states: The VkDescriptorSetLayoutBinding::binding members of the elements of the pBindings array 
+    // must each have different values 
+    // (https://vulkan.lunarg.com/doc/view/1.3.236.0/windows/1.3-extensions/vkspec.html#VUID-VkDescriptorSetLayoutCreateInfo-binding-00279)
+
     // Create pipeline binding and descriptor objects for the camera parameters
     VkDescriptorSetLayoutBinding vpMatUboBinding{};
     {
@@ -1389,50 +1395,107 @@ void PBRIBLGltfApp::InitIblPipelineDescriptorSetLayout()
         vpMatUboBinding.descriptorCount = 1;
     }
 
+    std::vector<VkDescriptorSetLayoutBinding> backgroundTexBindings;
     VkDescriptorSetLayoutBinding diffuseIrradianceBinding{};
     {
-        diffuseIrradianceBinding.binding = 1;
+        diffuseIrradianceBinding.binding = 0;
         diffuseIrradianceBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
         diffuseIrradianceBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         diffuseIrradianceBinding.descriptorCount = 1;
     }
+    backgroundTexBindings.push_back(diffuseIrradianceBinding);
 
     VkDescriptorSetLayoutBinding prefilterEnvBinding{};
     {
-        prefilterEnvBinding.binding = 2;
+        prefilterEnvBinding.binding = 1;
         prefilterEnvBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
         prefilterEnvBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         prefilterEnvBinding.descriptorCount = 1;
     }
+    backgroundTexBindings.push_back(prefilterEnvBinding);
 
     VkDescriptorSetLayoutBinding envBrdfBinding{};
     {
-        envBrdfBinding.binding = 3;
+        envBrdfBinding.binding = 2;
         envBrdfBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
         envBrdfBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         envBrdfBinding.descriptorCount = 1;
     }
+    backgroundTexBindings.push_back(envBrdfBinding);
 
-    // Create pipeline's descriptors layout
-    // The Vulkan spec states: The VkDescriptorSetLayoutBinding::binding members of the elements of the pBindings array 
-    // must each have different values 
-    // (https://vulkan.lunarg.com/doc/view/1.3.236.0/windows/1.3-extensions/vkspec.html#VUID-VkDescriptorSetLayoutCreateInfo-binding-00279)
-    VkDescriptorSetLayoutBinding pipelineDesSetLayoutBindings[4] = { vpMatUboBinding,
-                                                                     diffuseIrradianceBinding,
-                                                                     prefilterEnvBinding,
-                                                                     envBrdfBinding };
 
-    VkDescriptorSetLayoutCreateInfo pipelineDesSetLayoutInfo{};
+    std::vector<VkDescriptorSetLayoutBinding> modelTexBindings;
+    VkDescriptorSetLayoutBinding baseColorBinding{};
     {
-        pipelineDesSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        pipelineDesSetLayoutInfo.bindingCount = 4;
-        pipelineDesSetLayoutInfo.pBindings = pipelineDesSetLayoutBindings;
+        baseColorBinding.binding = 0;
+        baseColorBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        baseColorBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        baseColorBinding.descriptorCount = 1;
+    }
+    modelTexBindings.push_back(baseColorBinding);
+
+    VkDescriptorSetLayoutBinding normalBinding{};
+    {
+        normalBinding.binding = 1;
+        normalBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        normalBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        normalBinding.descriptorCount = 1;
+    }
+    modelTexBindings.push_back(normalBinding);
+
+    VkDescriptorSetLayoutBinding metallicRoughnessBinding{};
+    {
+        metallicRoughnessBinding.binding = 2;
+        metallicRoughnessBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        metallicRoughnessBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        metallicRoughnessBinding.descriptorCount = 1;
+    }
+    modelTexBindings.push_back(metallicRoughnessBinding);
+
+    VkDescriptorSetLayoutBinding occlusionBinding{};
+    {
+        occlusionBinding.binding = 3;
+        occlusionBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        occlusionBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        occlusionBinding.descriptorCount = 1;
+    }
+    modelTexBindings.push_back(occlusionBinding);
+
+    VkDescriptorSetLayoutCreateInfo uboPipelineDesSetLayoutInfo{};
+    {
+        uboPipelineDesSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        uboPipelineDesSetLayoutInfo.bindingCount = 1;
+        uboPipelineDesSetLayoutInfo.pBindings = &vpMatUboBinding;
+    }
+
+    VkDescriptorSetLayoutCreateInfo backgroundTexPipelineDesSetLayoutInfo{};
+    {
+        backgroundTexPipelineDesSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        backgroundTexPipelineDesSetLayoutInfo.bindingCount = backgroundTexBindings.size();
+        backgroundTexPipelineDesSetLayoutInfo.pBindings = backgroundTexBindings.data();
+    }
+
+    VkDescriptorSetLayoutCreateInfo modelTexPipelineDesSetLayoutInfo{};
+    {
+        modelTexPipelineDesSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        modelTexPipelineDesSetLayoutInfo.bindingCount = modelTexBindings.size();
+        modelTexPipelineDesSetLayoutInfo.pBindings = modelTexBindings.data();
     }
 
     VK_CHECK(vkCreateDescriptorSetLayout(m_device,
-                                         &pipelineDesSetLayoutInfo,
+                                         &uboPipelineDesSetLayoutInfo,
                                          nullptr,
-                                         &m_iblPipelineDesSet0Layout));
+                                         &m_iblPipelineDesSetsLayouts[0]));
+
+    VK_CHECK(vkCreateDescriptorSetLayout(m_device,
+                                         &backgroundTexPipelineDesSetLayoutInfo,
+                                         nullptr,
+                                         &m_iblPipelineDesSetsLayouts[1]));
+
+    VK_CHECK(vkCreateDescriptorSetLayout(m_device,
+                                         &modelTexPipelineDesSetLayoutInfo,
+                                         nullptr,
+                                         &m_iblPipelineDesSetsLayouts[2]));
 }
 
 // ================================================================================================================
@@ -1442,15 +1505,15 @@ void PBRIBLGltfApp::InitIblPipelineLayout()
     {
         range.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
         range.offset = 0;
-        range.size = sizeof(float); // Camera position.
+        range.size = sizeof(float); // Max IBL mipmap.
     }
 
     // Create pipeline layout
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     {
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pipelineLayoutInfo.setLayoutCount = 1;
-        pipelineLayoutInfo.pSetLayouts = &m_iblPipelineDesSet0Layout;
+        pipelineLayoutInfo.setLayoutCount = 3;
+        pipelineLayoutInfo.pSetLayouts = m_iblPipelineDesSetsLayouts;
         pipelineLayoutInfo.pushConstantRangeCount = 1;
         pipelineLayoutInfo.pPushConstantRanges = &range;
     }
@@ -1466,123 +1529,226 @@ void PBRIBLGltfApp::InitIblShaderModules()
 }
 
 // ================================================================================================================
+// Two ubo descriptor sets: One for each on-fly frames.
+// The number of descriptor sets of model rendering is equal to the number of meshes in the model since they can
+// be reused accross frames.
+// Actually, there can be three descriptor sets: IBL descriptor set, ubo descriptor set and tex descriptor sets.
 void PBRIBLGltfApp::InitIblPipelineDescriptorSets()
 {
     // Create pipeline descirptor
-    VkDescriptorSetAllocateInfo pipelineDesSet0AllocInfo{};
-    {
-        pipelineDesSet0AllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        pipelineDesSet0AllocInfo.descriptorPool = m_descriptorPool;
-        pipelineDesSet0AllocInfo.pSetLayouts = &m_iblPipelineDesSet0Layout;
-        pipelineDesSet0AllocInfo.descriptorSetCount = 1;
-    }
+    VkDescriptorSetLayout uboDescriptorSetLayout = m_iblPipelineDesSetsLayouts[0];
+    VkDescriptorSetLayout backgroundTexDescriptorSetLayout = m_iblPipelineDesSetsLayouts[1];
+    VkDescriptorSetLayout modelTexDescriptorSetLayout = m_iblPipelineDesSetsLayouts[2];
 
+    std::vector<VkDescriptorSetLayout> modelTexDescriptorSetLayouts(m_gltfModeMeshes.size(),
+                                                                    modelTexDescriptorSetLayout);
+
+    std::vector<VkDescriptorSetLayout> uboDescriptorSetLayouts(SharedLib::MAX_FRAMES_IN_FLIGHT,
+                                                               uboDescriptorSetLayout);
+
+    m_iblPipelineModelTexDescriptorSets.resize(m_gltfModeMeshes.size());
+    VkDescriptorSetAllocateInfo modelTexDescriptorSetsAllocInfo{};
+    {
+        modelTexDescriptorSetsAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        modelTexDescriptorSetsAllocInfo.descriptorPool = m_descriptorPool;
+        modelTexDescriptorSetsAllocInfo.pSetLayouts = modelTexDescriptorSetLayouts.data();
+        modelTexDescriptorSetsAllocInfo.descriptorSetCount = modelTexDescriptorSetLayouts.size();
+    }
+    VK_CHECK(vkAllocateDescriptorSets(m_device,
+                                      &modelTexDescriptorSetsAllocInfo,
+                                      m_iblPipelineModelTexDescriptorSets.data()));
+
+    m_iblPipelineUboDescriptorSets.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
+    VkDescriptorSetAllocateInfo uboDescriptorSetsAllocInfo{};
+    {
+        uboDescriptorSetsAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        uboDescriptorSetsAllocInfo.descriptorPool = m_descriptorPool;
+        uboDescriptorSetsAllocInfo.pSetLayouts = uboDescriptorSetLayouts.data();
+        uboDescriptorSetsAllocInfo.descriptorSetCount = uboDescriptorSetLayouts.size();
+    }
+    VK_CHECK(vkAllocateDescriptorSets(m_device,
+                                      &uboDescriptorSetsAllocInfo,
+                                      m_iblPipelineUboDescriptorSets.data()));
+
+    VkDescriptorSetAllocateInfo backgroundTexDescriptorSetsAllocInfo{};
+    {
+        backgroundTexDescriptorSetsAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        backgroundTexDescriptorSetsAllocInfo.descriptorPool = m_descriptorPool;
+        backgroundTexDescriptorSetsAllocInfo.pSetLayouts = &backgroundTexDescriptorSetLayout;
+        backgroundTexDescriptorSetsAllocInfo.descriptorSetCount = 1;
+    }
+    VK_CHECK(vkAllocateDescriptorSets(m_device,
+                                      &backgroundTexDescriptorSetsAllocInfo,
+                                      &m_iblPipelineBackgroundTexDescriptorSet));
+    
     // Link descriptors to the buffer and image
-    VkDescriptorImageInfo diffIrrDesImgInfo{};
+    // 
+    // Update the background textures descriptor set info.
     {
-        diffIrrDesImgInfo.imageView = m_diffuseIrradianceCubemapImgView;
-        diffIrrDesImgInfo.sampler = m_diffuseIrradianceCubemapSampler;
-        diffIrrDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    }
-
-    VkDescriptorImageInfo prefilterEnvDesImgInfo{};
-    {
-        prefilterEnvDesImgInfo.imageView = m_prefilterEnvCubemapView;
-        prefilterEnvDesImgInfo.sampler = m_prefilterEnvCubemapSampler;
-        prefilterEnvDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    }
-
-    VkDescriptorImageInfo envBrdfDesImgInfo{};
-    {
-        envBrdfDesImgInfo.imageView = m_envBrdfImgView;
-        envBrdfDesImgInfo.sampler = m_envBrdfImgSampler;
-        envBrdfDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    }
-
-    VkDescriptorImageInfo baseColorDesImgInfo{};
-    {
-        baseColorDesImgInfo.imageView = VK_NULL_HANDLE;
-    }
-
-    m_iblPipelineDescriptorSet0s.resize(SharedLib::MAX_FRAMES_IN_FLIGHT * m_gltfModeMeshes.size());
-
-    for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
-    {
-        VkDescriptorBufferInfo vpMatDesBufInfo{};
+        VkDescriptorImageInfo diffIrrDesImgInfo{};
         {
-            vpMatDesBufInfo.buffer = m_vpMatUboBuffer[i];
-            vpMatDesBufInfo.offset = 0;
-            vpMatDesBufInfo.range = VpMatBytesCnt;
+            diffIrrDesImgInfo.imageView = m_diffuseIrradianceCubemapImgView;
+            diffIrrDesImgInfo.sampler = m_diffuseIrradianceCubemapSampler;
+            diffIrrDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         }
 
-        VK_CHECK(vkAllocateDescriptorSets(m_device,
-                                          &pipelineDesSet0AllocInfo,
-                                          &m_iblPipelineDescriptorSet0s[i]));
-
-        std::vector<VkWriteDescriptorSet> writeIblPipelineDescriptors;
-
-        VkWriteDescriptorSet writeVpMatUboBufDesSet{};
+        VkDescriptorImageInfo prefilterEnvDesImgInfo{};
         {
-            writeVpMatUboBufDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            writeVpMatUboBufDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            writeVpMatUboBufDesSet.dstSet = m_iblPipelineDescriptorSet0s[i];
-            writeVpMatUboBufDesSet.dstBinding = 0;
-            writeVpMatUboBufDesSet.descriptorCount = 1;
-            writeVpMatUboBufDesSet.pBufferInfo = &vpMatDesBufInfo;
+            prefilterEnvDesImgInfo.imageView = m_prefilterEnvCubemapView;
+            prefilterEnvDesImgInfo.sampler = m_prefilterEnvCubemapSampler;
+            prefilterEnvDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         }
-        writeIblPipelineDescriptors.push_back(writeVpMatUboBufDesSet);
+
+        VkDescriptorImageInfo envBrdfDesImgInfo{};
+        {
+            envBrdfDesImgInfo.imageView = m_envBrdfImgView;
+            envBrdfDesImgInfo.sampler = m_envBrdfImgSampler;
+            envBrdfDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        }
 
         VkWriteDescriptorSet writeDiffIrrDesSet{};
         {
             writeDiffIrrDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             writeDiffIrrDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            writeDiffIrrDesSet.dstSet = m_iblPipelineDescriptorSet0s[i];
-            writeDiffIrrDesSet.dstBinding = 1;
+            writeDiffIrrDesSet.dstSet = m_iblPipelineBackgroundTexDescriptorSet;
+            writeDiffIrrDesSet.dstBinding = 0;
             writeDiffIrrDesSet.pImageInfo = &diffIrrDesImgInfo;
             writeDiffIrrDesSet.descriptorCount = 1;
         }
-        writeIblPipelineDescriptors.push_back(writeDiffIrrDesSet);
 
         VkWriteDescriptorSet writePrefilterEnvDesSet{};
         {
             writePrefilterEnvDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             writePrefilterEnvDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            writePrefilterEnvDesSet.dstSet = m_iblPipelineDescriptorSet0s[i];
-            writePrefilterEnvDesSet.dstBinding = 2;
+            writePrefilterEnvDesSet.dstSet = m_iblPipelineBackgroundTexDescriptorSet;
+            writePrefilterEnvDesSet.dstBinding = 1;
             writePrefilterEnvDesSet.pImageInfo = &prefilterEnvDesImgInfo;
             writePrefilterEnvDesSet.descriptorCount = 1;
         }
-        writeIblPipelineDescriptors.push_back(writePrefilterEnvDesSet);
 
         VkWriteDescriptorSet writeEnvBrdfDesSet{};
         {
             writeEnvBrdfDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             writeEnvBrdfDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            writeEnvBrdfDesSet.dstSet = m_iblPipelineDescriptorSet0s[i];
-            writeEnvBrdfDesSet.dstBinding = 3;
+            writeEnvBrdfDesSet.dstSet = m_iblPipelineBackgroundTexDescriptorSet;
+            writeEnvBrdfDesSet.dstBinding = 2;
             writeEnvBrdfDesSet.pImageInfo = &envBrdfDesImgInfo;
             writeEnvBrdfDesSet.descriptorCount = 1;
         }
-        writeIblPipelineDescriptors.push_back(writeEnvBrdfDesSet);
 
+        VkWriteDescriptorSet backgroundTexDescriptorSetWrites[3] = {
+            writeDiffIrrDesSet, writePrefilterEnvDesSet, writeEnvBrdfDesSet
+        };
+
+        vkUpdateDescriptorSets(m_device, 3, backgroundTexDescriptorSetWrites, 0, NULL);
+    }
+    
+    // Update the UBO descriptor set info.
+    {
+        std::vector<VkWriteDescriptorSet> writeUboDescriptors(SharedLib::MAX_FRAMES_IN_FLIGHT);
+        for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
+        {
+            VkDescriptorBufferInfo vpMatDesBufInfo{};
+            {
+                vpMatDesBufInfo.buffer = m_vpMatUboBuffer[i];
+                vpMatDesBufInfo.offset = 0;
+                vpMatDesBufInfo.range = VpMatBytesCnt;
+            }
+
+            VkWriteDescriptorSet writeVpMatUboBufDesSet{};
+            {
+                writeVpMatUboBufDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                writeVpMatUboBufDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+                writeVpMatUboBufDesSet.dstSet = m_iblPipelineUboDescriptorSets[i];
+                writeVpMatUboBufDesSet.dstBinding = 0;
+                writeVpMatUboBufDesSet.descriptorCount = 1;
+                writeVpMatUboBufDesSet.pBufferInfo = &vpMatDesBufInfo;
+            }
+            writeUboDescriptors[i] = writeVpMatUboBufDesSet;
+        }
+        vkUpdateDescriptorSets(m_device, SharedLib::MAX_FRAMES_IN_FLIGHT, writeUboDescriptors.data(), 0, NULL);
+    }
+
+    // Update the meshes' textures descriptor sets.
+    for (uint32_t i = 0; i < m_gltfModeMeshes.size(); i++)
+    {
+        const auto& mesh = m_gltfModeMeshes[i];
+
+        VkDescriptorImageInfo baseColorDesImgInfo{};
+        {
+            baseColorDesImgInfo.imageView = mesh.baseColorImgView;
+            baseColorDesImgInfo.sampler = mesh.baseColorImgSampler;
+            baseColorDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        }
+
+        VkDescriptorImageInfo normalDesImgInfo{};
+        {
+            normalDesImgInfo.imageView = mesh.normalImgView;
+            normalDesImgInfo.sampler = mesh.normalImgSampler;
+            normalDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        }
+
+        VkDescriptorImageInfo roughnessMetallicDesImgInfo{};
+        {
+            roughnessMetallicDesImgInfo.imageView = mesh.metallicRoughnessImgView;
+            roughnessMetallicDesImgInfo.sampler = mesh.metallicRoughnessImgSampler;
+            roughnessMetallicDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        }
+
+        VkDescriptorImageInfo occlusionDesImgInfo{};
+        {
+            occlusionDesImgInfo.imageView = mesh.occlusionImgView;
+            occlusionDesImgInfo.sampler = mesh.occlusionImgSampler;
+            occlusionDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        }
+
+        // Emissive is not supported.
+
+        // Update the mesh's textures descriptor set
         VkWriteDescriptorSet writeBaseColorDesSet{};
         {
             writeBaseColorDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             writeBaseColorDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            writeBaseColorDesSet.dstSet = m_iblPipelineDescriptorSet0s[i];
-            writeBaseColorDesSet.dstBinding = 4;
-            writeEnvBrdfDesSet.pImageInfo = nullptr;
-            writeEnvBrdfDesSet.descriptorCount = 1;
+            writeBaseColorDesSet.dstSet = m_iblPipelineModelTexDescriptorSets[i];
+            writeBaseColorDesSet.dstBinding = 0;
+            writeBaseColorDesSet.pImageInfo = &baseColorDesImgInfo;
+            writeBaseColorDesSet.descriptorCount = 1;
         }
-        writeIblPipelineDescriptors.push_back(writeBaseColorDesSet);
+        
+        VkWriteDescriptorSet writeNormalDesSet{};
+        {
+            writeNormalDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writeNormalDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            writeNormalDesSet.dstSet = m_iblPipelineModelTexDescriptorSets[i];
+            writeNormalDesSet.dstBinding = 1;
+            writeNormalDesSet.pImageInfo = &normalDesImgInfo;
+            writeNormalDesSet.descriptorCount = 1;
+        }
 
+        VkWriteDescriptorSet writeRoughnessMetallicDesSet{};
+        {
+            writeRoughnessMetallicDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writeRoughnessMetallicDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            writeRoughnessMetallicDesSet.dstSet = m_iblPipelineModelTexDescriptorSets[i];
+            writeRoughnessMetallicDesSet.dstBinding = 2;
+            writeRoughnessMetallicDesSet.pImageInfo = &roughnessMetallicDesImgInfo;
+            writeRoughnessMetallicDesSet.descriptorCount = 1;
+        }
 
+        VkWriteDescriptorSet writeOcclusionDesSet{};
+        {
+            writeOcclusionDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writeOcclusionDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            writeOcclusionDesSet.dstSet = m_iblPipelineModelTexDescriptorSets[i];
+            writeOcclusionDesSet.dstBinding = 3;
+            writeOcclusionDesSet.pImageInfo = &occlusionDesImgInfo;
+            writeOcclusionDesSet.descriptorCount = 1;
+        }
 
-        // Linking pipeline descriptors: cubemap and scene buffer descriptors to their GPU memory and info.
-
-        vkUpdateDescriptorSets(m_device,
-                               writeIblPipelineDescriptors.size(),
-                               writeIblPipelineDescriptors.data(), 0, NULL);
+        VkWriteDescriptorSet meshTexturesDesSetWrites[4] = {
+            writeBaseColorDesSet, writeNormalDesSet, writeRoughnessMetallicDesSet, writeOcclusionDesSet
+        };
+        vkUpdateDescriptorSets(m_device, 4, meshTexturesDesSetWrites, 0, NULL);
     }
 }
 
@@ -1597,7 +1763,10 @@ void PBRIBLGltfApp::DestroyIblPipelineRes()
     vkDestroyPipelineLayout(m_device, m_iblPipelineLayout, nullptr);
 
     // Destroy the descriptor set layout
-    vkDestroyDescriptorSetLayout(m_device, m_iblPipelineDesSet0Layout, nullptr);
+    for (uint32_t i = 0; i < 3; i++)
+    {
+        vkDestroyDescriptorSetLayout(m_device, m_iblPipelineDesSetsLayouts[i], nullptr);
+    }
 }
 
 // ================================================================================================================

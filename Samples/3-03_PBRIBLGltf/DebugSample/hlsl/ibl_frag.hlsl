@@ -20,20 +20,20 @@ struct SceneInfoUbo
 [[vk::binding(2, 1)]] Texture2D    i_envBrdfTexture;
 [[vk::binding(2, 1)]] SamplerState i_envBrdfSamplerState;
 
-[[vk::binding(3, 1)]] Texture2D i_baseColorTexture;
-[[vk::binding(3, 1)]] SamplerState i_baseColorSamplerState;
+[[vk::binding(0, 2)]] Texture2D i_baseColorTexture;
+[[vk::binding(0, 2)]] SamplerState i_baseColorSamplerState;
 
-[[vk::binding(4, 1)]] Texture2D i_normalTexture;
-[[vk::binding(4, 1)]] SamplerState i_normalSamplerState;
+[[vk::binding(1, 2)]] Texture2D i_normalTexture;
+[[vk::binding(1, 2)]] SamplerState i_normalSamplerState;
 
 // The textures for metalness and roughness properties are packed together in a single texture called
 // metallicRoughnessTexture. Its green channel contains roughness values and its blue channel contains metalness
 // values.
-Texture2D i_metallicRoughnessTexture : register(t6);
-SamplerState i_metallicRoughnessSamplerState : register(s6);
+[[vk::binding(2, 2)]] Texture2D i_metallicRoughnessTexture;
+[[vk::binding(2, 2)]] SamplerState i_metallicRoughnessSamplerState;
 
-Texture2D i_occlusionTexture : register(t7);
-SamplerState i_occlusionSamplerState : register(s7);
+[[vk::binding(3, 2)]] Texture2D i_occlusionTexture;
+[[vk::binding(3, 2)]] SamplerState i_occlusionSamplerState;
 
 [[vk::push_constant]] SceneInfoUbo i_sceneInfo;
 
