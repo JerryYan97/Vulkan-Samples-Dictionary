@@ -118,8 +118,14 @@ public:
 
     void GetCameraData(float* pBuffer);
 
-    VkDescriptorSet GetIblCurrentFrameDescriptorSet0() 
-        { return m_iblPipelineDescriptorSet0s[m_currentFrame]; }
+    VkDescriptorSet GetIblCurrentFrameUboDescriptorSet() 
+        { return m_iblPipelineUboDescriptorSets[m_currentFrame]; }
+
+    VkDescriptorSet GetIblTexDescriptorSet()
+        { return m_iblPipelineBackgroundTexDescriptorSet; }
+
+    VkDescriptorSet GetMeshTexDescriptorSet(uint32_t i)
+        { return m_iblPipelineModelTexDescriptorSets[i]; }
     
     // NOTE: Temp functions to make compilation work.
     VkBuffer GetIblVertBuffer() { return m_vpMatUboBuffer[0]; }

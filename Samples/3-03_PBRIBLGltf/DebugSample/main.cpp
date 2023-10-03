@@ -500,7 +500,8 @@ int main()
         VkFence inFlightFence = app.GetCurrentFrameFence();
         VkCommandBuffer currentCmdBuffer = app.GetCurrentFrameGfxCmdBuffer();
         VkDescriptorSet currentSkyboxPipelineDesSet0 = app.GetSkyboxCurrentFrameDescriptorSet0();
-        VkDescriptorSet currentIblPipelineDesSet0 = app.GetIblCurrentFrameDescriptorSet0();
+        VkDescriptorSet currentIblPipelineUboDesSet = app.GetIblCurrentFrameUboDescriptorSet();
+        VkDescriptorSet iblPipelineIblTexDesSet = app.GetIblTexDescriptorSet();
         VkExtent2D swapchainImageExtent = app.GetSwapchainImageExtent();
         VkBuffer vertBuffer = app.GetIblVertBuffer();
         VkBuffer idxBuffer = app.GetIblIdxBuffer();
@@ -647,7 +648,7 @@ int main()
             vkCmdBindDescriptorSets(currentCmdBuffer,
                 VK_PIPELINE_BIND_POINT_GRAPHICS,
                 app.GetIblPipelineLayout(),
-                0, 1, &currentIblPipelineDesSet0, 0, NULL);
+                0, 1, &currentIblPipelineUboDesSet, 0, NULL);
 
             VkRenderingInfoKHR renderSpheresInfo{};
             {
