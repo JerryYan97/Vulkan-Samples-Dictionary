@@ -503,8 +503,6 @@ int main()
         VkDescriptorSet currentIblPipelineUboDesSet = app.GetIblCurrentFrameUboDescriptorSet();
         VkDescriptorSet iblPipelineIblTexDesSet = app.GetIblTexDescriptorSet();
         VkExtent2D swapchainImageExtent = app.GetSwapchainImageExtent();
-        VkBuffer vertBuffer = app.GetIblVertBuffer();
-        VkBuffer idxBuffer = app.GetIblIdxBuffer();
 
         app.FrameStart();
 
@@ -643,12 +641,19 @@ int main()
             0, nullptr,
             0, nullptr);
 
-        for (const auto& mesh : gltfMeshes)
+        // for (const auto& mesh : gltfMeshes)
+        for(uint32_t i = 0; i < gltfMeshes.size(); i++)
         {
+            const auto& mesh = gltfMeshes[i];
+
+            VkDescriptorSet iblPipelineDescriptorSets[3] = {
+                currentIblPipelineUboDesSet, iblPipelineIblTexDesSet, app.GetMeshTexDescriptorSet(i)
+            };
+
             vkCmdBindDescriptorSets(currentCmdBuffer,
-                VK_PIPELINE_BIND_POINT_GRAPHICS,
-                app.GetIblPipelineLayout(),
-                0, 1, &currentIblPipelineUboDesSet, 0, NULL);
+                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    app.GetIblPipelineLayout(),
+                                    0, 3, iblPipelineDescriptorSets, 0, NULL);
 
             VkRenderingInfoKHR renderSpheresInfo{};
             {
@@ -670,8 +675,9 @@ int main()
             vkCmdSetScissor(currentCmdBuffer, 0, 1, &scissor);
 
             VkDeviceSize vbOffset = 0;
-            vkCmdBindVertexBuffers(currentCmdBuffer, 0, 1, &vertBuffer, &vbOffset);
-            vkCmdBindIndexBuffer(currentCmdBuffer, idxBuffer, 0, VK_INDEX_TYPE_UINT32);
+            vkCmdBindVertexBuffers(currentCmdBuffer, 0, 1, &mesh.modelVertBuffer, &vbOffset);
+            // Assume uint16_t input idx data
+            vkCmdBindIndexBuffer(currentCmdBuffer, mesh.modelIdxBuffer, 0, VK_INDEX_TYPE_UINT16);
 
             float maxMipLevels = static_cast<float>(app.GetMaxMipLevel());
             vkCmdPushConstants(currentCmdBuffer,
@@ -679,7 +685,7 @@ int main()
                 VK_SHADER_STAGE_FRAGMENT_BIT,
                 0, sizeof(float), &maxMipLevels);
 
-            vkCmdDrawIndexed(currentCmdBuffer, app.GetIdxCnt(), 14, 0, 0, 0);
+            vkCmdDrawIndexed(currentCmdBuffer, mesh.idxData.size(), 1, 0, 0, 0);
 
             vkCmdEndRendering(currentCmdBuffer);
         }

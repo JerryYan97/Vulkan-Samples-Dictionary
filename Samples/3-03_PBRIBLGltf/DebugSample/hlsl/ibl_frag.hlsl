@@ -40,7 +40,7 @@ struct SceneInfoUbo
 float4 main(
     float4 i_pixelWorldPos     : POSITION0,
     float4 i_pixelWorldNormal  : NORMAL0,
-    float2 i_pixelWorldTangent : TANGENT0,
+    float4 i_pixelWorldTangent : TANGENT0,
     float2 i_pixelWorldUv      : TEXCOORD0) : SV_Target
 {
     float3 V = normalize(-i_pixelWorldPos.xyz);
@@ -48,7 +48,7 @@ float4 main(
     float NoV = saturate(dot(N, V));
     float3 R = 2 * NoV * N - V;
 
-    float2 roughnessMetalic = i_metallicRoughnessTexture.Sample(i_metallicRoughnessSamplerState, i_pixelWorldUv);
+    float2 roughnessMetalic = i_metallicRoughnessTexture.Sample(i_metallicRoughnessSamplerState, i_pixelWorldUv).xy;
     float3 baseColor = i_baseColorTexture.Sample(i_baseColorSamplerState, i_pixelWorldUv).xyz;
     float3 normalSampled = i_normalTexture.Sample(i_normalSamplerState, i_pixelWorldUv).xyz;
     float occlusion = i_occlusionTexture.Sample(i_occlusionSamplerState, i_pixelWorldUv).x;

@@ -1,3 +1,5 @@
+#pragma pack_matrix(row_major)
+
 struct VSOutput
 {
     float4 Pos : SV_POSITION;
@@ -28,7 +30,7 @@ VSOutput main(
 {
     VSOutput output = (VSOutput)0;
 
-    float4x4 mvpMat = mul(i_vertUbo.modelMat, i_vertUbo.vpMat);
+    float4x4 mvpMat = mul(i_vertUbo.vpMat, i_vertUbo.modelMat);
     
     output.Pos = mul(mvpMat, float4(i_vertInput.vPosition, 1.0));
     output.WorldPos = mul(i_vertUbo.modelMat, float4(i_vertInput.vPosition, 1.0));

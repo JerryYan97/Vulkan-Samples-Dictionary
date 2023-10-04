@@ -80,6 +80,7 @@ enum GLTF_ACCESSOR_DATA_TYPE
 */
 
 const uint32_t VpMatBytesCnt = 4 * 4 * sizeof(float);
+const uint32_t IblMvpMatsBytesCnt = 2 * 4 * 4 * sizeof(float);
 
 class PBRIBLGltfApp : public SharedLib::GlfwApplication
 {
@@ -127,12 +128,6 @@ public:
     VkDescriptorSet GetMeshTexDescriptorSet(uint32_t i)
         { return m_iblPipelineModelTexDescriptorSets[i]; }
     
-    // NOTE: Temp functions to make compilation work.
-    VkBuffer GetIblVertBuffer() { return m_vpMatUboBuffer[0]; }
-    VkBuffer GetIblIdxBuffer() { return m_vpMatUboBuffer[0]; }
-    uint32_t GetIdxCnt() { return 0; }
-    
-
     VkPipeline GetIblPipeline() { return m_iblPipeline.GetVkPipeline(); }
     VkPipelineLayout GetIblPipelineLayout() { return m_iblPipelineLayout; }
     
@@ -171,6 +166,9 @@ private:
     void InitVpMatBuffer();
     void DestroyVpMatBuffer();
 
+    void InitIblMvpMatsBuffer();
+    void DestroyIblMvpMatsBuffer();
+
     // Shared resources init and destroy.
     void InitHdrRenderObjects();
     void InitCameraUboObjects();
@@ -187,6 +185,9 @@ private:
 
     std::vector<VkBuffer>      m_vpMatUboBuffer;
     std::vector<VmaAllocation> m_vpMatUboAlloc;
+
+    std::vector<VkBuffer>      m_iblMvpMatsUboBuffer;
+    std::vector<VmaAllocation> m_iblMvpMatsUboAlloc;
 
     SharedLib::Camera*           m_pCamera;
     std::vector<VkBuffer>        m_cameraParaBuffers;

@@ -72,6 +72,7 @@ PBRIBLGltfApp::~PBRIBLGltfApp()
     vkDeviceWaitIdle(m_device);
     delete m_pCamera;
 
+    DestroyIblMvpMatsBuffer();
     DestroyVpMatBuffer();
     DestroyHdrRenderObjs();
     DestroyCameraUboObjects();
@@ -724,6 +725,7 @@ void PBRIBLGltfApp::AppInit()
     InitSwapchain();
     InitModelInfo();
     InitVpMatBuffer();
+    InitIblMvpMatsBuffer();
 
     // Create the graphics pipeline
     InitSkyboxShaderModules();
@@ -1648,23 +1650,23 @@ void PBRIBLGltfApp::InitIblPipelineDescriptorSets()
         std::vector<VkWriteDescriptorSet> writeUboDescriptors(SharedLib::MAX_FRAMES_IN_FLIGHT);
         for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
         {
-            VkDescriptorBufferInfo vpMatDesBufInfo{};
+            VkDescriptorBufferInfo iblMvpMatDesBufInfo{};
             {
-                vpMatDesBufInfo.buffer = m_vpMatUboBuffer[i];
-                vpMatDesBufInfo.offset = 0;
-                vpMatDesBufInfo.range = VpMatBytesCnt;
+                iblMvpMatDesBufInfo.buffer = m_iblMvpMatsUboBuffer[i];
+                iblMvpMatDesBufInfo.offset = 0;
+                iblMvpMatDesBufInfo.range = IblMvpMatsBytesCnt;
             }
 
-            VkWriteDescriptorSet writeVpMatUboBufDesSet{};
+            VkWriteDescriptorSet writeIblMvpMatUboBufDesSet{};
             {
-                writeVpMatUboBufDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                writeVpMatUboBufDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-                writeVpMatUboBufDesSet.dstSet = m_iblPipelineUboDescriptorSets[i];
-                writeVpMatUboBufDesSet.dstBinding = 0;
-                writeVpMatUboBufDesSet.descriptorCount = 1;
-                writeVpMatUboBufDesSet.pBufferInfo = &vpMatDesBufInfo;
+                writeIblMvpMatUboBufDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                writeIblMvpMatUboBufDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+                writeIblMvpMatUboBufDesSet.dstSet = m_iblPipelineUboDescriptorSets[i];
+                writeIblMvpMatUboBufDesSet.dstBinding = 0;
+                writeIblMvpMatUboBufDesSet.descriptorCount = 1;
+                writeIblMvpMatUboBufDesSet.pBufferInfo = &iblMvpMatDesBufInfo;
             }
-            writeUboDescriptors[i] = writeVpMatUboBufDesSet;
+            writeUboDescriptors[i] = writeIblMvpMatUboBufDesSet;
         }
         vkUpdateDescriptorSets(m_device, SharedLib::MAX_FRAMES_IN_FLIGHT, writeUboDescriptors.data(), 0, NULL);
     }
@@ -1890,4 +1892,71 @@ VkPipelineDepthStencilStateCreateInfo PBRIBLGltfApp::CreateDepthStencilStateInfo
     }
 
     return depthStencilInfo;
+}
+
+// ================================================================================================================
+// TODO: The model should be at the center of the scene and the camera should rotate the model to make the animation.
+void PBRIBLGltfApp::InitIblMvpMatsBuffer()
+{
+    VkBufferCreateInfo bufferInfo{};
+    {
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = 32 * sizeof(float);
+        bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    }
+
+    VmaAllocationCreateInfo bufferAllocInfo{};
+    {
+        bufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        bufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
+                                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    }
+
+    m_iblMvpMatsUboBuffer.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
+    m_iblMvpMatsUboAlloc.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
+
+
+    // NOTE: Perspective Mat x View Mat x Model Mat x position.
+    float modelMatData[16] = {
+        1.f, 0.f, 0.f, 2.f,
+        0.f, 1.f, 0.f, 0.f,
+        0.f, 0.f, 1.f, 0.f,
+        0.f, 0.f, 0.f, 1.f
+    };
+    // SharedLib::MatTranspose(modelMatData, 4);
+
+    float vpMatData[16] = {};
+    float tmpViewMatData[16] = {};
+    float tmpPersMatData[16] = {};
+    m_pCamera->GenViewPerspectiveMatrices(tmpViewMatData, tmpPersMatData, vpMatData);
+    // SharedLib::MatTranspose(vpMatData, 4);
+
+    float iblUboData[32] = {};
+    memcpy(iblUboData, modelMatData, sizeof(modelMatData));
+    memcpy(&iblUboData[16], vpMatData, sizeof(vpMatData));
+
+    for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        vmaCreateBuffer(*m_pAllocator,
+                        &bufferInfo,
+                        &bufferAllocInfo,
+                        &m_iblMvpMatsUboBuffer[i],
+                        &m_iblMvpMatsUboAlloc[i],
+                        nullptr);
+
+        CopyRamDataToGpuBuffer(iblUboData,
+                               m_iblMvpMatsUboBuffer[i],
+                               m_iblMvpMatsUboAlloc[i],
+                               sizeof(iblUboData));
+    }
+}
+
+// ================================================================================================================
+void PBRIBLGltfApp::DestroyIblMvpMatsBuffer()
+{
+    for (uint32_t i = 0; i < m_iblMvpMatsUboBuffer.size(); i++)
+    {
+        vmaDestroyBuffer(*m_pAllocator, m_iblMvpMatsUboBuffer[i], m_iblMvpMatsUboAlloc[i]);
+    }
 }
