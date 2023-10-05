@@ -575,14 +575,24 @@ int main()
 
         VkClearValue depthClearVal{};
         depthClearVal.depthStencil.depth = 0.f;
-        VkRenderingAttachmentInfoKHR depthAttachmentInfo{};
+        VkRenderingAttachmentInfoKHR depthBackgroundAttachmentInfo{};
         {
-            depthAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-            depthAttachmentInfo.imageView = app.GetSwapchainDepthImageView(imageIndex);
-            depthAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
-            depthAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            depthAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-            depthAttachmentInfo.clearValue = depthClearVal;
+            depthBackgroundAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+            depthBackgroundAttachmentInfo.imageView = app.GetSwapchainDepthImageView(imageIndex);
+            depthBackgroundAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
+            depthBackgroundAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            depthBackgroundAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            depthBackgroundAttachmentInfo.clearValue = depthClearVal;
+        }
+
+        VkRenderingAttachmentInfoKHR depthModelAttachmentInfo{};
+        {
+            depthBackgroundAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+            depthBackgroundAttachmentInfo.imageView = app.GetSwapchainDepthImageView(imageIndex);
+            depthBackgroundAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
+            depthBackgroundAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+            depthBackgroundAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            depthBackgroundAttachmentInfo.clearValue = depthClearVal;
         }
 
         VkRenderingInfoKHR renderBackgroundInfo{};
@@ -593,6 +603,7 @@ int main()
             renderBackgroundInfo.layerCount = 1;
             renderBackgroundInfo.colorAttachmentCount = 1;
             renderBackgroundInfo.pColorAttachments = &renderBackgroundAttachmentInfo;
+            renderBackgroundInfo.pDepthAttachment = &depthBackgroundAttachmentInfo;
         }
 
         vkCmdBeginRendering(currentCmdBuffer, &renderBackgroundInfo);
@@ -663,7 +674,7 @@ int main()
                 renderSpheresInfo.layerCount = 1;
                 renderSpheresInfo.colorAttachmentCount = 1;
                 renderSpheresInfo.pColorAttachments = &renderSpheresAttachmentInfo;
-                renderSpheresInfo.pDepthAttachment = &depthAttachmentInfo;
+                renderSpheresInfo.pDepthAttachment = &depthModelAttachmentInfo;
             }
 
             vkCmdBeginRendering(currentCmdBuffer, &renderSpheresInfo);

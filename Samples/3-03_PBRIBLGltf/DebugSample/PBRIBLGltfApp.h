@@ -1,6 +1,7 @@
 #pragma once
 #include "../../../SharedLibrary/Application/GlfwApplication.h"
 #include "../../../SharedLibrary/Pipeline/Pipeline.h"
+#include <chrono>
 
 VK_DEFINE_HANDLE(VmaAllocation);
 
@@ -67,20 +68,11 @@ struct Mesh
     VkSampler     emissiveImgSampler;
 };
 
-/*
-enum GLTF_ACCESSOR_DATA_TYPE
-{
-    SIGNED_BYTE = 5120,
-    UNSIGNED_BYTE,
-    SIGNED_SHORT,
-    UNSIGNED_SHORT,
-    UNSIGNED_INT = 5125,
-    FLOAT
-};
-*/
-
 const uint32_t VpMatBytesCnt = 4 * 4 * sizeof(float);
 const uint32_t IblMvpMatsBytesCnt = 2 * 4 * 4 * sizeof(float);
+const float ModelWorldPos[3] = {0.f, -0.5f, 0.f};
+const float Radius = 1.5f;
+const float RotateRadiensPerSecond = 3.1415926 * 2.f / 10.f; // 10s -- a circle.
 
 class PBRIBLGltfApp : public SharedLib::GlfwApplication
 {
@@ -116,8 +108,6 @@ public:
         { return m_skyboxPipelineDescriptorSet0s[m_currentFrame]; }
 
     VkPipeline GetSkyboxPipeline() { return m_skyboxPipeline.GetVkPipeline(); }
-
-    void GetCameraData(float* pBuffer);
 
     VkDescriptorSet GetIblCurrentFrameUboDescriptorSet() 
         { return m_iblPipelineUboDescriptorSets[m_currentFrame]; }
@@ -229,4 +219,8 @@ private:
     ImgInfo       m_envBrdfImgInfo;
 
     std::vector<Mesh> m_gltfModeMeshes;
+
+    float m_currentRadians;
+    std::chrono::steady_clock::time_point m_lastTime;
+    bool m_isFirstTimeRecord;
 };

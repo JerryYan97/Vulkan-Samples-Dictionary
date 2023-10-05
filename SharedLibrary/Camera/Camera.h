@@ -23,6 +23,9 @@ namespace SharedLib
 
         void GetPos(float* oVec) { memcpy(oVec, m_pos, sizeof(float) * 3); };
 
+        void SetView(float* iView);
+        void SetPos(float* iPos) { memcpy(m_pos, iPos, sizeof(m_pos)); }
+
     private:
         void OnMiddleMouseButtonEvent(HEvent& ievent);
 

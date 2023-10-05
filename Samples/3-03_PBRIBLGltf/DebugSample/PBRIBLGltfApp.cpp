@@ -60,9 +60,19 @@ PBRIBLGltfApp::PBRIBLGltfApp() :
     m_hdrImgCubemap(),
     m_diffuseIrradianceCubemapImgInfo(),
     m_envBrdfImgInfo(),
-    m_iblPipelineBackgroundTexDescriptorSet(VK_NULL_HANDLE)
+    m_iblPipelineBackgroundTexDescriptorSet(VK_NULL_HANDLE),
+    m_currentRadians(0.f),
+    m_isFirstTimeRecord(true),
+    m_lastTime()
 {
     m_pCamera = new SharedLib::Camera();
+    
+    float cameraStartPos[3] = {-Radius, 0.f, 0.f};
+    m_pCamera->SetPos(cameraStartPos);
+
+    float cameraStartView[3] = {1.f, 0.f, 0.f};
+    m_pCamera->SetView(cameraStartView);
+
     memset(m_iblPipelineDesSetsLayouts, 0, sizeof(m_iblPipelineDesSetsLayouts));
 }
 
@@ -126,13 +136,6 @@ VkDeviceSize PBRIBLGltfApp::GetHdrByteNum()
 }
 
 // ================================================================================================================
-void PBRIBLGltfApp::GetCameraData(
-    float* pBuffer)
-{
-    
-}
-
-// ================================================================================================================
 void PBRIBLGltfApp::SendCameraDataToBuffer(
     uint32_t i)
 {
@@ -143,10 +146,21 @@ void PBRIBLGltfApp::SendCameraDataToBuffer(
 
     m_pCamera->GetNearPlane(cameraData[12], cameraData[13], cameraData[11]);
 
+    float iblMvpMatsData[32] = {};
+    float modelMatData[16] = {
+        1.f, 0.f, 0.f, ModelWorldPos[0],
+        0.f, 1.f, 0.f, ModelWorldPos[1],
+        0.f, 0.f, 1.f, ModelWorldPos[2],
+        0.f, 0.f, 0.f, 1.f
+    };
+    memcpy(iblMvpMatsData, modelMatData, sizeof(modelMatData));
+
     float vpMatData[16] = {};
     float tmpViewMat[16] = {};
     float tmpPersMat[16] = {};
     m_pCamera->GenViewPerspectiveMatrices(tmpViewMat, tmpPersMat, vpMatData);
+    memcpy(&iblMvpMatsData[16], vpMatData, sizeof(vpMatData));
+
     SharedLib::MatTranspose(vpMatData, 4);
 
     VkExtent2D swapchainImgExtent = GetSwapchainImageExtent();
@@ -155,13 +169,51 @@ void PBRIBLGltfApp::SendCameraDataToBuffer(
 
     CopyRamDataToGpuBuffer(cameraData, m_cameraParaBuffers[i], m_cameraParaBufferAllocs[i], sizeof(cameraData));
     CopyRamDataToGpuBuffer(vpMatData, m_vpMatUboBuffer[i], m_vpMatUboAlloc[i], sizeof(vpMatData));
+    CopyRamDataToGpuBuffer(iblMvpMatsData,
+                           m_iblMvpMatsUboBuffer[i],
+                           m_iblMvpMatsUboAlloc[i],
+                           sizeof(iblMvpMatsData));
 }
 
 // ================================================================================================================
 void PBRIBLGltfApp::UpdateCameraAndGpuBuffer()
 {
+    // TODO: Delete the mouse event.
     SharedLib::HEvent midMouseDownEvent = CreateMiddleMouseEvent(g_isDown);
     m_pCamera->OnEvent(midMouseDownEvent);
+    
+    // Animation
+    if (m_isFirstTimeRecord)
+    {
+        m_lastTime = std::chrono::high_resolution_clock::now();
+        m_isFirstTimeRecord = false;
+    }
+
+    auto thisTime = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(thisTime - m_lastTime);
+
+    float delta = (float)duration.count() / 1000.f; // Delta is in second.
+    float deltaRadians = delta * RotateRadiensPerSecond;
+
+    m_currentRadians += deltaRadians;
+    if (m_currentRadians > 3.1415926 * 2.f)
+    {
+        m_currentRadians -= 3.1415926 * 2.f;
+    }
+
+    float newCameraPos[3] = {
+        -cosf(m_currentRadians) * Radius, 0.f, sinf(m_currentRadians) * Radius
+    };
+
+    float newCameraView[3] = {
+        -newCameraPos[0], -newCameraPos[1], -newCameraPos[2]
+    };
+
+    m_pCamera->SetPos(newCameraPos);
+    m_pCamera->SetView(newCameraView);
+
+    m_lastTime = thisTime;
+
     SendCameraDataToBuffer(m_currentFrame);
 }
 
@@ -1919,9 +1971,9 @@ void PBRIBLGltfApp::InitIblMvpMatsBuffer()
 
     // NOTE: Perspective Mat x View Mat x Model Mat x position.
     float modelMatData[16] = {
-        1.f, 0.f, 0.f, 2.f,
-        0.f, 1.f, 0.f, 0.f,
-        0.f, 0.f, 1.f, 0.f,
+        1.f, 0.f, 0.f, ModelWorldPos[0],
+        0.f, 1.f, 0.f, ModelWorldPos[1],
+        0.f, 0.f, 1.f, ModelWorldPos[2],
         0.f, 0.f, 0.f, 1.f
     };
     // SharedLib::MatTranspose(modelMatData, 4);

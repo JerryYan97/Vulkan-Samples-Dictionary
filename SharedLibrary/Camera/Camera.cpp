@@ -42,6 +42,16 @@ namespace SharedLib
 
     }
 
+    void Camera::SetView(
+        float* iView)
+    {
+        memcpy(m_view, iView, sizeof(m_view));
+        NormalizeVec(m_view, 3);
+
+        CrossProductVec3(m_view, m_up, m_holdRight);
+        NormalizeVec(m_holdRight, 3);
+    }
+
     void Camera::OnEvent(
         HEvent& ievent)
     {
