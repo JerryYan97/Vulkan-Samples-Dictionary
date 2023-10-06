@@ -21,6 +21,8 @@ typedef VkFlags VmaAllocationCreateFlags;
 // - Sync, CmdBuffer operations should be explicit in the main.cpp.
 // TODO1: I may need a standalone pipeline class.
 // TODO2: Dictionary Vma/VkBuffer/VkImage Management -- Need explicit create/destroy; return internal ids; element: id - {alloc, vkBuffer}.
+// TODO3: GPU image format should have more information like currnet GPU image format.
+// TODO4: A queue/vector to collect all image trans barriers so that we can init their formats easiler.
 namespace SharedLib
 {
     // Base Vulkan application without a swapchain -- Basically abstract.
@@ -105,5 +107,7 @@ namespace SharedLib
 
         std::vector<void*> m_heapMemPtrVec; // Manage heap memory -- Auto delete at the end.
         std::vector<void*> m_heapArrayMemPtrVec;
+
+        std::vector<VkImageMemoryBarrier> m_imgTransBarriers; // A queue to collect all barriers to run at one time to simpliy coding.
     };
 }

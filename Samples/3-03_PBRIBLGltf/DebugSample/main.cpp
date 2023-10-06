@@ -9,6 +9,7 @@
 #include <Windows.h>
 #include <cassert>
 
+// TODO: We can design a queue to hold all transfer barriers and do them all-together.
 int main()
 {
     PBRIBLGltfApp app;
@@ -21,6 +22,15 @@ int main()
         swapchainPresentSubResRange.levelCount = 1;
         swapchainPresentSubResRange.baseArrayLayer = 0;
         swapchainPresentSubResRange.layerCount = 1;
+    }
+
+    VkImageSubresourceRange swapchainDepthSubResRange{};
+    {
+        swapchainDepthSubResRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        swapchainDepthSubResRange.baseMipLevel = 0;
+        swapchainDepthSubResRange.levelCount = 1;
+        swapchainDepthSubResRange.baseArrayLayer = 0;
+        swapchainDepthSubResRange.layerCount = 1;
     }
 
     // RenderDoc debug starts
@@ -541,14 +551,29 @@ int main()
             swapchainRenderTargetTransBarrier.subresourceRange = swapchainPresentSubResRange;
         }
 
+        // NOTE: This barrier is only needed at the beginning of the swapchain creation.
+        VkImageMemoryBarrier swapchainDepthTargetTransBarrier{};
+        {
+            swapchainDepthTargetTransBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            swapchainDepthTargetTransBarrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+            swapchainDepthTargetTransBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            swapchainDepthTargetTransBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            swapchainDepthTargetTransBarrier.image = app.GetSwapchainDepthImage(imageIndex);
+            swapchainDepthTargetTransBarrier.subresourceRange = swapchainDepthSubResRange;
+        }
+
+        VkImageMemoryBarrier swapchainImgTrans[2] = {
+            swapchainRenderTargetTransBarrier, swapchainDepthTargetTransBarrier
+        };
+
         vkCmdPipelineBarrier(
             currentCmdBuffer,
             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
             0,
             0, nullptr,
             0, nullptr,
-            1, &swapchainRenderTargetTransBarrier);
+            2, swapchainImgTrans);
 
         // Draw the scene
         VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
@@ -575,24 +600,14 @@ int main()
 
         VkClearValue depthClearVal{};
         depthClearVal.depthStencil.depth = 0.f;
-        VkRenderingAttachmentInfoKHR depthBackgroundAttachmentInfo{};
-        {
-            depthBackgroundAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-            depthBackgroundAttachmentInfo.imageView = app.GetSwapchainDepthImageView(imageIndex);
-            depthBackgroundAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
-            depthBackgroundAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            depthBackgroundAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-            depthBackgroundAttachmentInfo.clearValue = depthClearVal;
-        }
-
         VkRenderingAttachmentInfoKHR depthModelAttachmentInfo{};
         {
-            depthBackgroundAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-            depthBackgroundAttachmentInfo.imageView = app.GetSwapchainDepthImageView(imageIndex);
-            depthBackgroundAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
-            depthBackgroundAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-            depthBackgroundAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-            depthBackgroundAttachmentInfo.clearValue = depthClearVal;
+            depthModelAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+            depthModelAttachmentInfo.imageView = app.GetSwapchainDepthImageView(imageIndex);
+            depthModelAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
+            depthModelAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+            depthModelAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            depthModelAttachmentInfo.clearValue = depthClearVal;
         }
 
         VkRenderingInfoKHR renderBackgroundInfo{};
@@ -603,7 +618,6 @@ int main()
             renderBackgroundInfo.layerCount = 1;
             renderBackgroundInfo.colorAttachmentCount = 1;
             renderBackgroundInfo.pColorAttachments = &renderBackgroundAttachmentInfo;
-            renderBackgroundInfo.pDepthAttachment = &depthBackgroundAttachmentInfo;
         }
 
         vkCmdBeginRendering(currentCmdBuffer, &renderBackgroundInfo);
@@ -642,15 +656,38 @@ int main()
 
         vkCmdEndRendering(currentCmdBuffer);
 
+        VkClearDepthStencilValue clearDepthStencilVal{};
+        {
+            clearDepthStencilVal.depth = 0;
+            clearDepthStencilVal.stencil = 0;
+        }
+
+        vkCmdClearDepthStencilImage(currentCmdBuffer,
+                                    app.GetSwapchainDepthImage(imageIndex),
+                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                    &clearDepthStencilVal, 1, &swapchainDepthSubResRange);
+
+        // Transfer the depth stencil swapchain image back to depth attachment
+        VkImageMemoryBarrier swapchainTransDstToDepthTargetBarrier{};
+        {
+            swapchainTransDstToDepthTargetBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            swapchainTransDstToDepthTargetBarrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+                                                                  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+            swapchainTransDstToDepthTargetBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            swapchainTransDstToDepthTargetBarrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            swapchainTransDstToDepthTargetBarrier.image = app.GetSwapchainDepthImage(imageIndex);
+            swapchainTransDstToDepthTargetBarrier.subresourceRange = swapchainDepthSubResRange;
+        }
+
         // Render models' meshes
         // Let IBL render in the color attachment after the skybox rendering completes.
         vkCmdPipelineBarrier(currentCmdBuffer,
             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
             0,
             0, nullptr,
             0, nullptr,
-            0, nullptr);
+            1, &swapchainTransDstToDepthTargetBarrier);
 
         // for (const auto& mesh : gltfMeshes)
         for(uint32_t i = 0; i < gltfMeshes.size(); i++)

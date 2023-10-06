@@ -370,7 +370,8 @@ namespace SharedLib
             depthImgsInfo.arrayLayers = 1;
             depthImgsInfo.samples = VK_SAMPLE_COUNT_1_BIT;
             depthImgsInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-            depthImgsInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+            depthImgsInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+                                  VK_IMAGE_USAGE_TRANSFER_DST_BIT; // For vkCmdDepthStencilClear(...).
             depthImgsInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         }
 
