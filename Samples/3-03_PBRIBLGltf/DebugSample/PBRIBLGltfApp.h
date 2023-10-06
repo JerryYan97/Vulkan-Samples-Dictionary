@@ -71,7 +71,7 @@ struct Mesh
 const uint32_t VpMatBytesCnt = 4 * 4 * sizeof(float);
 const uint32_t IblMvpMatsBytesCnt = 2 * 4 * 4 * sizeof(float);
 const float ModelWorldPos[3] = {0.f, -0.5f, 0.f};
-const float Radius = 1.5f;
+const float Radius = 1.3f;
 const float RotateRadiensPerSecond = 3.1415926 * 2.f / 10.f; // 10s -- a circle.
 
 class PBRIBLGltfApp : public SharedLib::GlfwApplication

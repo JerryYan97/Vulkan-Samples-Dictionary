@@ -36,6 +36,7 @@ VSOutput main(
     output.WorldPos = mul(i_vertUbo.modelMat, float4(i_vertInput.vPosition, 1.0));
     output.Normal = mul(i_vertUbo.modelMat, float4(i_vertInput.vNormal, 0.0));
     output.Tangent = mul(i_vertUbo.modelMat, float4(i_vertInput.vTangent.xyz, 0.0));
+    output.UV = i_vertInput.vUv;
 
     return output;
 }

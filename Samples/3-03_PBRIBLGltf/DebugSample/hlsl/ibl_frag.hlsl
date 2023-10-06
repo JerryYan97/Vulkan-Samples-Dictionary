@@ -1,9 +1,7 @@
 #include <GGXModel.hlsl>
 
-// const static float3 F0 = float3(1.0, 1.0, 1.0);
-// const static float3 Albedo = float3(1.0, 1.0, 1.0); 
-
 // NOTE: [[vk::binding(X[, Y])]] -- X: binding number, Y: descriptor set.
+// NOTE: We assume that the metallic, roughness and occlusion are in the same texture.
 // TODO: We'll two descriptor sets since only the camera matrices are needed to be updated.
 
 struct SceneInfoUbo
@@ -70,6 +68,7 @@ float4 main(
     float3 diffuse = Kd * diffuseIrradiance * baseColor;
     float3 specular = prefilterEnv * (baseColor * envBrdf.x + envBrdf.y);
 
-    // return float4(diffuse + specular, 1.0);
+    // return float4((diffuse + specular) * occlusion, 1.0);
     return float4(baseColor, 1.0);
+    // return float4(occlusion, occlusion, occlusion, 1.0);
 }

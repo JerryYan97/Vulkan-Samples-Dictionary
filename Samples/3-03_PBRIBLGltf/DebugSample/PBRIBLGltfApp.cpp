@@ -800,6 +800,7 @@ void PBRIBLGltfApp::AppInit()
 // ================================================================================================================
 // NOTE: Currently, we don't support gltf nodes's position, rotation and scale information. 
 //       * We only support triangle.
+//       * Texture samplers' type should follow the real data, but here we simply choose the repeat.
 // TODO: A formal gltf model loader should load a model from it's node and apply its attributes recursively.
 // TODO: The gltf model loader should put into the shared library.
 void PBRIBLGltfApp::InitModelInfo()
@@ -943,8 +944,8 @@ void PBRIBLGltfApp::InitModelInfo()
             m_gltfModeMeshes[i].vertData[12 * vertIdx + 9] = pTangentData[4 * vertIdx + 3];
 
             // uv -- 2 floats
-            m_gltfModeMeshes[i].vertData[12 * vertIdx + 10] = pTangentData[2 * vertIdx];
-            m_gltfModeMeshes[i].vertData[12 * vertIdx + 11] = pTangentData[2 * vertIdx + 1];
+            m_gltfModeMeshes[i].vertData[12 * vertIdx + 10] = pUvData[2 * vertIdx];
+            m_gltfModeMeshes[i].vertData[12 * vertIdx + 11] = pUvData[2 * vertIdx + 1];
         }
 
         // Create the VkBuffer for the idx buffer.
@@ -1096,9 +1097,9 @@ void PBRIBLGltfApp::InitModelInfo()
                 sampler_info.magFilter = VK_FILTER_LINEAR;
                 sampler_info.minFilter = VK_FILTER_LINEAR;
                 sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-                sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-                sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-                sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+                sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+                sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+                sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
                 sampler_info.minLod = -1000;
                 sampler_info.maxLod = 1000;
                 sampler_info.maxAnisotropy = 1.0f;
@@ -1166,9 +1167,9 @@ void PBRIBLGltfApp::InitModelInfo()
                 sampler_info.magFilter = VK_FILTER_LINEAR;
                 sampler_info.minFilter = VK_FILTER_LINEAR;
                 sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-                sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-                sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-                sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+                sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+                sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+                sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
                 sampler_info.minLod = -1000;
                 sampler_info.maxLod = 1000;
                 sampler_info.maxAnisotropy = 1.0f;
@@ -1236,9 +1237,9 @@ void PBRIBLGltfApp::InitModelInfo()
                 sampler_info.magFilter = VK_FILTER_LINEAR;
                 sampler_info.minFilter = VK_FILTER_LINEAR;
                 sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-                sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-                sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-                sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+                sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+                sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+                sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
                 sampler_info.minLod = -1000;
                 sampler_info.maxLod = 1000;
                 sampler_info.maxAnisotropy = 1.0f;
@@ -1306,9 +1307,9 @@ void PBRIBLGltfApp::InitModelInfo()
                 sampler_info.magFilter = VK_FILTER_LINEAR;
                 sampler_info.minFilter = VK_FILTER_LINEAR;
                 sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-                sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-                sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-                sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+                sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+                sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+                sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
                 sampler_info.minLod = -1000;
                 sampler_info.maxLod = 1000;
                 sampler_info.maxAnisotropy = 1.0f;
