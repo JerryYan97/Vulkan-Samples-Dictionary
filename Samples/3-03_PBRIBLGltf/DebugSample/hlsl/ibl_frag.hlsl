@@ -1,7 +1,7 @@
 #include <GGXModel.hlsl>
 
 // NOTE: [[vk::binding(X[, Y])]] -- X: binding number, Y: descriptor set.
-// NOTE: We assume that the metallic, roughness and occlusion are in the same texture.
+// NOTE: We assume that the metallic, roughness and occlusion are in the same texture. x: occlusion, y: roughness, z: metal.
 // TODO: We'll two descriptor sets since only the camera matrices are needed to be updated.
 
 struct SceneInfoUbo
@@ -46,7 +46,7 @@ float4 main(
     float NoV = saturate(dot(N, V));
     float3 R = 2 * NoV * N - V;
 
-    float2 roughnessMetalic = i_metallicRoughnessTexture.Sample(i_metallicRoughnessSamplerState, i_pixelWorldUv).xy;
+    float2 roughnessMetalic = i_metallicRoughnessTexture.Sample(i_metallicRoughnessSamplerState, i_pixelWorldUv).yz;
     float3 baseColor = i_baseColorTexture.Sample(i_baseColorSamplerState, i_pixelWorldUv).xyz;
     float3 normalSampled = i_normalTexture.Sample(i_normalSamplerState, i_pixelWorldUv).xyz;
     float occlusion = i_occlusionTexture.Sample(i_occlusionSamplerState, i_pixelWorldUv).x;
@@ -68,7 +68,7 @@ float4 main(
     float3 diffuse = Kd * diffuseIrradiance * baseColor;
     float3 specular = prefilterEnv * (baseColor * envBrdf.x + envBrdf.y);
 
-    // return float4((diffuse + specular) * occlusion, 1.0);
-    return float4(baseColor, 1.0);
-    // return float4(occlusion, occlusion, occlusion, 1.0);
+    return float4((diffuse + specular) * occlusion, 1.0);
+    // return float4(baseColor, 1.0);
+    // return float4(metalic, metalic, metalic, 1.0);
 }
