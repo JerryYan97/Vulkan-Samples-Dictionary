@@ -1,7 +1,6 @@
 #include <GGXModel.hlsl>
 
-const static float3 F0 = float3(1.0, 1.0, 1.0);
-const static float3 Albedo = float3(1.0, 1.0, 1.0); 
+const static float3 Albedo = float3(0.56, 0.57, 0.58); 
 
 struct SceneInfoUbo
 {
@@ -32,6 +31,9 @@ float4 main(
     float metalic = i_params[0];
     float roughness = i_params[1];
 
+    float3 F0 = float3(0.04, 0.04, 0.04);
+    F0 = lerp(F0, Albedo, float3(metalic, metalic, metalic));
+
     float3 diffuseIrradiance = i_diffuseCubeMapTexture.Sample(i_diffuseCubemapSamplerState, N).xyz;
 
     float3 prefilterEnv = i_prefilterEnvCubeMapTexture.SampleLevel(i_prefilterEnvCubeMapSamplerState,
@@ -44,7 +46,8 @@ float4 main(
     Kd *= (1.0 - metalic);
 
     float3 diffuse = Kd * diffuseIrradiance * Albedo;
-    float3 specular = prefilterEnv * (F0 * envBrdf.x + envBrdf.y);
+    float3 specular = prefilterEnv * (Ks * envBrdf.x + envBrdf.y);
 
     return float4(diffuse + specular, 1.0);
+    // return float4(Ks, 1.0);
 }

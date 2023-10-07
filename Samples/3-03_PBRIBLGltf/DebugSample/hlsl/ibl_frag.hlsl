@@ -1,3 +1,5 @@
+#pragma pack_matrix(row_major)
+
 #include <GGXModel.hlsl>
 
 // NOTE: [[vk::binding(X[, Y])]] -- X: binding number, Y: descriptor set.
@@ -6,6 +8,7 @@
 
 struct SceneInfoUbo
 {
+    float3 cameraPos;
     float maxMipLevel;
 };
 
@@ -43,13 +46,19 @@ float4 main(
 {
     float3 V = normalize(-i_pixelWorldPos.xyz);
     float3 N = normalize(i_pixelWorldNormal.xyz);
-    float NoV = saturate(dot(N, V));
-    float3 R = 2 * NoV * N - V;
+    float3 tangent = normalize(i_pixelWorldTangent.xyz);
+    float3 biTangent = normalize(cross(N, tangent));
 
     float2 roughnessMetalic = i_metallicRoughnessTexture.Sample(i_metallicRoughnessSamplerState, i_pixelWorldUv).yz;
     float3 baseColor = i_baseColorTexture.Sample(i_baseColorSamplerState, i_pixelWorldUv).xyz;
     float3 normalSampled = i_normalTexture.Sample(i_normalSamplerState, i_pixelWorldUv).xyz;
     float occlusion = i_occlusionTexture.Sample(i_occlusionSamplerState, i_pixelWorldUv).x;
+
+    normalSampled = normalSampled * 2.0 - 1.0;
+    N = tangent * normalSampled.x + biTangent * normalSampled.y + N * normalSampled.z;
+
+    float NoV = saturate(dot(N, V));
+    float3 R = 2 * NoV * N - V;
 
     float metalic = roughnessMetalic[1];
     float roughness = roughnessMetalic[0];
@@ -66,9 +75,9 @@ float4 main(
     Kd *= (1.0 - metalic);
 
     float3 diffuse = Kd * diffuseIrradiance * baseColor;
-    float3 specular = prefilterEnv * (baseColor * envBrdf.x + envBrdf.y);
+    float3 specular = prefilterEnv * (Ks * envBrdf.x + envBrdf.y);
 
-    return float4((diffuse + specular) * occlusion, 1.0);
+    // return float4((diffuse + specular) * occlusion, 1.0);
     // return float4(baseColor, 1.0);
-    // return float4(metalic, metalic, metalic, 1.0);
+    return float4(specular, 1.0);
 }
