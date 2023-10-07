@@ -44,7 +44,7 @@ float4 main(
     float4 i_pixelWorldTangent : TANGENT0,
     float2 i_pixelWorldUv      : TEXCOORD0) : SV_Target
 {
-    float3 V = normalize(-i_pixelWorldPos.xyz);
+    float3 V = normalize(i_sceneInfo.cameraPos - i_pixelWorldPos.xyz);
     float3 N = normalize(i_pixelWorldNormal.xyz);
     float3 tangent = normalize(i_pixelWorldTangent.xyz);
     float3 biTangent = normalize(cross(N, tangent));
@@ -63,6 +63,9 @@ float4 main(
     float metalic = roughnessMetalic[1];
     float roughness = roughnessMetalic[0];
 
+    float3 F0 = float3(0.04, 0.04, 0.04);
+    F0 = lerp(F0, baseColor, float3(metalic, metalic, metalic));
+
     float3 diffuseIrradiance = i_diffuseCubeMapTexture.Sample(i_diffuseCubemapSamplerState, N).xyz;
 
     float3 prefilterEnv = i_prefilterEnvCubeMapTexture.SampleLevel(i_prefilterEnvCubeMapSamplerState,
@@ -70,14 +73,14 @@ float4 main(
 
     float2 envBrdf = i_envBrdfTexture.Sample(i_envBrdfSamplerState, float2(NoV, roughness)).xy;
 
-    float3 Ks = fresnelSchlickRoughness(NoV, baseColor, roughness);
+    float3 Ks = fresnelSchlickRoughness(NoV, F0, roughness);
     float3 Kd = float3(1.0, 1.0, 1.0) - Ks;
     Kd *= (1.0 - metalic);
 
     float3 diffuse = Kd * diffuseIrradiance * baseColor;
     float3 specular = prefilterEnv * (Ks * envBrdf.x + envBrdf.y);
 
-    // return float4((diffuse + specular) * occlusion, 1.0);
+    return float4((diffuse + specular) * occlusion, 1.0);
     // return float4(baseColor, 1.0);
-    return float4(specular, 1.0);
+    // return float4(specular, 1.0);
 }

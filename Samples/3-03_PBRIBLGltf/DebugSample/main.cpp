@@ -728,10 +728,15 @@ int main()
             vkCmdBindIndexBuffer(currentCmdBuffer, mesh.modelIdxBuffer, 0, VK_INDEX_TYPE_UINT16);
 
             float maxMipLevels = static_cast<float>(app.GetMaxMipLevel());
+            float cameraPos[3] = {};
+            app.GetCameraPos(cameraPos);
+
+            float pushConst[4] = { cameraPos[0], cameraPos[1], cameraPos[2], maxMipLevels };
+
             vkCmdPushConstants(currentCmdBuffer,
                 app.GetIblPipelineLayout(),
                 VK_SHADER_STAGE_FRAGMENT_BIT,
-                0, sizeof(float), &maxMipLevels);
+                0, 4 * sizeof(float), pushConst);
 
             vkCmdDrawIndexed(currentCmdBuffer, mesh.idxData.size(), 1, 0, 0, 0);
 

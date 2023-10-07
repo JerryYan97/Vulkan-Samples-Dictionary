@@ -1560,7 +1560,7 @@ void PBRIBLGltfApp::InitIblPipelineLayout()
     {
         range.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
         range.offset = 0;
-        range.size = sizeof(float); // Max IBL mipmap.
+        range.size = 4 * sizeof(float); // Camera pos, Max IBL mipmap.
     }
 
     // Create pipeline layout
