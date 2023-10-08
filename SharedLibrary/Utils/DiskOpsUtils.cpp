@@ -22,7 +22,7 @@ namespace SharedLib
     }
 
     // ================================================================================================================
-    void SaveImg(
+    void SaveImgHdr(
         const std::string& namePath,
         uint32_t width,
         uint32_t height,
@@ -30,6 +30,28 @@ namespace SharedLib
         float* pData)
     {
         int res = stbi_write_hdr(namePath.c_str(), width, height, components, pData);
+        if (res > 0)
+        {
+            std::cout << namePath << ": saves successfully." << std::endl;
+        }
+        else
+        {
+            std::cout << "Img fails to save." << std::endl;
+        }
+    }
+
+    // ================================================================================================================
+    // "stride_in_bytes" is the distance in bytes from the first byte of a row of pixels to the first byte of the next
+    // row of pixels.
+    void SaveImgPng(
+        const std::string& namePath,
+        uint32_t           width,
+        uint32_t           height,
+        uint32_t           components,
+        void*              pData,
+        uint32_t           strideInByte)
+    {
+        int res = stbi_write_png(namePath.c_str(), width, height, components, pData, strideInByte);
         if (res > 0)
         {
             std::cout << namePath << ": saves successfully." << std::endl;

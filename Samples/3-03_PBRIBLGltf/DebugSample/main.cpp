@@ -42,12 +42,6 @@ int main()
             int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_6_0, (void**)&rdoc_api);
             assert(ret == 1);
         }
-
-        if (rdoc_api)
-        {
-            std::cout << "Frame capture starts." << std::endl;
-            rdoc_api->StartFrameCapture(NULL, NULL);
-        }
     }
 
     // Send image and buffer data to GPU:
@@ -494,13 +488,6 @@ int main()
         }
     }
 
-    // End RenderDoc debug
-    if (rdoc_api)
-    {
-        std::cout << "Frame capture ends." << std::endl;
-        rdoc_api->EndFrameCapture(NULL, NULL);
-    }
-
     // Main Loop
     // Two draws. First draw draws triangle into an image with window 1 window size.
     // Second draw draws GUI. GUI would use the image drawn from the first draw.
@@ -743,6 +730,14 @@ int main()
             vkCmdEndRendering(currentCmdBuffer);
         }
 
+        if (rdoc_api)
+        {
+            std::cout << "Frame capture starts." << std::endl;
+            rdoc_api->StartFrameCapture(NULL, NULL);
+        }
+
+        // app.CmdCopyPresentImgToLogAnim(currentCmdBuffer, imageIndex);
+
         // Transform the swapchain image layout from render target to present.
         // Transform the layout of the swapchain from undefined to render target.
         VkImageMemoryBarrier swapchainPresentTransBarrier{};
@@ -768,6 +763,15 @@ int main()
 
         app.GfxCmdBufferFrameSubmitAndPresent();
 
+        // app.DumpRenderedFrame(currentCmdBuffer);
+
         app.FrameEnd();
+    }
+
+    // End RenderDoc debug
+    if (rdoc_api)
+    {
+        std::cout << "Frame capture ends." << std::endl;
+        rdoc_api->EndFrameCapture(NULL, NULL);
     }
 }

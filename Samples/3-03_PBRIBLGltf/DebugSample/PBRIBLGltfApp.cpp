@@ -64,8 +64,10 @@ PBRIBLGltfApp::PBRIBLGltfApp() :
     m_currentRadians(0.f),
     m_isFirstTimeRecord(true),
     m_lastTime()
+    // m_pAnimLogger(nullptr)
 {
     m_pCamera = new SharedLib::Camera();
+    // m_pAnimLogger = new SharedLib::AnimLogger();
     
     float cameraStartPos[3] = {-Radius, 0.f, 0.f};
     m_pCamera->SetPos(cameraStartPos);
@@ -81,6 +83,7 @@ PBRIBLGltfApp::~PBRIBLGltfApp()
 {
     vkDeviceWaitIdle(m_device);
     delete m_pCamera;
+    // delete m_pAnimLogger;
 
     DestroyIblMvpMatsBuffer();
     DestroyVpMatBuffer();
@@ -795,6 +798,18 @@ void PBRIBLGltfApp::AppInit()
     InitSkyboxPipelineDescriptorSets();
     InitIblPipelineDescriptorSets();
     InitSwapchainSyncObjects();
+
+    /*
+    SharedLib::AnimLoggerInitInfo animInfo{};
+    {
+        animInfo.dumpDir = SOURCE_PATH;
+        animInfo.dumpDir += "/../data/anim";
+        animInfo.logDuration = 10.f; // 10s a circle.
+        animInfo.logFps = 30;
+        animInfo.pAllocator = m_pAllocator;
+    }
+    m_pAnimLogger->Init(animInfo);
+    */
 }
 
 // ================================================================================================================
@@ -2012,4 +2027,26 @@ void PBRIBLGltfApp::DestroyIblMvpMatsBuffer()
     {
         vmaDestroyBuffer(*m_pAllocator, m_iblMvpMatsUboBuffer[i], m_iblMvpMatsUboAlloc[i]);
     }
+}
+
+// ================================================================================================================
+void PBRIBLGltfApp::CmdCopyPresentImgToLogAnim(
+    VkCommandBuffer cmdBuffer,
+    uint32_t        swapchainImgIdx)
+{
+    /*
+    m_pAnimLogger->CmdCopyRenderTargetOut(cmdBuffer,
+                                          this->GetSwapchainColorImage(swapchainImgIdx),
+                                          this->GetSwapchainImageExtent());
+    */
+}
+
+// ================================================================================================================
+void PBRIBLGltfApp::DumpRenderedFrame(
+    VkCommandBuffer cmdBuffer)
+{
+    /*
+    // Log anim as needed.
+    m_pAnimLogger->DumpRenderTargetData(m_device, m_graphicsQueue, m_inFlightFences[m_currentFrame], cmdBuffer);
+    */
 }

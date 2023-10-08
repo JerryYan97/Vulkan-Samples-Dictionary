@@ -633,13 +633,13 @@ namespace SharedLib
                      m_outputCubemap,
                      outputCubemapLayersSubres,
                      outputCubemapExtent,
-                     4, pImgData);
+                     4, sizeof(float), pImgData);
 
         // Convert data from 4 elements to 3 elements data
         float* pImgData3Ele = new float[3 * m_inputCubemapExtent.width * m_inputCubemapExtent.height * 6];
         Img4EleTo3Ele(pImgData, pImgData3Ele, m_inputCubemapExtent.width * m_inputCubemapExtent.height * 6);
 
-        SaveImg(outputCubemapPathName, m_inputCubemapExtent.width, m_inputCubemapExtent.height * 6, 3, pImgData3Ele);
+        SaveImgHdr(outputCubemapPathName, m_inputCubemapExtent.width, m_inputCubemapExtent.height * 6, 3, pImgData3Ele);
 
         // Cleanup resources
         delete[] pImgData;
@@ -656,13 +656,13 @@ namespace SharedLib
         VkImageSubresourceLayers srcImgSubres,
         VkExtent3D               srcImgExtent,
         uint32_t                 srcImgChannelCnt,
+        uint32_t                 srcImgChannelByteCnt,
         void*                    pDst)
     {
         // Copy the rendered images to a buffer.
         VkBuffer stagingBuffer;
         VmaAllocation stagingBufferAlloc;
-        uint32_t bufferDwordsCnt = srcImgChannelCnt * srcImgExtent.width * srcImgExtent.height * srcImgSubres.layerCount;
-        uint32_t bufferBytesCnt = sizeof(float) * bufferDwordsCnt;
+        uint32_t bufferBytesCnt = srcImgChannelByteCnt * srcImgChannelCnt * srcImgExtent.width * srcImgExtent.height * srcImgSubres.layerCount;
 
         VmaAllocationCreateInfo stagingBufAllocInfo{};
         {

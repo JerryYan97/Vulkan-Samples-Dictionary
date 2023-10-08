@@ -57,7 +57,7 @@ else()
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/Event)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/Pipeline)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/Utils)
-
+    
     if(NOT "../../ThirdPartyLibs/VMA" IN_LIST INCLUDE_DIRECTORIES)
         include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../ThirdPartyLibs/VMA)
     endif()
@@ -66,6 +66,7 @@ else()
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/Event)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/Pipeline)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/Utils)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/AnimLogger)
 
     target_compile_features(SharedLibrary PRIVATE cxx_std_17)
 

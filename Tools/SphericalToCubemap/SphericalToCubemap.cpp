@@ -82,7 +82,7 @@ void SphericalToCubemap::SaveCubemap(
     uint32_t components, 
     float* pData)
 {
-    SharedLib::SaveImg(namePath, width, height, components, pData);
+    SharedLib::SaveImgHdr(namePath, width, height, components, pData);
 }
 
 // ================================================================================================================

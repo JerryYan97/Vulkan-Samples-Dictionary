@@ -1,6 +1,7 @@
 #pragma once
 #include "../../../SharedLibrary/Application/GlfwApplication.h"
 #include "../../../SharedLibrary/Pipeline/Pipeline.h"
+// #include "../../../SharedLibrary/AnimLogger/AnimLogger.h"
 #include <chrono>
 
 VK_DEFINE_HANDLE(VmaAllocation);
@@ -73,6 +74,7 @@ const uint32_t IblMvpMatsBytesCnt = 2 * 4 * 4 * sizeof(float);
 const float ModelWorldPos[3] = {0.f, -0.5f, 0.f};
 const float Radius = 1.5f;
 const float RotateRadiensPerSecond = 3.1415926 * 2.f / 10.f; // 10s -- a circle.
+const bool DumpAnim = true;
 
 class PBRIBLGltfApp : public SharedLib::GlfwApplication
 {
@@ -81,6 +83,10 @@ public:
     ~PBRIBLGltfApp();
 
     virtual void AppInit() override;
+
+    void CmdCopyPresentImgToLogAnim(VkCommandBuffer cmdBuffer, uint32_t swapchainImgIdx);
+
+    void DumpRenderedFrame(VkCommandBuffer cmdBuffer);
 
     void UpdateCameraAndGpuBuffer();
 
@@ -121,11 +127,11 @@ public:
     VkPipeline GetIblPipeline() { return m_iblPipeline.GetVkPipeline(); }
     VkPipelineLayout GetIblPipelineLayout() { return m_iblPipelineLayout; }
     
-    void SendCameraDataToBuffer(uint32_t i);
-    void SendModelTexDataToGPU(VkCommandBuffer cmdBuffer);
-
     const std::vector<Mesh>& GetModelMeshes() { return m_gltfModeMeshes; }
     uint32_t GetModelTexCnt();
+
+    void SendCameraDataToBuffer(uint32_t i);
+    void SendModelTexDataToGPU(VkCommandBuffer cmdBuffer);
 
 private:
     VkPipelineVertexInputStateCreateInfo CreatePipelineVertexInputInfo();
@@ -223,4 +229,6 @@ private:
     float m_currentRadians;
     std::chrono::steady_clock::time_point m_lastTime;
     bool m_isFirstTimeRecord;
+
+    // SharedLib::AnimLogger* m_pAnimLogger;
 };

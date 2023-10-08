@@ -250,7 +250,7 @@ namespace SharedLib
     void GlfwApplication::InitSwapchain()
     {
         // Create the swapchain
-    // Qurery surface capabilities.
+        // Qurery surface capabilities.
         VkSurfaceCapabilitiesKHR surfaceCapabilities;
         vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physicalDevice, m_surface, &surfaceCapabilities);
 
@@ -290,7 +290,8 @@ namespace SharedLib
         bool foundFormat = false;
         for (auto curFormat : surfaceFormats)
         {
-            if (curFormat.format == VK_FORMAT_B8G8R8A8_SRGB && curFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+            // if (curFormat.format == VK_FORMAT_B8G8R8A8_SRGB && curFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+            if (curFormat.format == VK_FORMAT_R8G8B8A8_SRGB && curFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
             {
                 foundFormat = true;
                 m_choisenSurfaceFormat = curFormat;
@@ -325,7 +326,7 @@ namespace SharedLib
             swapchainCreateInfo.imageColorSpace = m_choisenSurfaceFormat.colorSpace;
             swapchainCreateInfo.imageExtent = m_swapchainImageExtent;
             swapchainCreateInfo.imageArrayLayers = 1;
-            swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+            swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
             if (m_graphicsQueueFamilyIdx != m_presentQueueFamilyIdx)
             {
                 swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;

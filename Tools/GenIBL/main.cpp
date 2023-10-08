@@ -574,7 +574,7 @@ int main(
                                     app.GetEnvBrdfOutputImg(),
                                     envBrdfMapSubresLayers,
                                     { EnvBrdfMapDim, EnvBrdfMapDim, 1},
-                                    4, pEnvBrdfMapData);
+                                    4, sizeof(float), pEnvBrdfMapData);
             
             uint32_t outputDwordsCnt = EnvBrdfMapDim * EnvBrdfMapDim * 3;
             float* pEnvBrdfOutputData = new float[outputDwordsCnt];
@@ -582,7 +582,7 @@ int main(
             SharedLib::Img4EleTo3Ele(pEnvBrdfMapData, pEnvBrdfOutputData, EnvBrdfMapDim* EnvBrdfMapDim);
 
             std::string envBrdfMapPathName = outputDir + "/envBrdf.hdr";
-            SharedLib::SaveImg(envBrdfMapPathName, EnvBrdfMapDim, EnvBrdfMapDim, 3, pEnvBrdfOutputData);
+            SharedLib::SaveImgHdr(envBrdfMapPathName, EnvBrdfMapDim, EnvBrdfMapDim, 3, pEnvBrdfOutputData);
 
             delete[] pEnvBrdfMapData;
             delete[] pEnvBrdfOutputData;

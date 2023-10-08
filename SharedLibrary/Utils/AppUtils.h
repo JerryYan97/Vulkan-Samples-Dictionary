@@ -16,6 +16,7 @@ namespace SharedLib
                       VkImageSubresourceLayers srcImgSubres,
                       VkExtent3D               srcImgExtent,
                       uint32_t                 srcImgChannelCnt,
+                      uint32_t                 srcImgChannelByteCnt,
                       void*                    pDst);
 
     void Img4EleTo3Ele(float* pSrc, float* pDst, uint32_t pixCnt);

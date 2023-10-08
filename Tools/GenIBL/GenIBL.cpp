@@ -490,10 +490,10 @@ void GenIBL::CmdGenInputCubemapMipMaps(
         {
             std::string outputPathName = SOURCE_PATH;
             outputPathName += ("/mip" + std::to_string(mipLevel + 1) + ".hdr");
-            SharedLib::SaveImg(outputPathName,
-                               m_hdrCubeMapInfo.width / dstDivFactor,
-                               m_hdrCubeMapInfo.height / dstDivFactor,
-                               3, pDstMip);
+            SharedLib::SaveImgHdr(outputPathName,
+                                  m_hdrCubeMapInfo.width / dstDivFactor,
+                                  m_hdrCubeMapInfo.height / dstDivFactor,
+                                  3, pDstMip);
         }
 
         uint32_t mipBytesCnt = 3 * sizeof(float) *
