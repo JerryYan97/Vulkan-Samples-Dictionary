@@ -352,8 +352,8 @@ void PBRBasicApp::InitPipelineLayout()
 void PBRBasicApp::InitShaderModules()
 {
     // Create Shader Modules.
-    m_vsShaderModule = CreateShaderModule("./sphere_vert.spv");
-    m_psShaderModule = CreateShaderModule("./sphere_frag.spv");
+    m_vsShaderModule = CreateShaderModule("/hlsl/sphere_vert.spv");
+    m_psShaderModule = CreateShaderModule("/hlsl/sphere_frag.spv");
 }
 
 // ================================================================================================================
