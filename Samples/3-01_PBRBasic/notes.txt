@@ -1,20 +1,15 @@
-Plans:
-
--- Camera + PBR 4 lights sphere.
--- 
-
-
 PBR:
 https://learnopengl.com/PBR/IBL/Specular-IBL
 https://learnopengl.com/PBR/Theory
 
-Reading list:
-LearnOpenGL PBR x3
-Unreal4 note x1
-Disney BRDF x1
-PBS Physics math note x1
-
-
 Download data:
 https://www.geeksforgeeks.org/downloading-files-web-using-python/
 https://help.dropbox.com/share/force-download
+
+
+BRDF explain:
+https://computergraphics.stackexchange.com/questions/7503/what-is-the-difference-between-radiance-and-irradiance-in-brdf
+
+
+Definition of solid angle (NOTE: Wiki is not exactly correct and a little bit confusing):
+https://physics.stackexchange.com/questions/98863/whats-the-dimensionality-of-a-solid-angle

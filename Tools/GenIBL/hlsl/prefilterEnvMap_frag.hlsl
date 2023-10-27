@@ -68,7 +68,23 @@ float4 main(
         float NdotL = max(dot(N, L), 0.0);
         if(NdotL > 0.0)
         {
-            prefilteredColor += i_cubeMapTexture.Sample(samplerState, L).rgb * NdotL;
+            float mipLevel = 0.0;
+            // Sample from the environment's mip level based on roughness/pdf.
+            if(i_cameraInfo.roughness != 0)
+            {
+                float D = DistributionGGX(N, H, i_cameraInfo.roughness);
+                float NoH = saturate( dot( N, H ) );
+                float VoH = saturate( dot( V, H ) );
+                float pdf = D * NoH / (4.0 * VoH) + 0.0001;
+
+                float resolution = 1024.0;
+                float saTexel = 4.0 * PI / (6.0 * resolution * resolution);
+                float saSample = 1.0 / (float(SAMPLE_COUNT) * pdf + 0.0001);
+
+                mipLevel = 0.5 * log2(saSample / saTexel);
+            }
+
+            prefilteredColor += i_cubeMapTexture.SampleLevel(samplerState, L, mipLevel).rgb * NdotL;
             totalWeight      += NdotL;
         }
     }

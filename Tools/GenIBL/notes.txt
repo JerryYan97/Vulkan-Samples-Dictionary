@@ -5,3 +5,6 @@ Plan:
 
 (1): Split sums:
 (1.1): First split sum mip-map images and their dumps.
+
+
+Investigate `Bright dots in the pre-filter convolution`.
