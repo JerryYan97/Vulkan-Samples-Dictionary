@@ -214,7 +214,9 @@ void GenIBL::GenPrefilterEnvMap()
             colorRenderTargetExtent.height = currentRenderDim;
         }
 
-        // BUG! The buffer change happens but packets are not submitted to GPU!
+        // It maybe better to use the push constant to update the roughness since it changes for each draw.
+        // In this way, we don't need to wait for previous draw finishes and can kick off all the draws and let them
+        // run in parallel.
         UpdateRoughnessInUbo(currentRoughness, float(currentRenderDim));
 
         VkRenderingAttachmentInfoKHR renderAttachmentInfo{};
