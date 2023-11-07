@@ -1,9 +1,13 @@
 #include <iostream>
 #include <vector>
+#include <unordered_set>
 #include <fstream>
 #include <cassert>
 #include "vulkan/vulkan.h"
 #include "lodepng.h"
+
+// Features: VulkanRT, Vulkan HLSL, Vulkan Dynamic Rendering.
+// Reference: 2023 SIGGRAPH Course - Real-Time Ray-Tracing with Vulkan for the Impatient.
 
 #define STR(r)    \
 	case r:       \
@@ -130,22 +134,25 @@ int main()
     VkApplicationInfo appInfo{}; // TIPS: You can delete this bracket to see what happens.
     {
         appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-        appInfo.pApplicationName = "DumpTri";
+        appInfo.pApplicationName = "DumpTriRT";
         appInfo.applicationVersion = 1;
         appInfo.pEngineName = "VulkanDict";
         appInfo.engineVersion = 1;
-        appInfo.apiVersion = VK_API_VERSION_1_1;
+        appInfo.apiVersion = VK_API_VERSION_1_3;
     }
+    
+    const std::vector<const char*> requiredInstExtensions = {
+        VK_EXT_DEBUG_UTILS_EXTENSION_NAME, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME
+    };
 
-    const char* extensionName = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
     const char* validationLayerName = "VK_LAYER_KHRONOS_validation";
     VkInstanceCreateInfo instanceCreateInfo{};
     {
         instanceCreateInfo.sType = VkStructureType::VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         instanceCreateInfo.pNext = &debugCreateInfo;
         instanceCreateInfo.pApplicationInfo = &appInfo;
-        instanceCreateInfo.enabledExtensionCount = 1;
-        instanceCreateInfo.ppEnabledExtensionNames = &extensionName;
+        instanceCreateInfo.enabledExtensionCount = requiredInstExtensions.size();
+        instanceCreateInfo.ppEnabledExtensionNames = requiredInstExtensions.data();
         instanceCreateInfo.enabledLayerCount = 1;
         instanceCreateInfo.ppEnabledLayerNames = &validationLayerName;
     }
@@ -161,23 +168,220 @@ int main()
     }
     VK_CHECK(fpVkCreateDebugUtilsMessengerExt(instance, &debugCreateInfo, nullptr, &debugMessenger));
 
-    // Enumerate the physicalDevices, select the first one and display the name of it.
+    // Enumerate the physicalDevices.
+    // Write down devices that support VulkanRT:
+    // - VK_KHR_acceleration_structure
+    // - VK_KHR_deferred_host_operations
+    // - VK_KHR_ray_query
+    // - VK_KHR_ray_tracing_maintenance1
+    // - VK_KHR_ray_tracing_pipeline
+    // Select the first one that fulfills the requirements and display the name of it.
+    const std::vector<const char*> requiredDeviceExtensions = {
+        VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+        VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+        VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME,
+        VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
+        VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
+        VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+        VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME,
+        VK_KHR_MAINTENANCE3_EXTENSION_NAME,
+        VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME
+    };
+
+    VkPhysicalDevice physicalDevice;
     uint32_t phyDeviceCount;
     VK_CHECK(vkEnumeratePhysicalDevices(instance, &phyDeviceCount, nullptr));
     assert(phyDeviceCount >= 1);
     std::vector<VkPhysicalDevice> phyDeviceVec(phyDeviceCount);
     VK_CHECK(vkEnumeratePhysicalDevices(instance, &phyDeviceCount, phyDeviceVec.data()));
-    VkPhysicalDevice physicalDevice = phyDeviceVec[0];
-    VkPhysicalDeviceProperties physicalDevProperties;
-    vkGetPhysicalDeviceProperties(physicalDevice, &physicalDevProperties);
-    std::cout << "Device name:" << physicalDevProperties.deviceName << std::endl;
 
-    // Enumerate this physical device's memory properties
-    VkPhysicalDeviceMemoryProperties phyDeviceMemProps;
-    vkGetPhysicalDeviceMemoryProperties(physicalDevice, &phyDeviceMemProps);
+    for (VkPhysicalDevice phyDevice : phyDeviceVec)
+    {
+        VkPhysicalDeviceProperties physicalDevProperties;
+        vkGetPhysicalDeviceProperties(phyDevice, &physicalDevProperties);
+        std::cout << "Device name:" << physicalDevProperties.deviceName << std::endl;
 
+        // Note - if you don't include VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME in
+        // ppEnabledExtensionNames when you create instance, there will be no rayTracingPipelines
+        
+        // Check if ray query is supported.
+        VkPhysicalDeviceRayQueryFeaturesKHR phyDevRayQueryFeatures = {};
+        {
+            phyDevRayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
+        }
+
+        // Check if Acceleration structure is supported. (Whether the native acceleration structure is supported.)
+        VkPhysicalDeviceAccelerationStructureFeaturesKHR phyDevAccStructFeatures = {};
+        {
+            phyDevAccStructFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+            phyDevAccStructFeatures.pNext = &phyDevRayQueryFeatures;
+        }
+
+        // Check if ray tracing extension is supported
+        VkPhysicalDeviceRayTracingPipelineFeaturesKHR rtPipelineFeatures = {};
+        {
+            rtPipelineFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
+            rtPipelineFeatures.pNext = &phyDevAccStructFeatures;
+        }
+
+        VkPhysicalDeviceFeatures2 phyDevFeatures2 = {};
+        {
+            phyDevFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+            phyDevFeatures2.pNext = &rtPipelineFeatures;
+        }
+
+        vkGetPhysicalDeviceFeatures2(phyDevice, &phyDevFeatures2);
+
+        std::cout << "Support raytracing pipeline: " << rtPipelineFeatures.rayTracingPipeline << std::endl;
+
+        if (rtPipelineFeatures.rayTracingPipeline)
+        {
+            physicalDevice = phyDevice;
+
+            // Accerlation structure properties.
+            VkPhysicalDeviceAccelerationStructurePropertiesKHR phyDevAccStructProperties = {};
+            {
+                phyDevAccStructProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR;
+            }
+
+            // Ray tracing properties.
+            VkPhysicalDeviceRayTracingPipelinePropertiesKHR phyDevRtPipelineProperties = {};
+            {
+                phyDevRtPipelineProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
+                phyDevRtPipelineProperties.pNext = &phyDevAccStructProperties;
+            }
+
+            VkPhysicalDeviceProperties2 phyDevRtProperties2 = {};
+            {
+                phyDevRtProperties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+                phyDevRtProperties2.pNext = &phyDevRtPipelineProperties;
+            }
+
+            vkGetPhysicalDeviceProperties2(phyDevice, &phyDevRtProperties2);
+
+            std::cout << "Max recursion depth: " << phyDevRtPipelineProperties.maxRayRecursionDepth << std::endl;
+
+            std::cout << "Has acceleration structure: " << phyDevAccStructFeatures.accelerationStructure << std::endl;
+
+            std::cout << "Max acceleration structure geometry count: " << phyDevAccStructProperties.maxGeometryCount << std::endl;
+
+            std::cout << "Has ray query: " << phyDevRayQueryFeatures.rayQuery << std::endl;
+        }
+
+        // Choose the device if the physical device supports all extensions
+        std::unordered_set<std::string> requiredDeviceExtensionsCheckList(requiredDeviceExtensions.begin(), requiredDeviceExtensions.end());
+
+        std::vector<VkExtensionProperties> phyDevExtensionProperties;
+        uint32_t propertiesCnt;
+        vkEnumerateDeviceExtensionProperties(phyDevice, NULL, &propertiesCnt, nullptr);
+        phyDevExtensionProperties.resize(propertiesCnt);
+        vkEnumerateDeviceExtensionProperties(phyDevice, NULL, &propertiesCnt, phyDevExtensionProperties.data());
+
+        for (const VkExtensionProperties& prop : phyDevExtensionProperties)
+        {
+            requiredDeviceExtensionsCheckList.erase(prop.extensionName);
+            if (requiredDeviceExtensionsCheckList.size() == 0)
+            {
+                std::cout << "Choose this physical device for ray tracing." << std::endl;
+                break;
+            }
+        }
+
+        // Only select the first supported physical device.
+        if (requiredDeviceExtensionsCheckList.size() == 0)
+        {
+            break;
+        }
+    }
+
+    // Find a queue that supports both compute and graphics.
+    uint32_t queueFamilyPropCount;
+    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyPropCount, nullptr);
+    assert(queueFamilyPropCount >= 1);
+    std::vector<VkQueueFamilyProperties> queueFamilyProps(queueFamilyPropCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyPropCount, queueFamilyProps.data());
+    
+    uint32_t queueId = ~0;
+    // for (const VkQueueFamilyProperties& queueFamilyProperty : queueFamilyProps)
+    for(uint32_t i = 0; i < queueFamilyProps.size(); i++)
+    {
+        const VkQueueFamilyProperties& queueFamilyProperty = queueFamilyProps[i];
+        bool supportsGraphics = (queueFamilyProperty.queueFlags & VK_QUEUE_GRAPHICS_BIT) > 0;
+        bool supportsCompute = (queueFamilyProperty.queueFlags & VK_QUEUE_COMPUTE_BIT) > 0;
+
+        if (supportsGraphics && supportsCompute)
+        {
+            queueId = i;
+            break;
+        }
+    }
+
+    if (queueId == ~0)
+    {
+        std::cerr << "Unable to find a queue that supports both compute and graphic family" << std::endl;
+    }
+
+    // Create the logical device
+    float queuePriority = 1.f;
+    VkDeviceQueueCreateInfo queueCreateInfo = {};
+    {
+        queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queueCreateInfo.queueFamilyIndex = queueId;
+        queueCreateInfo.queueCount = 1;
+        queueCreateInfo.pQueuePriorities = &queuePriority;
+    }
+
+    // Setup required rt features
+    VkPhysicalDeviceBufferDeviceAddressFeatures phyDeviceBufferDeviceAddrFeatures = {};
+    {
+        phyDeviceBufferDeviceAddrFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
+        phyDeviceBufferDeviceAddrFeatures.bufferDeviceAddress = true;
+        phyDeviceBufferDeviceAddrFeatures.bufferDeviceAddressCaptureReplay = false;
+        phyDeviceBufferDeviceAddrFeatures.bufferDeviceAddressMultiDevice = false;
+    }
+
+    VkPhysicalDeviceRayTracingPipelineFeaturesKHR phyDeviceRTPipelineFeatures = {};
+    {
+        phyDeviceRTPipelineFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
+        phyDeviceRTPipelineFeatures.pNext = &phyDeviceBufferDeviceAddrFeatures;
+        phyDeviceRTPipelineFeatures.rayTracingPipeline = true;
+    }
+
+    VkPhysicalDeviceAccelerationStructureFeaturesKHR phyDeviceAccStructureFeatures = {};
+    {
+        phyDeviceAccStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+        phyDeviceAccStructureFeatures.pNext = &phyDeviceRTPipelineFeatures;
+        phyDeviceAccStructureFeatures.accelerationStructure = true;
+        phyDeviceAccStructureFeatures.accelerationStructureCaptureReplay = true;
+        phyDeviceAccStructureFeatures.accelerationStructureIndirectBuild = false;
+        phyDeviceAccStructureFeatures.accelerationStructureHostCommands = false;
+        phyDeviceAccStructureFeatures.descriptorBindingAccelerationStructureUpdateAfterBind = false;
+    }
+
+    VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeature{};
+    {
+        dynamicRenderingFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
+        dynamicRenderingFeature.pNext = &phyDeviceAccStructureFeatures;
+        dynamicRenderingFeature.dynamicRendering = VK_TRUE;
+    }
+
+    VkDeviceCreateInfo deviceInfo{};
+    {
+        deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        deviceInfo.pNext = &dynamicRenderingFeature;
+        deviceInfo.queueCreateInfoCount = 1;
+        deviceInfo.pQueueCreateInfos = &queueCreateInfo;
+        deviceInfo.enabledExtensionCount = requiredDeviceExtensions.size();
+        deviceInfo.ppEnabledExtensionNames = requiredDeviceExtensions.data();
+        deviceInfo.pEnabledFeatures = nullptr;
+    }
+
+    VkDevice device;
+    vkCreateDevice(physicalDevice, &deviceInfo, nullptr, &device);
 
     std::cout << "Hello World" << std::endl;
+
+    vkDestroyDevice(device, nullptr);
 
     // Destroy debug messenger
     auto fpVkDestroyDebugUtilsMessengerEXT = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
