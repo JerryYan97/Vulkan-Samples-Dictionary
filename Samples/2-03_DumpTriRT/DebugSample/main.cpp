@@ -6,6 +6,9 @@
 #include "vulkan/vulkan.h"
 #include "lodepng.h"
 
+#define VMA_IMPLEMENTATION
+#include "vk_mem_alloc.h"
+
 // Features: VulkanRT, Vulkan HLSL, Vulkan Dynamic Rendering.
 // Reference: 2023 SIGGRAPH Course - Real-Time Ray-Tracing with Vulkan for the Impatient.
 
@@ -377,9 +380,167 @@ int main()
     }
 
     VkDevice device;
-    vkCreateDevice(physicalDevice, &deviceInfo, nullptr, &device);
+    VK_CHECK(vkCreateDevice(physicalDevice, &deviceInfo, nullptr, &device));
+
+    VmaVulkanFunctions vkFuncs = {};
+    {
+        vkFuncs.vkGetInstanceProcAddr = &vkGetInstanceProcAddr;
+        vkFuncs.vkGetDeviceProcAddr = &vkGetDeviceProcAddr;
+    }
+
+    VmaAllocatorCreateInfo allocCreateInfo = {};
+    {
+        allocCreateInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+        allocCreateInfo.vulkanApiVersion = VK_API_VERSION_1_3;
+        allocCreateInfo.physicalDevice = physicalDevice;
+        allocCreateInfo.device = device;
+        allocCreateInfo.instance = instance;
+        allocCreateInfo.pVulkanFunctions = &vkFuncs;
+    }
+
+    VmaAllocator allocator;
+    vmaCreateAllocator(&allocCreateInfo, &allocator);
+
+    //
+    //
+    // BLAS - Bottom Level Acceleration Structure (Verts/Tris)
+    //
+    //
+    const uint32_t numTriangles = 1;
+    const uint32_t idxCount = 3;
+
+    float vertices[9] = {
+        1.f, 1.f, 0.f,
+        -1.f, 1.f, 0.f,
+        0.f, -1.f, 0.f
+    };
+
+    uint32_t indices[3] = {0, 1, 2};
+
+    // Note: RT doesn't have perspective so it's just <3, 4> x <4, 1>
+    float transformMatrix[12] = {
+        1.f, 0.f, 0.f, 0.f,
+        0.f, 1.f, 0.f, 0.f,
+        0.f, 0.f, 1.f, 0.f
+    };
+
+    // Vertex buffer
+    VkBuffer vertBuffer;
+    VmaAllocation vertBufferAlloc;
+    VkBufferCreateInfo vertBufferInfo = {};
+    {
+        vertBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        vertBufferInfo.size = sizeof(vertices);
+        vertBufferInfo.usage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
+                               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        vertBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    }
+
+    VmaAllocationCreateInfo vertBufferAllocInfo = {};
+    {
+        vertBufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        vertBufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
+                                    VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    }
+
+    vmaCreateBuffer(allocator, &vertBufferInfo, &vertBufferAllocInfo, &vertBuffer, &vertBufferAlloc, nullptr);
+    
+    void* pVertGpuAddr = nullptr;
+    vmaMapMemory(allocator, vertBufferAlloc, &pVertGpuAddr);
+    memcpy(pVertGpuAddr, vertices, sizeof(vertices));
+    vmaUnmapMemory(allocator, vertBufferAlloc);
+
+    VkDeviceOrHostAddressKHR vertBufferDeviceAddr = {};
+    {
+        VkBufferDeviceAddressInfo bufferDeviceAddrInfo = {};
+        {
+            bufferDeviceAddrInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+            bufferDeviceAddrInfo.buffer = vertBuffer;
+        }
+        vertBufferDeviceAddr.deviceAddress = vkGetBufferDeviceAddress(device, &bufferDeviceAddrInfo);
+    }
+
+    // Index buffer
+    VkBuffer idxBuffer;
+    VmaAllocation idxBufferAlloc;
+    VkBufferCreateInfo idxBufferInfo = {};
+    {
+        idxBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        idxBufferInfo.size = sizeof(indices);
+        idxBufferInfo.usage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
+                              VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        idxBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    }
+
+    VmaAllocationCreateInfo idxBufferAllocInfo = {};
+    {
+        idxBufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        idxBufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
+                                   VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    }
+
+    vmaCreateBuffer(allocator, &idxBufferInfo, &idxBufferAllocInfo, &idxBuffer, &idxBufferAlloc, nullptr);
+
+    void* pIdxGpuAddr = nullptr;
+    vmaMapMemory(allocator, idxBufferAlloc, &pIdxGpuAddr);
+    memcpy(pIdxGpuAddr, indices, sizeof(indices));
+    vmaUnmapMemory(allocator, idxBufferAlloc);
+
+    VkDeviceOrHostAddressKHR idxBufferDeviceAddr = {};
+    {
+        VkBufferDeviceAddressInfo bufferDeviceAddrInfo = {};
+        {
+            bufferDeviceAddrInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+            bufferDeviceAddrInfo.buffer = idxBuffer;
+        }
+        idxBufferDeviceAddr.deviceAddress = vkGetBufferDeviceAddress(device, &bufferDeviceAddrInfo);
+    }
+
+    // Transform matrix buffer
+    VkBuffer transformMatrixBuffer;
+    VmaAllocation transformMatrixAlloc;
+    VkBufferCreateInfo transformMatrixBufferInfo = {};
+    {
+        transformMatrixBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        transformMatrixBufferInfo.size = sizeof(transformMatrix);
+        transformMatrixBufferInfo.usage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
+                                          VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        transformMatrixBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    }
+
+    VmaAllocationCreateInfo transformMatrixAllocInfo = {};
+    {
+        transformMatrixAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        transformMatrixAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
+                                         VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    }
+
+    vmaCreateBuffer(allocator, &transformMatrixBufferInfo, &transformMatrixAllocInfo, &transformMatrixBuffer, &transformMatrixAlloc, nullptr);
+
+    void* pTransformMatrixGpuAddr = nullptr;
+    vmaMapMemory(allocator, transformMatrixAlloc, &pTransformMatrixGpuAddr);
+    memcpy(pTransformMatrixGpuAddr, transformMatrix, sizeof(transformMatrix));
+    vmaUnmapMemory(allocator, transformMatrixAlloc);
+
+    VkDeviceOrHostAddressKHR transformMatBufferDeviceAddr = {};
+    {
+        VkBufferDeviceAddressInfo bufferDeviceAddrInfo = {};
+        {
+            bufferDeviceAddrInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+            bufferDeviceAddrInfo.buffer = transformMatrixBuffer;
+        }
+        transformMatBufferDeviceAddr.deviceAddress = vkGetBufferDeviceAddress(device, &bufferDeviceAddrInfo);
+    }
 
     std::cout << "Hello World" << std::endl;
+
+    // Destroy buffers
+    vmaDestroyBuffer(allocator, idxBuffer, idxBufferAlloc);
+    vmaDestroyBuffer(allocator, vertBuffer, vertBufferAlloc);
+    vmaDestroyBuffer(allocator, transformMatrixBuffer, transformMatrixAlloc);
+
+    // Destroy the allocator
+    vmaDestroyAllocator(allocator);
 
     vkDestroyDevice(device, nullptr);
 
