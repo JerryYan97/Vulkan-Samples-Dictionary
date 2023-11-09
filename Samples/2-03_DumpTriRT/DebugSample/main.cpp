@@ -450,7 +450,7 @@ int main()
     memcpy(pVertGpuAddr, vertices, sizeof(vertices));
     vmaUnmapMemory(allocator, vertBufferAlloc);
 
-    VkDeviceOrHostAddressKHR vertBufferDeviceAddr = {};
+    VkDeviceOrHostAddressConstKHR vertBufferDeviceAddr = {};
     {
         VkBufferDeviceAddressInfo bufferDeviceAddrInfo = {};
         {
@@ -486,7 +486,7 @@ int main()
     memcpy(pIdxGpuAddr, indices, sizeof(indices));
     vmaUnmapMemory(allocator, idxBufferAlloc);
 
-    VkDeviceOrHostAddressKHR idxBufferDeviceAddr = {};
+    VkDeviceOrHostAddressConstKHR idxBufferDeviceAddr = {};
     {
         VkBufferDeviceAddressInfo bufferDeviceAddrInfo = {};
         {
@@ -522,7 +522,7 @@ int main()
     memcpy(pTransformMatrixGpuAddr, transformMatrix, sizeof(transformMatrix));
     vmaUnmapMemory(allocator, transformMatrixAlloc);
 
-    VkDeviceOrHostAddressKHR transformMatBufferDeviceAddr = {};
+    VkDeviceOrHostAddressConstKHR transformMatBufferDeviceAddr = {};
     {
         VkBufferDeviceAddressInfo bufferDeviceAddrInfo = {};
         {
@@ -531,6 +531,67 @@ int main()
         }
         transformMatBufferDeviceAddr.deviceAddress = vkGetBufferDeviceAddress(device, &bufferDeviceAddrInfo);
     }
+
+    // Build the accerlation structure
+    // Get the ray tracing and accelertion structure related function pointers required by this sample
+    PFN_vkGetAccelerationStructureBuildSizesKHR vkGetAccelerationStructureBuildSizesKHR = reinterpret_cast<PFN_vkGetAccelerationStructureBuildSizesKHR>(vkGetDeviceProcAddr(device, "vkGetAccelerationStructureBuildSizesKHR"));
+
+    struct AccelerationStructure
+    {
+        VkAccelerationStructureKHR accStructure;
+        VkBuffer accStructureBuffer;
+        VmaAllocation accStructureBufferAlloc;
+        VkBuffer scratchBuffer;
+        VmaAllocation scratchBufferAlloc;
+        VkBuffer instancesBuffer;
+        VmaAllocation instancesBufferAlloc;
+    };
+    AccelerationStructure bottomLevelAccelerationStructure;
+
+    VkAccelerationStructureGeometryKHR accStructureGeometry = {};
+    {
+        accStructureGeometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+        accStructureGeometry.geometryType = VkGeometryTypeKHR::VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+        accStructureGeometry.flags = VkGeometryFlagBitsKHR::VK_GEOMETRY_OPAQUE_BIT_KHR;
+        {
+            VkAccelerationStructureGeometryDataKHR accStructureGeoData = {};
+            VkAccelerationStructureGeometryTrianglesDataKHR accStructureGeoTriData = {};
+            {
+                accStructureGeoTriData.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+                accStructureGeoTriData.vertexFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+                accStructureGeoTriData.vertexData = vertBufferDeviceAddr;
+                accStructureGeoTriData.vertexStride = sizeof(float) * 3;
+                accStructureGeoTriData.maxVertex = 2;
+                accStructureGeoTriData.indexType = VK_INDEX_TYPE_UINT32;
+                accStructureGeoTriData.indexData = idxBufferDeviceAddr;
+                accStructureGeoTriData.transformData = transformMatBufferDeviceAddr;
+            }
+            accStructureGeoData.triangles = accStructureGeoTriData;
+            accStructureGeometry.geometry = accStructureGeoData;
+        }
+    }
+
+    VkAccelerationStructureBuildGeometryInfoKHR accStructureBuildGeoInfo = {};
+    {
+        accStructureBuildGeoInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+        accStructureBuildGeoInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+        accStructureBuildGeoInfo.flags = VkBuildAccelerationStructureFlagBitsKHR::VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+        accStructureBuildGeoInfo.mode = VkBuildAccelerationStructureModeKHR::VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+        accStructureBuildGeoInfo.geometryCount = 1;
+        accStructureBuildGeoInfo.pGeometries = &accStructureGeometry;
+    }
+
+    // Get BLAS size info
+    VkAccelerationStructureBuildSizesInfoKHR accStructureBuildSizeInfo = {};
+    {
+        accStructureBuildSizeInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
+    }
+    vkGetAccelerationStructureBuildSizesKHR(
+        device,
+        VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
+        &accStructureBuildGeoInfo,
+        &numTriangles,
+        &accStructureBuildSizeInfo);
 
     std::cout << "Hello World" << std::endl;
 
