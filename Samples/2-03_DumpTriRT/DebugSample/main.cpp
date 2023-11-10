@@ -535,6 +535,8 @@ int main()
     // Build the accerlation structure
     // Get the ray tracing and accelertion structure related function pointers required by this sample
     PFN_vkGetAccelerationStructureBuildSizesKHR vkGetAccelerationStructureBuildSizesKHR = reinterpret_cast<PFN_vkGetAccelerationStructureBuildSizesKHR>(vkGetDeviceProcAddr(device, "vkGetAccelerationStructureBuildSizesKHR"));
+    PFN_vkCreateAccelerationStructureKHR vkCreateAccelerationStructureKHR = reinterpret_cast<PFN_vkCreateAccelerationStructureKHR>(vkGetDeviceProcAddr(device, "vkCreateAccelerationStructureKHR"));
+    PFN_vkDestroyAccelerationStructureKHR vkDestroyAccelerationStructureKHR = reinterpret_cast<PFN_vkDestroyAccelerationStructureKHR>(vkGetDeviceProcAddr(device, "vkDestroyAccelerationStructureKHR"));
 
     struct AccelerationStructure
     {
@@ -593,9 +595,49 @@ int main()
         &numTriangles,
         &accStructureBuildSizeInfo);
 
+    // Create BLAS buffer
+    VkBufferCreateInfo blasBufferInfo = {};
+    {
+        blasBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        blasBufferInfo.size  = accStructureBuildSizeInfo.accelerationStructureSize;
+        blasBufferInfo.usage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
+                               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        blasBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    }
+
+    VmaAllocationCreateInfo blasBufferAllocInfo = {};
+    {
+        blasBufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        blasBufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+    }
+
+    vmaCreateBuffer(allocator,
+                    &blasBufferInfo,
+                    &blasBufferAllocInfo,
+                    &bottomLevelAccelerationStructure.accStructureBuffer,
+                    &bottomLevelAccelerationStructure.accStructureBufferAlloc,
+                    nullptr);
+
+    VkAccelerationStructureCreateInfoKHR accStructureCreateInfo = {};
+    {
+        accStructureCreateInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
+        accStructureCreateInfo.buffer = bottomLevelAccelerationStructure.accStructureBuffer;
+        accStructureCreateInfo.size = accStructureBuildSizeInfo.accelerationStructureSize;
+        accStructureCreateInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+    }
+    vkCreateAccelerationStructureKHR(device, &accStructureCreateInfo, nullptr, &bottomLevelAccelerationStructure.accStructure);
+
+    // vkCreateAccelerationStructureKHR()
+
     std::cout << "Hello World" << std::endl;
 
+    // Destroy BLAS structure
+    vkDestroyAccelerationStructureKHR(device, bottomLevelAccelerationStructure.accStructure, nullptr);
+
     // Destroy buffers
+    vmaDestroyBuffer(allocator,
+                     bottomLevelAccelerationStructure.accStructureBuffer,
+                     bottomLevelAccelerationStructure.accStructureBufferAlloc);
     vmaDestroyBuffer(allocator, idxBuffer, idxBufferAlloc);
     vmaDestroyBuffer(allocator, vertBuffer, vertBufferAlloc);
     vmaDestroyBuffer(allocator, transformMatrixBuffer, transformMatrixAlloc);
