@@ -382,6 +382,27 @@ int main()
     VkDevice device;
     VK_CHECK(vkCreateDevice(physicalDevice, &deviceInfo, nullptr, &device));
 
+    // Create a command buffer pool and allocate a command buffer
+    VkCommandPoolCreateInfo cmdPoolInfo = {};
+    {
+        cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        cmdPoolInfo.queueFamilyIndex = queueId;
+        cmdPoolInfo.flags = 0;
+    }
+    VkCommandPool cmdPool;
+    VK_CHECK(vkCreateCommandPool(device, &cmdPoolInfo, nullptr, &cmdPool));
+
+    VkCommandBufferAllocateInfo cmdBufferAllocInfo{};
+    {
+        cmdBufferAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        cmdBufferAllocInfo.commandPool = cmdPool;
+        cmdBufferAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        cmdBufferAllocInfo.commandBufferCount = 1;
+    }
+    VkCommandBuffer cmdBuffer;
+    VK_CHECK(vkAllocateCommandBuffers(device, &cmdBufferAllocInfo, &cmdBuffer));
+
+    // Init VMA
     VmaVulkanFunctions vkFuncs = {};
     {
         vkFuncs.vkGetInstanceProcAddr = &vkGetInstanceProcAddr;
@@ -537,12 +558,15 @@ int main()
     PFN_vkGetAccelerationStructureBuildSizesKHR vkGetAccelerationStructureBuildSizesKHR = reinterpret_cast<PFN_vkGetAccelerationStructureBuildSizesKHR>(vkGetDeviceProcAddr(device, "vkGetAccelerationStructureBuildSizesKHR"));
     PFN_vkCreateAccelerationStructureKHR vkCreateAccelerationStructureKHR = reinterpret_cast<PFN_vkCreateAccelerationStructureKHR>(vkGetDeviceProcAddr(device, "vkCreateAccelerationStructureKHR"));
     PFN_vkDestroyAccelerationStructureKHR vkDestroyAccelerationStructureKHR = reinterpret_cast<PFN_vkDestroyAccelerationStructureKHR>(vkGetDeviceProcAddr(device, "vkDestroyAccelerationStructureKHR"));
+    PFN_vkGetAccelerationStructureDeviceAddressKHR vkGetAccelerationStructureDeviceAddressKHR = reinterpret_cast<PFN_vkGetAccelerationStructureDeviceAddressKHR>(vkGetDeviceProcAddr(device, "vkGetAccelerationStructureDeviceAddressKHR"));
+    PFN_vkCmdBuildAccelerationStructuresKHR vkCmdBuildAccelerationStructuresKHR = reinterpret_cast<PFN_vkCmdBuildAccelerationStructuresKHR>(vkGetDeviceProcAddr(device, "vkCmdBuildAccelerationStructuresKHR"));
 
     struct AccelerationStructure
     {
         VkAccelerationStructureKHR accStructure;
         VkBuffer accStructureBuffer;
         VmaAllocation accStructureBufferAlloc;
+        uint64_t deviceAddress;
         VkBuffer scratchBuffer;
         VmaAllocation scratchBufferAlloc;
         VkBuffer instancesBuffer;
@@ -618,6 +642,29 @@ int main()
                     &bottomLevelAccelerationStructure.accStructureBufferAlloc,
                     nullptr);
 
+    // Create BLAS scratch buffer
+    VkBufferCreateInfo blasScratchBufferInfo = {};
+    {
+        blasScratchBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        blasScratchBufferInfo.size = accStructureBuildSizeInfo.buildScratchSize;
+        blasScratchBufferInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                                      VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        blasScratchBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    }
+
+    VmaAllocationCreateInfo blasScratchBufferAllocInfo = {};
+    {
+        blasScratchBufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        blasScratchBufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+    }
+
+    vmaCreateBuffer(allocator,
+                    &blasScratchBufferInfo,
+                    &blasScratchBufferAllocInfo,
+                    &bottomLevelAccelerationStructure.scratchBuffer,
+                    &bottomLevelAccelerationStructure.scratchBufferAlloc,
+                    nullptr);
+
     VkAccelerationStructureCreateInfoKHR accStructureCreateInfo = {};
     {
         accStructureCreateInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
@@ -627,7 +674,49 @@ int main()
     }
     vkCreateAccelerationStructureKHR(device, &accStructureCreateInfo, nullptr, &bottomLevelAccelerationStructure.accStructure);
 
-    // vkCreateAccelerationStructureKHR()
+    // Fill in the remaining BLAS meta info for building
+    accStructureBuildGeoInfo.dstAccelerationStructure = bottomLevelAccelerationStructure.accStructure;
+    VkBufferDeviceAddressInfo blasBuildScratchBufferDevAddrInfo = {};
+    {
+        blasBuildScratchBufferDevAddrInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+        blasBuildScratchBufferDevAddrInfo.buffer = bottomLevelAccelerationStructure.scratchBuffer;
+    }
+    accStructureBuildGeoInfo.scratchData.deviceAddress = vkGetBufferDeviceAddress(device, &blasBuildScratchBufferDevAddrInfo);
+    
+    VkAccelerationStructureBuildRangeInfoKHR accStructureBuildRangeInfo = {};
+    {
+        accStructureBuildRangeInfo.primitiveCount = numTriangles;
+        accStructureBuildRangeInfo.primitiveOffset = 0;
+        accStructureBuildRangeInfo.firstVertex = 0;
+        accStructureBuildRangeInfo.transformOffset = 0;
+    }
+    VkAccelerationStructureBuildRangeInfoKHR* accStructureBuildRangeInfos[1] = { &accStructureBuildRangeInfo };
+
+    // Tell the GPU and driver to build the BLAS.
+    VkCommandBufferBeginInfo cmdBufferBeginInfo = {};
+    {
+        cmdBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    }
+    
+    VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &cmdBufferBeginInfo));
+
+    vkCmdBuildAccelerationStructuresKHR(cmdBuffer, 1, &accStructureBuildGeoInfo, accStructureBuildRangeInfos);
+
+    VK_CHECK(vkEndCommandBuffer(cmdBuffer));
+    
+    vkDeviceWaitIdle(device);
+
+    VkAccelerationStructureDeviceAddressInfoKHR blasAddressInfo = {};
+    {
+        blasAddressInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
+        blasAddressInfo.accelerationStructure = bottomLevelAccelerationStructure.accStructure;
+    }
+    bottomLevelAccelerationStructure.deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(device, &blasAddressInfo);
+    
+    // Destroy BLAS build scratch buffer
+    vmaDestroyBuffer(allocator,
+                     bottomLevelAccelerationStructure.scratchBuffer,
+                     bottomLevelAccelerationStructure.scratchBufferAlloc);
 
     std::cout << "Hello World" << std::endl;
 
@@ -641,6 +730,10 @@ int main()
     vmaDestroyBuffer(allocator, idxBuffer, idxBufferAlloc);
     vmaDestroyBuffer(allocator, vertBuffer, vertBufferAlloc);
     vmaDestroyBuffer(allocator, transformMatrixBuffer, transformMatrixAlloc);
+
+    // Destroy the command pool and release the command buffer
+    vkFreeCommandBuffers(device, cmdPool, 1, &cmdBuffer);
+    vkDestroyCommandPool(device, cmdPool, nullptr);
 
     // Destroy the allocator
     vmaDestroyAllocator(allocator);
