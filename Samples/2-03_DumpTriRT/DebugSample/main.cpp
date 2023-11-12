@@ -11,6 +11,7 @@
 
 // Features: VulkanRT, Vulkan HLSL, Vulkan Dynamic Rendering.
 // Reference: 2023 SIGGRAPH Course - Real-Time Ray-Tracing with Vulkan for the Impatient.
+//            https://github.com/SaschaWillems/Vulkan/blob/master/examples/raytracingbasic/raytracingbasic.cpp
 
 #define STR(r)    \
 	case r:       \
@@ -439,7 +440,7 @@ int main()
     uint32_t indices[3] = {0, 1, 2};
 
     // Note: RT doesn't have perspective so it's just <3, 4> x <4, 1>
-    float transformMatrix[12] = {
+    VkTransformMatrixKHR transformMatrix = {
         1.f, 0.f, 0.f, 0.f,
         0.f, 1.f, 0.f, 0.f,
         0.f, 0.f, 1.f, 0.f
@@ -540,7 +541,7 @@ int main()
 
     void* pTransformMatrixGpuAddr = nullptr;
     vmaMapMemory(allocator, transformMatrixAlloc, &pTransformMatrixGpuAddr);
-    memcpy(pTransformMatrixGpuAddr, transformMatrix, sizeof(transformMatrix));
+    memcpy(pTransformMatrixGpuAddr, transformMatrix.matrix, sizeof(transformMatrix));
     vmaUnmapMemory(allocator, transformMatrixAlloc);
 
     VkDeviceOrHostAddressConstKHR transformMatBufferDeviceAddr = {};
@@ -713,6 +714,38 @@ int main()
     }
     bottomLevelAccelerationStructure.deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(device, &blasAddressInfo);
     
+    vkResetCommandBuffer(cmdBuffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+
+    /*
+        Build the TLAS. The top level acceleration structure contains the scene's object instances
+    */
+    VkAccelerationStructureInstanceKHR accStructureInstance = {};
+    {
+        accStructureInstance.transform = transformMatrix;
+        accStructureInstance.instanceCustomIndex = 0;
+        accStructureInstance.mask = 0xff;
+        accStructureInstance.instanceShaderBindingTableRecordOffset = 0;
+        accStructureInstance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
+        accStructureInstance.accelerationStructureReference = bottomLevelAccelerationStructure.deviceAddress;
+    }
+
+    VkBufferCreateInfo instBufferInfo = {};
+    {
+        instBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        instBufferInfo.size = accStructureBuildSizeInfo.buildScratchSize;
+        instBufferInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+            VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        instBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    }
+
+    VkAccelerationStructureGeometryKHR tlasStructureGeo = {};
+    {
+        tlasStructureGeo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+        tlasStructureGeo.geometryType = VkGeometryTypeKHR::VK_GEOMETRY_TYPE_INSTANCES_KHR;
+        tlasStructureGeo.geometry.instances.arrayOfPointers = false;
+    }
+
+
     // Destroy BLAS build scratch buffer
     vmaDestroyBuffer(allocator,
                      bottomLevelAccelerationStructure.scratchBuffer,
