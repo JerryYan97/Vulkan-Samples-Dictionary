@@ -388,7 +388,7 @@ int main()
     {
         cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
         cmdPoolInfo.queueFamilyIndex = queueId;
-        cmdPoolInfo.flags = 0;
+        cmdPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     }
     VkCommandPool cmdPool;
     VK_CHECK(vkCreateCommandPool(device, &cmdPoolInfo, nullptr, &cmdPool));
@@ -562,7 +562,7 @@ int main()
     PFN_vkGetAccelerationStructureDeviceAddressKHR vkGetAccelerationStructureDeviceAddressKHR = reinterpret_cast<PFN_vkGetAccelerationStructureDeviceAddressKHR>(vkGetDeviceProcAddr(device, "vkGetAccelerationStructureDeviceAddressKHR"));
     PFN_vkCmdBuildAccelerationStructuresKHR vkCmdBuildAccelerationStructuresKHR = reinterpret_cast<PFN_vkCmdBuildAccelerationStructuresKHR>(vkGetDeviceProcAddr(device, "vkCmdBuildAccelerationStructuresKHR"));
 
-    struct AccelerationStructure
+    struct BottomLevelAccelerationStructure
     {
         VkAccelerationStructureKHR accStructure;
         VkBuffer accStructureBuffer;
@@ -570,16 +570,14 @@ int main()
         uint64_t deviceAddress;
         VkBuffer scratchBuffer;
         VmaAllocation scratchBufferAlloc;
-        VkBuffer instancesBuffer;
-        VmaAllocation instancesBufferAlloc;
     };
-    AccelerationStructure bottomLevelAccelerationStructure;
+    BottomLevelAccelerationStructure bottomLevelAccelerationStructure;
 
-    VkAccelerationStructureGeometryKHR accStructureGeometry = {};
+    VkAccelerationStructureGeometryKHR blasGeometry = {};
     {
-        accStructureGeometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
-        accStructureGeometry.geometryType = VkGeometryTypeKHR::VK_GEOMETRY_TYPE_TRIANGLES_KHR;
-        accStructureGeometry.flags = VkGeometryFlagBitsKHR::VK_GEOMETRY_OPAQUE_BIT_KHR;
+        blasGeometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+        blasGeometry.geometryType = VkGeometryTypeKHR::VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+        blasGeometry.flags = VkGeometryFlagBitsKHR::VK_GEOMETRY_OPAQUE_BIT_KHR;
         {
             VkAccelerationStructureGeometryDataKHR accStructureGeoData = {};
             VkAccelerationStructureGeometryTrianglesDataKHR accStructureGeoTriData = {};
@@ -594,37 +592,37 @@ int main()
                 accStructureGeoTriData.transformData = transformMatBufferDeviceAddr;
             }
             accStructureGeoData.triangles = accStructureGeoTriData;
-            accStructureGeometry.geometry = accStructureGeoData;
+            blasGeometry.geometry = accStructureGeoData;
         }
     }
 
-    VkAccelerationStructureBuildGeometryInfoKHR accStructureBuildGeoInfo = {};
+    VkAccelerationStructureBuildGeometryInfoKHR blasBuildGeoInfo = {};
     {
-        accStructureBuildGeoInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
-        accStructureBuildGeoInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-        accStructureBuildGeoInfo.flags = VkBuildAccelerationStructureFlagBitsKHR::VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
-        accStructureBuildGeoInfo.mode = VkBuildAccelerationStructureModeKHR::VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-        accStructureBuildGeoInfo.geometryCount = 1;
-        accStructureBuildGeoInfo.pGeometries = &accStructureGeometry;
+        blasBuildGeoInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+        blasBuildGeoInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+        blasBuildGeoInfo.flags = VkBuildAccelerationStructureFlagBitsKHR::VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+        blasBuildGeoInfo.mode = VkBuildAccelerationStructureModeKHR::VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+        blasBuildGeoInfo.geometryCount = 1;
+        blasBuildGeoInfo.pGeometries = &blasGeometry;
     }
 
     // Get BLAS size info
-    VkAccelerationStructureBuildSizesInfoKHR accStructureBuildSizeInfo = {};
+    VkAccelerationStructureBuildSizesInfoKHR blasBuildSizeInfo = {};
     {
-        accStructureBuildSizeInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
+        blasBuildSizeInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
     }
     vkGetAccelerationStructureBuildSizesKHR(
         device,
         VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
-        &accStructureBuildGeoInfo,
+        &blasBuildGeoInfo,
         &numTriangles,
-        &accStructureBuildSizeInfo);
+        &blasBuildSizeInfo);
 
     // Create BLAS buffer
     VkBufferCreateInfo blasBufferInfo = {};
     {
         blasBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        blasBufferInfo.size  = accStructureBuildSizeInfo.accelerationStructureSize;
+        blasBufferInfo.size  = blasBuildSizeInfo.accelerationStructureSize;
         blasBufferInfo.usage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
                                VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         blasBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -647,7 +645,7 @@ int main()
     VkBufferCreateInfo blasScratchBufferInfo = {};
     {
         blasScratchBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        blasScratchBufferInfo.size = accStructureBuildSizeInfo.buildScratchSize;
+        blasScratchBufferInfo.size = blasBuildSizeInfo.buildScratchSize;
         blasScratchBufferInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                                       VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         blasScratchBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -666,32 +664,32 @@ int main()
                     &bottomLevelAccelerationStructure.scratchBufferAlloc,
                     nullptr);
 
-    VkAccelerationStructureCreateInfoKHR accStructureCreateInfo = {};
+    VkAccelerationStructureCreateInfoKHR blasCreateInfo = {};
     {
-        accStructureCreateInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
-        accStructureCreateInfo.buffer = bottomLevelAccelerationStructure.accStructureBuffer;
-        accStructureCreateInfo.size = accStructureBuildSizeInfo.accelerationStructureSize;
-        accStructureCreateInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+        blasCreateInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
+        blasCreateInfo.buffer = bottomLevelAccelerationStructure.accStructureBuffer;
+        blasCreateInfo.size = blasBuildSizeInfo.accelerationStructureSize;
+        blasCreateInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
     }
-    vkCreateAccelerationStructureKHR(device, &accStructureCreateInfo, nullptr, &bottomLevelAccelerationStructure.accStructure);
+    vkCreateAccelerationStructureKHR(device, &blasCreateInfo, nullptr, &bottomLevelAccelerationStructure.accStructure);
 
     // Fill in the remaining BLAS meta info for building
-    accStructureBuildGeoInfo.dstAccelerationStructure = bottomLevelAccelerationStructure.accStructure;
+    blasBuildGeoInfo.dstAccelerationStructure = bottomLevelAccelerationStructure.accStructure;
     VkBufferDeviceAddressInfo blasBuildScratchBufferDevAddrInfo = {};
     {
         blasBuildScratchBufferDevAddrInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
         blasBuildScratchBufferDevAddrInfo.buffer = bottomLevelAccelerationStructure.scratchBuffer;
     }
-    accStructureBuildGeoInfo.scratchData.deviceAddress = vkGetBufferDeviceAddress(device, &blasBuildScratchBufferDevAddrInfo);
+    blasBuildGeoInfo.scratchData.deviceAddress = vkGetBufferDeviceAddress(device, &blasBuildScratchBufferDevAddrInfo);
     
-    VkAccelerationStructureBuildRangeInfoKHR accStructureBuildRangeInfo = {};
+    VkAccelerationStructureBuildRangeInfoKHR blasBuildRangeInfo = {};
     {
-        accStructureBuildRangeInfo.primitiveCount = numTriangles;
-        accStructureBuildRangeInfo.primitiveOffset = 0;
-        accStructureBuildRangeInfo.firstVertex = 0;
-        accStructureBuildRangeInfo.transformOffset = 0;
+        blasBuildRangeInfo.primitiveCount = numTriangles;
+        blasBuildRangeInfo.primitiveOffset = 0;
+        blasBuildRangeInfo.firstVertex = 0;
+        blasBuildRangeInfo.transformOffset = 0;
     }
-    VkAccelerationStructureBuildRangeInfoKHR* accStructureBuildRangeInfos[1] = { &accStructureBuildRangeInfo };
+    VkAccelerationStructureBuildRangeInfoKHR* blasBuildRangeInfos[1] = { &blasBuildRangeInfo };
 
     // Tell the GPU and driver to build the BLAS.
     VkCommandBufferBeginInfo cmdBufferBeginInfo = {};
@@ -701,7 +699,7 @@ int main()
     
     VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &cmdBufferBeginInfo));
 
-    vkCmdBuildAccelerationStructuresKHR(cmdBuffer, 1, &accStructureBuildGeoInfo, accStructureBuildRangeInfos);
+    vkCmdBuildAccelerationStructuresKHR(cmdBuffer, 1, &blasBuildGeoInfo, blasBuildRangeInfos);
 
     VK_CHECK(vkEndCommandBuffer(cmdBuffer));
     
@@ -716,42 +714,206 @@ int main()
     
     vkResetCommandBuffer(cmdBuffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
 
+    // Destroy build scratch buffers
+    vmaDestroyBuffer(allocator,
+                     bottomLevelAccelerationStructure.scratchBuffer,
+                     bottomLevelAccelerationStructure.scratchBufferAlloc);
+
     /*
         Build the TLAS. The top level acceleration structure contains the scene's object instances
     */
-    VkAccelerationStructureInstanceKHR accStructureInstance = {};
+    struct TopLevelAccelerationStructure
     {
-        accStructureInstance.transform = transformMatrix;
-        accStructureInstance.instanceCustomIndex = 0;
-        accStructureInstance.mask = 0xff;
-        accStructureInstance.instanceShaderBindingTableRecordOffset = 0;
-        accStructureInstance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
-        accStructureInstance.accelerationStructureReference = bottomLevelAccelerationStructure.deviceAddress;
+        VkAccelerationStructureKHR accStructure;
+        VkBuffer accStructureBuffer;
+        VmaAllocation accStructureBufferAlloc;
+        uint64_t deviceAddress;
+        VkBuffer scratchBuffer;
+        VmaAllocation scratchBufferAlloc;
+        VkBuffer instancesBuffer;
+        VmaAllocation instancesBufferAlloc;
+    };
+    TopLevelAccelerationStructure topLevelAccelerationStructure{};
+
+    VkAccelerationStructureInstanceKHR tlasInstance = {};
+    {
+        tlasInstance.transform = transformMatrix;
+        tlasInstance.instanceCustomIndex = 0;
+        tlasInstance.mask = 0xff;
+        tlasInstance.instanceShaderBindingTableRecordOffset = 0;
+        tlasInstance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
+        tlasInstance.accelerationStructureReference = bottomLevelAccelerationStructure.deviceAddress;
     }
 
     VkBufferCreateInfo instBufferInfo = {};
     {
         instBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        instBufferInfo.size = accStructureBuildSizeInfo.buildScratchSize;
-        instBufferInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-            VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        instBufferInfo.size = sizeof(VkAccelerationStructureInstanceKHR);
+        instBufferInfo.usage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
+                               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         instBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    }
+
+    VmaAllocationCreateInfo instBufferAllocInfo = {};
+    {
+        instBufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        instBufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
+                                    VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    }
+
+    vmaCreateBuffer(allocator,
+                    &instBufferInfo,
+                    &instBufferAllocInfo,
+                    &topLevelAccelerationStructure.instancesBuffer,
+                    &topLevelAccelerationStructure.instancesBufferAlloc,
+                    nullptr);
+
+    void* pInstBuffer;
+    vmaMapMemory(allocator, topLevelAccelerationStructure.instancesBufferAlloc, &pInstBuffer);
+    memcpy(pInstBuffer, &tlasInstance, sizeof(tlasInstance));
+    vmaUnmapMemory(allocator, topLevelAccelerationStructure.instancesBufferAlloc);
+
+    VkDeviceOrHostAddressConstKHR instBufferDeviceAddr = {};
+    {
+        VkBufferDeviceAddressInfo bufferDeviceAddrInfo = {};
+        {
+            bufferDeviceAddrInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+            bufferDeviceAddrInfo.buffer = topLevelAccelerationStructure.instancesBuffer;
+        }
+        instBufferDeviceAddr.deviceAddress = vkGetBufferDeviceAddress(device, &bufferDeviceAddrInfo);
     }
 
     VkAccelerationStructureGeometryKHR tlasStructureGeo = {};
     {
         tlasStructureGeo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
         tlasStructureGeo.geometryType = VkGeometryTypeKHR::VK_GEOMETRY_TYPE_INSTANCES_KHR;
-        tlasStructureGeo.geometry.instances.arrayOfPointers = false;
+        tlasStructureGeo.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
+        tlasStructureGeo.geometry.instances.arrayOfPointers = VK_FALSE;
+        tlasStructureGeo.geometry.instances.data = instBufferDeviceAddr;
     }
 
+    VkAccelerationStructureBuildGeometryInfoKHR tlasBuildGeoInfo{};
+    {
+        tlasBuildGeoInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+        tlasBuildGeoInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+        tlasBuildGeoInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+        tlasBuildGeoInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+        tlasBuildGeoInfo.geometryCount = 1;
+        tlasBuildGeoInfo.pGeometries = &tlasStructureGeo;
+    }
 
-    // Destroy BLAS build scratch buffer
+    VkAccelerationStructureBuildSizesInfoKHR tlasBuildSizesInfo{};
+    {
+        tlasBuildSizesInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
+    }
+
+    vkGetAccelerationStructureBuildSizesKHR(
+        device,
+        VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
+        &tlasBuildGeoInfo,
+        &numTriangles,
+        &tlasBuildSizesInfo);
+
+    VkBufferCreateInfo tlasBufferInfo = {};
+    {
+        tlasBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        tlasBufferInfo.size = tlasBuildSizesInfo.accelerationStructureSize;
+        tlasBufferInfo.usage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
+                               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        tlasBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    }
+
+    VmaAllocationCreateInfo tlasBufferAllocInfo = {};
+    {
+        tlasBufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        tlasBufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+    }
+
+    vmaCreateBuffer(allocator,
+                    &tlasBufferInfo,
+                    &tlasBufferAllocInfo,
+                    &topLevelAccelerationStructure.accStructureBuffer,
+                    &topLevelAccelerationStructure.accStructureBufferAlloc,
+                    nullptr);
+
+    // Create TLAS scratch buffer
+    VkBufferCreateInfo tlasScratchBufferInfo = {};
+    {
+        tlasScratchBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        tlasScratchBufferInfo.size = tlasBuildSizesInfo.buildScratchSize;
+        tlasScratchBufferInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                                      VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        tlasScratchBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    }
+
+    VmaAllocationCreateInfo tlasScratchBufferAllocInfo = {};
+    {
+        tlasScratchBufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        tlasScratchBufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+    }
+
+    vmaCreateBuffer(allocator,
+                    &tlasScratchBufferInfo,
+                    &tlasScratchBufferAllocInfo,
+                    &topLevelAccelerationStructure.scratchBuffer,
+                    &topLevelAccelerationStructure.scratchBufferAlloc,
+                    nullptr);
+
+    VkAccelerationStructureCreateInfoKHR tlasCreateInfo = {};
+    {
+        tlasCreateInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
+        tlasCreateInfo.buffer = topLevelAccelerationStructure.accStructureBuffer;
+        tlasCreateInfo.size = tlasBuildSizesInfo.accelerationStructureSize;
+        tlasCreateInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+    }
+    vkCreateAccelerationStructureKHR(device, &tlasCreateInfo, nullptr, &topLevelAccelerationStructure.accStructure);
+    tlasBuildGeoInfo.dstAccelerationStructure = topLevelAccelerationStructure.accStructure;
+
+    VkBufferDeviceAddressInfo tlasBuildScratchBufferDevAddrInfo = {};
+    {
+        tlasBuildScratchBufferDevAddrInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+        tlasBuildScratchBufferDevAddrInfo.buffer = topLevelAccelerationStructure.scratchBuffer;
+    }
+    tlasBuildGeoInfo.scratchData.deviceAddress = vkGetBufferDeviceAddress(device, &tlasBuildScratchBufferDevAddrInfo);
+
+    VkAccelerationStructureBuildRangeInfoKHR tlasBuildRangeInfo = {};
+    {
+        tlasBuildRangeInfo.primitiveCount = 1;
+        tlasBuildRangeInfo.primitiveOffset = 0;
+        tlasBuildRangeInfo.firstVertex = 0;
+        tlasBuildRangeInfo.transformOffset = 0;
+    }
+    VkAccelerationStructureBuildRangeInfoKHR* tlasBuildRangeInfos[1] = { &tlasBuildRangeInfo };
+
+    // Tell the GPU and driver to build the TLAS.
+    VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &cmdBufferBeginInfo));
+
+    vkCmdBuildAccelerationStructuresKHR(cmdBuffer, 1, &tlasBuildGeoInfo, tlasBuildRangeInfos);
+
+    VK_CHECK(vkEndCommandBuffer(cmdBuffer));
+
+    vkDeviceWaitIdle(device);
+
     vmaDestroyBuffer(allocator,
-                     bottomLevelAccelerationStructure.scratchBuffer,
-                     bottomLevelAccelerationStructure.scratchBufferAlloc);
+                     topLevelAccelerationStructure.scratchBuffer,
+                     topLevelAccelerationStructure.scratchBufferAlloc);
 
-    std::cout << "Hello World" << std::endl;
+    VkAccelerationStructureDeviceAddressInfoKHR tlasAddressInfo = {};
+    {
+        tlasAddressInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
+        tlasAddressInfo.accelerationStructure = topLevelAccelerationStructure.accStructure;
+    }
+    topLevelAccelerationStructure.deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(device, &tlasAddressInfo);
+
+    // Destroy TLAS structure
+    vkDestroyAccelerationStructureKHR(device, topLevelAccelerationStructure.accStructure, nullptr);
+
+    vmaDestroyBuffer(allocator,
+                     topLevelAccelerationStructure.accStructureBuffer,
+                     topLevelAccelerationStructure.accStructureBufferAlloc);
+    vmaDestroyBuffer(allocator,
+                     topLevelAccelerationStructure.instancesBuffer,
+                     topLevelAccelerationStructure.instancesBufferAlloc);
 
     // Destroy BLAS structure
     vkDestroyAccelerationStructureKHR(device, bottomLevelAccelerationStructure.accStructure, nullptr);
