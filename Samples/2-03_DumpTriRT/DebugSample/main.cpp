@@ -81,6 +81,26 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_utils_messenger_callback(
 
 #define VK_CHECK(res) if(res){std::cout << "Error at line:" << __LINE__ << ", Error name:" << to_string(res) << ".\n"; exit(1);}
 
+VkShaderModule createShaderModule(const std::string& spvName, const VkDevice& device)
+{
+    // Create  Shader Module -- SOURCE_PATH is a MACRO definition passed in during compilation, which is specified in
+    //                          the CMakeLists.txt file in the same level of repository.
+    std::string shaderPath = std::string(SOURCE_PATH) + spvName;
+    std::ifstream inputShader(shaderPath.c_str(), std::ios::binary | std::ios::in);
+    std::vector<unsigned char> inputShaderStr(std::istreambuf_iterator<char>(inputShader), {});
+    inputShader.close();
+    VkShaderModuleCreateInfo shaderModuleCreateInfo{};
+    {
+        shaderModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        shaderModuleCreateInfo.codeSize = inputShaderStr.size();
+        shaderModuleCreateInfo.pCode = (uint32_t*)inputShaderStr.data();
+    }
+    VkShaderModule shaderModule;
+    vkCreateShaderModule(device, &shaderModuleCreateInfo, nullptr, &shaderModule);
+
+    return shaderModule;
+}
+
 int main()
 {
     // Verify that the debug extension for the callback messenger is supported.
@@ -904,6 +924,57 @@ int main()
         tlasAddressInfo.accelerationStructure = topLevelAccelerationStructure.accStructure;
     }
     topLevelAccelerationStructure.deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(device, &tlasAddressInfo);
+
+    /*
+    * Create shader modules and ray tracing pipeline.
+    */
+    VkDescriptorSetLayoutBinding tlasLayoutBinding = {};
+    {
+        tlasLayoutBinding.binding = 0;
+        tlasLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+        tlasLayoutBinding.descriptorCount = 1;
+        tlasLayoutBinding.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+    }
+
+    VkDescriptorSetLayoutBinding resultImageLayoutBinding = {};
+    {
+        resultImageLayoutBinding.binding = 1;
+        resultImageLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        resultImageLayoutBinding.descriptorCount = 1;
+        resultImageLayoutBinding.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+    }
+
+    std::vector<VkDescriptorSetLayoutBinding> bindings({
+        tlasLayoutBinding, resultImageLayoutBinding
+        });
+
+    VkDescriptorSetLayoutCreateInfo desSetLayoutInfo = {};
+    {
+        desSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        desSetLayoutInfo.bindingCount = bindings.size();
+        desSetLayoutInfo.pBindings = bindings.data();
+    }
+    VkDescriptorSetLayout desSetLayout;
+    VK_CHECK(vkCreateDescriptorSetLayout(device, &desSetLayoutInfo, nullptr, &desSetLayout));
+
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
+    {
+        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        pipelineLayoutInfo.setLayoutCount = 1;
+        pipelineLayoutInfo.pSetLayouts = &desSetLayout;
+    }
+    VkPipelineLayout pipelineLayout;
+    VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout));
+
+    VkShaderModule rgenShaderModule = createShaderModule("/hlsl/dumpTri_rgen.spv", device);
+    VkShaderModule rmissShaderModule = createShaderModule("./hlsl/dumpTri_rmiss.spv", device);
+    /*
+    * Build the Shader Binding Table
+    */
+
+
+    // Destroy the ray tracing pipeline
+    vkDestroyDescriptorSetLayout(device, desSetLayout, nullptr);
 
     // Destroy TLAS structure
     vkDestroyAccelerationStructureKHR(device, topLevelAccelerationStructure.accStructure, nullptr);
