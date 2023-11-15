@@ -24,6 +24,10 @@ add_custom_command(
             DUMMY_FILE
         COMMAND python
             ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/dumpTri_rgen.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
+        COMMAND python
+            ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/dumpTri_rmiss.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
+        COMMAND python
+            ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/dumpTri_rchit.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl  
 )
 
 add_custom_target(SHADER_COMPILE

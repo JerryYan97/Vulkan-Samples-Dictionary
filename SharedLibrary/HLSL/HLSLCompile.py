@@ -27,7 +27,7 @@ def SelectProfile(srcFileName):
     elif(srcFileName.find('_frag') != -1):
         return 'ps_6_1'
     else:
-        accepted_strings = ['_rgen']
+        accepted_strings = ['_rgen', '_rmiss', '_rchit']
         for rtPostfix in accepted_strings:
             if rtPostfix in srcFileName:
                 return 'lib_6_4'
