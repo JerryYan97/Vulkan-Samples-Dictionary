@@ -27,6 +27,10 @@ def SelectProfile(srcFileName):
     elif(srcFileName.find('_frag') != -1):
         return 'ps_6_1'
     else:
+        accepted_strings = ['_rgen']
+        for rtPostfix in accepted_strings:
+            if rtPostfix in srcFileName:
+                return 'lib_6_4'
         sys.exit('Unrecogonized shader type.')
 
 
@@ -66,6 +70,8 @@ if __name__ == "__main__":
         '-T', profile,
         '-E', 'main',
         '-I', os.path.realpath(os.path.dirname(__file__)),
+        '-fspv-target-env=vulkan1.3',
+        '-fspv-extension=SPV_KHR_ray_query',
         '-fspv-extension=SPV_KHR_ray_tracing',
         '-fspv-extension=SPV_KHR_multiview',
         '-fspv-extension=SPV_KHR_shader_draw_parameters',

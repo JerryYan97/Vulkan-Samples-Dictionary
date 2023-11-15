@@ -1,2 +1,3 @@
 Real-Time Ray-Tracing with Vulkan for the Impatient
 https://github.com/SaschaWillems/Vulkan/blob/master/examples/raytracingbasic/raytracingbasic.cpp
+https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#traceray-control-flow
