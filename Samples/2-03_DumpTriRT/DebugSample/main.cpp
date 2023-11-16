@@ -203,13 +203,17 @@ int main()
     const std::vector<const char*> requiredDeviceExtensions = {
         VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
         VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+        VK_KHR_RAY_QUERY_EXTENSION_NAME,
         VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME,
         VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
         VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
         VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
         VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME,
         VK_KHR_MAINTENANCE3_EXTENSION_NAME,
-        VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME
+        VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
+        VK_EXT_MESH_SHADER_EXTENSION_NAME, // NOTE: I don't know why the SPIRV compiled from hlsl needs it...
+        VK_KHR_SPIRV_1_4_EXTENSION_NAME,
+        VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME
     };
 
     VkPhysicalDevice physicalDevice;
@@ -356,9 +360,16 @@ int main()
     }
 
     // Setup required rt features
+    VkPhysicalDeviceRayQueryFeaturesKHR phyDevRayQueryFeatures = {};
+    {
+        phyDevRayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
+        phyDevRayQueryFeatures.rayQuery = VK_TRUE;
+    }
+
     VkPhysicalDeviceBufferDeviceAddressFeatures phyDeviceBufferDeviceAddrFeatures = {};
     {
         phyDeviceBufferDeviceAddrFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
+        phyDeviceBufferDeviceAddrFeatures.pNext = &phyDevRayQueryFeatures;
         phyDeviceBufferDeviceAddrFeatures.bufferDeviceAddress = true;
         phyDeviceBufferDeviceAddrFeatures.bufferDeviceAddressCaptureReplay = false;
         phyDeviceBufferDeviceAddrFeatures.bufferDeviceAddressMultiDevice = false;
@@ -581,6 +592,7 @@ int main()
     PFN_vkDestroyAccelerationStructureKHR vkDestroyAccelerationStructureKHR = reinterpret_cast<PFN_vkDestroyAccelerationStructureKHR>(vkGetDeviceProcAddr(device, "vkDestroyAccelerationStructureKHR"));
     PFN_vkGetAccelerationStructureDeviceAddressKHR vkGetAccelerationStructureDeviceAddressKHR = reinterpret_cast<PFN_vkGetAccelerationStructureDeviceAddressKHR>(vkGetDeviceProcAddr(device, "vkGetAccelerationStructureDeviceAddressKHR"));
     PFN_vkCmdBuildAccelerationStructuresKHR vkCmdBuildAccelerationStructuresKHR = reinterpret_cast<PFN_vkCmdBuildAccelerationStructuresKHR>(vkGetDeviceProcAddr(device, "vkCmdBuildAccelerationStructuresKHR"));
+    PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelinesKHR = reinterpret_cast<PFN_vkCreateRayTracingPipelinesKHR>(vkGetDeviceProcAddr(device, "vkCreateRayTracingPipelinesKHR"));
 
     struct BottomLevelAccelerationStructure
     {
@@ -966,15 +978,107 @@ int main()
     VkPipelineLayout pipelineLayout;
     VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout));
 
+    std::vector<VkPipelineShaderStageCreateInfo>      shaderStages;
+    std::vector<VkRayTracingShaderGroupCreateInfoKHR> shaderGroups;
+
+    // Ray generation group
     VkShaderModule rgenShaderModule = createShaderModule("/hlsl/dumpTri_rgen.spv", device);
+    {
+        VkPipelineShaderStageCreateInfo rgenStageInfo = {};
+        {
+            rgenStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            rgenStageInfo.stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+            rgenStageInfo.pName = "main";
+            rgenStageInfo.module = rgenShaderModule;
+        }
+        shaderStages.push_back(rgenStageInfo);
+
+        VkRayTracingShaderGroupCreateInfoKHR shaderGroup = {};
+        {
+            shaderGroup.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+            shaderGroup.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+            shaderGroup.generalShader = static_cast<uint32_t>(shaderStages.size()) - 1;
+            shaderGroup.closestHitShader = VK_SHADER_UNUSED_KHR;
+            shaderGroup.anyHitShader = VK_SHADER_UNUSED_KHR;
+            shaderGroup.intersectionShader = VK_SHADER_UNUSED_KHR;
+        }
+        shaderGroups.push_back(shaderGroup);
+    }
+
+    // Miss group
     VkShaderModule rmissShaderModule = createShaderModule("./hlsl/dumpTri_rmiss.spv", device);
+    {
+        VkPipelineShaderStageCreateInfo rmissStageInfo = {};
+        {
+            rmissStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            rmissStageInfo.stage = VK_SHADER_STAGE_MISS_BIT_KHR;
+            rmissStageInfo.pName = "main";
+            rmissStageInfo.module = rmissShaderModule;
+        }
+        shaderStages.push_back(rmissStageInfo);
+
+        VkRayTracingShaderGroupCreateInfoKHR shaderGroup = {};
+        {
+            shaderGroup.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+            shaderGroup.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+            shaderGroup.generalShader = static_cast<uint32_t>(shaderStages.size()) - 1;
+            shaderGroup.closestHitShader = VK_SHADER_UNUSED_KHR;
+            shaderGroup.anyHitShader = VK_SHADER_UNUSED_KHR;
+            shaderGroup.intersectionShader = VK_SHADER_UNUSED_KHR;
+        }
+        shaderGroups.push_back(shaderGroup);
+    }
+
+    // Closest hit group
+    VkShaderModule rchitShaderModule = createShaderModule("./hlsl/dumpTri_rchit.spv", device);
+    {
+        VkPipelineShaderStageCreateInfo rchitStageInfo = {};
+        {
+            rchitStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            rchitStageInfo.stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+            rchitStageInfo.pName = "main";
+            rchitStageInfo.module = rchitShaderModule;
+        }
+        shaderStages.push_back(rchitStageInfo);
+
+        VkRayTracingShaderGroupCreateInfoKHR shaderGroup = {};
+        {
+            shaderGroup.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+            shaderGroup.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
+            shaderGroup.generalShader = VK_SHADER_UNUSED_KHR;
+            shaderGroup.closestHitShader = static_cast<uint32_t>(shaderStages.size()) - 1;
+            shaderGroup.anyHitShader = VK_SHADER_UNUSED_KHR;
+            shaderGroup.intersectionShader = VK_SHADER_UNUSED_KHR;
+        }
+        shaderGroups.push_back(shaderGroup);
+    }
+
+    VkRayTracingPipelineCreateInfoKHR rayTracingPipelineInfo = {};
+    {
+        rayTracingPipelineInfo.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR;
+        rayTracingPipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
+        rayTracingPipelineInfo.pStages = shaderStages.data();
+        rayTracingPipelineInfo.groupCount = static_cast<uint32_t>(shaderGroups.size());
+        rayTracingPipelineInfo.pGroups = shaderGroups.data();
+        rayTracingPipelineInfo.maxPipelineRayRecursionDepth = 1;
+        rayTracingPipelineInfo.layout = pipelineLayout;
+    }
+    VkPipeline rtPipeline;
+    VK_CHECK(vkCreateRayTracingPipelinesKHR(device, VK_NULL_HANDLE, VK_NULL_HANDLE, 1, &rayTracingPipelineInfo, nullptr, &rtPipeline));
+
+
     /*
     * Build the Shader Binding Table
     */
 
 
     // Destroy the ray tracing pipeline
+    vkDestroyShaderModule(device, rgenShaderModule, nullptr);
+    vkDestroyShaderModule(device, rmissShaderModule, nullptr);
+    vkDestroyShaderModule(device, rchitShaderModule, nullptr);
     vkDestroyDescriptorSetLayout(device, desSetLayout, nullptr);
+    vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+    vkDestroyPipeline(device, rtPipeline, nullptr);
 
     // Destroy TLAS structure
     vkDestroyAccelerationStructureKHR(device, topLevelAccelerationStructure.accStructure, nullptr);
