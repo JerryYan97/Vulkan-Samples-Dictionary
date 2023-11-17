@@ -461,6 +461,23 @@ int main()
     VmaAllocator allocator;
     vmaCreateAllocator(&allocCreateInfo, &allocator);
 
+    // Init descriptors pool
+    VkDescriptorPool descriptorPool;
+    std::vector<VkDescriptorPoolSize> poolSizes = {
+            { VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1 }
+    };
+    
+    VkDescriptorPoolCreateInfo poolInfo{};
+    {
+        poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        poolInfo.poolSizeCount = poolSizes.size();
+        poolInfo.pPoolSizes = poolSizes.data();
+        poolInfo.maxSets = 1;
+    }
+
+    VK_CHECK(vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool));
+
     //
     //
     // BLAS - Bottom Level Acceleration Structure (Verts/Tris)
@@ -1192,6 +1209,58 @@ int main()
 
     VK_CHECK(vkCreateImageView(device, &storageImageViewInfo, nullptr, &storageImageView));
 
+    /*
+    *   Create the descriptor sets used for the ray tracing dispatch
+    */
+    VkDescriptorSetAllocateInfo descriptorSetAllocInfo = {};
+    {
+        descriptorSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        descriptorSetAllocInfo.descriptorPool = descriptorPool;
+        descriptorSetAllocInfo.descriptorSetCount = 1;
+        descriptorSetAllocInfo.pSetLayouts = &desSetLayout;
+    }
+    VkDescriptorSet rtDescriptorSet;
+    vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &rtDescriptorSet);
+
+    VkWriteDescriptorSetAccelerationStructureKHR tlasDescriptorInfo = {};
+    {
+        tlasDescriptorInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
+        tlasDescriptorInfo.accelerationStructureCount = 1;
+        tlasDescriptorInfo.pAccelerationStructures = &topLevelAccelerationStructure.accStructure;
+    }
+
+    VkWriteDescriptorSet tlasDescriptorWrite = {};
+    {
+        tlasDescriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        tlasDescriptorWrite.pNext = &tlasDescriptorInfo;
+        tlasDescriptorWrite.dstSet = rtDescriptorSet;
+        tlasDescriptorWrite.dstBinding = 0;
+        tlasDescriptorWrite.descriptorCount = 1;
+        tlasDescriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+    }
+
+    VkDescriptorImageInfo storageImgDescriptorInfo{};
+    {
+        storageImgDescriptorInfo.imageView = storageImageView;
+        storageImgDescriptorInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+    }
+
+    VkWriteDescriptorSet storageImgDescriptorWrite = {};
+    {
+        storageImgDescriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        storageImgDescriptorWrite.dstSet = rtDescriptorSet;
+        storageImgDescriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        storageImgDescriptorWrite.dstBinding = 1;
+        storageImgDescriptorWrite.pImageInfo = &storageImgDescriptorInfo;
+        storageImgDescriptorWrite.descriptorCount = 1;
+    }
+
+    VkWriteDescriptorSet descriptorSetWrites[2] = {
+        tlasDescriptorWrite, storageImgDescriptorWrite
+    };
+
+    vkUpdateDescriptorSets(device, 2, descriptorSetWrites, 0, nullptr);
+
     // Destroy the image and its image view
     vkDestroyImageView(device, storageImageView, nullptr);
     vmaDestroyImage(allocator, storageImage, storageImageAlloc);
@@ -1233,6 +1302,9 @@ int main()
     // Destroy the command pool and release the command buffer
     vkFreeCommandBuffers(device, cmdPool, 1, &cmdBuffer);
     vkDestroyCommandPool(device, cmdPool, nullptr);
+
+    // Destroy the descriptor pool
+    vkDestroyDescriptorPool(device, descriptorPool, nullptr);
 
     // Destroy the allocator
     vmaDestroyAllocator(allocator);
