@@ -101,6 +101,11 @@ VkShaderModule createShaderModule(const std::string& spvName, const VkDevice& de
     return shaderModule;
 }
 
+uint32_t alignedSize(uint32_t value, uint32_t alignment)
+{
+    return (value + alignment - 1) & ~(alignment - 1);
+}
+
 int main()
 {
     // Verify that the debug extension for the callback messenger is supported.
@@ -223,6 +228,10 @@ int main()
     std::vector<VkPhysicalDevice> phyDeviceVec(phyDeviceCount);
     VK_CHECK(vkEnumeratePhysicalDevices(instance, &phyDeviceCount, phyDeviceVec.data()));
 
+    // We need the physical device ray tracing pipeline properties afterward.
+    VkPhysicalDeviceAccelerationStructurePropertiesKHR phyDevAccStructProperties = {};
+    VkPhysicalDeviceRayTracingPipelinePropertiesKHR phyDevRtPipelineProperties = {};
+
     for (VkPhysicalDevice phyDevice : phyDeviceVec)
     {
         VkPhysicalDeviceProperties physicalDevProperties;
@@ -267,13 +276,11 @@ int main()
             physicalDevice = phyDevice;
 
             // Accerlation structure properties.
-            VkPhysicalDeviceAccelerationStructurePropertiesKHR phyDevAccStructProperties = {};
             {
                 phyDevAccStructProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR;
             }
 
             // Ray tracing properties.
-            VkPhysicalDeviceRayTracingPipelinePropertiesKHR phyDevRtPipelineProperties = {};
             {
                 phyDevRtPipelineProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
                 phyDevRtPipelineProperties.pNext = &phyDevAccStructProperties;
@@ -593,6 +600,7 @@ int main()
     PFN_vkGetAccelerationStructureDeviceAddressKHR vkGetAccelerationStructureDeviceAddressKHR = reinterpret_cast<PFN_vkGetAccelerationStructureDeviceAddressKHR>(vkGetDeviceProcAddr(device, "vkGetAccelerationStructureDeviceAddressKHR"));
     PFN_vkCmdBuildAccelerationStructuresKHR vkCmdBuildAccelerationStructuresKHR = reinterpret_cast<PFN_vkCmdBuildAccelerationStructuresKHR>(vkGetDeviceProcAddr(device, "vkCmdBuildAccelerationStructuresKHR"));
     PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelinesKHR = reinterpret_cast<PFN_vkCreateRayTracingPipelinesKHR>(vkGetDeviceProcAddr(device, "vkCreateRayTracingPipelinesKHR"));
+    PFN_vkGetRayTracingShaderGroupHandlesKHR vkGetRayTracingShaderGroupHandlesKHR = reinterpret_cast<PFN_vkGetRayTracingShaderGroupHandlesKHR>(vkGetDeviceProcAddr(device, "vkGetRayTracingShaderGroupHandlesKHR"));
 
     struct BottomLevelAccelerationStructure
     {
@@ -1066,11 +1074,132 @@ int main()
     VkPipeline rtPipeline;
     VK_CHECK(vkCreateRayTracingPipelinesKHR(device, VK_NULL_HANDLE, VK_NULL_HANDLE, 1, &rayTracingPipelineInfo, nullptr, &rtPipeline));
 
-
     /*
     * Build the Shader Binding Table
     */
+    VkBuffer rgenShaderGroupHandle;
+    VmaAllocation rgenShaderGroupHandleAlloc;
 
+    VkBuffer rmissShaderGroupHandle;
+    VmaAllocation rmissShaderGroupHandleAlloc;
+
+    VkBuffer rchitShaderGroupHandle;
+    VmaAllocation rchitShaderGroupHandleAlloc;
+    {
+        const uint32_t handleSize = phyDevRtPipelineProperties.shaderGroupHandleSize;
+        const uint32_t alignedHandleSize = alignedSize(handleSize, phyDevRtPipelineProperties.shaderGroupHandleAlignment);
+        const uint32_t groupCount = static_cast<uint32_t>(shaderGroups.size());
+        const uint32_t stbSize = groupCount * alignedHandleSize;
+
+        std::vector<uint8_t> shaderHandles(stbSize);
+        VK_CHECK(vkGetRayTracingShaderGroupHandlesKHR(device, rtPipeline, 0, groupCount, stbSize, shaderHandles.data()));
+
+        const VkBufferUsageFlags shaderGroupHandleBufferUsageFlags = VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        const VmaAllocationCreateFlags shaderGroupHandleAllocFlags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        VkBufferCreateInfo shaderGroupHandleBufferInfo = {};
+        {
+            shaderGroupHandleBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+            shaderGroupHandleBufferInfo.size = handleSize;
+            shaderGroupHandleBufferInfo.usage = shaderGroupHandleBufferUsageFlags;
+            shaderGroupHandleBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        }
+
+        VmaAllocationCreateInfo shaderGroupHandleBufferAllocInfo = {};
+        {
+            shaderGroupHandleBufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+            shaderGroupHandleBufferAllocInfo.flags = shaderGroupHandleAllocFlags;
+        }
+
+        // Ray generation
+        {
+            vmaCreateBuffer(allocator, &shaderGroupHandleBufferInfo, &shaderGroupHandleBufferAllocInfo, &rgenShaderGroupHandle, &rgenShaderGroupHandleAlloc, nullptr);
+
+            void* pShaderGroupHandle;
+            vmaMapMemory(allocator, rgenShaderGroupHandleAlloc, &pShaderGroupHandle);
+            memcpy(pShaderGroupHandle, shaderHandles.data(), handleSize);
+            vmaUnmapMemory(allocator, rgenShaderGroupHandleAlloc);
+        }
+
+        // Ray miss
+        {
+            vmaCreateBuffer(allocator, &shaderGroupHandleBufferInfo, &shaderGroupHandleBufferAllocInfo, &rmissShaderGroupHandle, &rmissShaderGroupHandleAlloc, nullptr);
+
+            void* pShaderGroupHandle;
+            vmaMapMemory(allocator, rmissShaderGroupHandleAlloc, &pShaderGroupHandle);
+            memcpy(pShaderGroupHandle, shaderHandles.data() + alignedHandleSize, handleSize);
+            vmaUnmapMemory(allocator, rmissShaderGroupHandleAlloc);
+        }
+
+        // Ray closest hit
+        {
+            vmaCreateBuffer(allocator, &shaderGroupHandleBufferInfo, &shaderGroupHandleBufferAllocInfo, &rchitShaderGroupHandle, &rchitShaderGroupHandleAlloc, nullptr);
+
+            void* pShaderGroupHandle;
+            vmaMapMemory(allocator, rchitShaderGroupHandleAlloc, &pShaderGroupHandle);
+            memcpy(pShaderGroupHandle, shaderHandles.data() + 2 * alignedHandleSize, handleSize);
+            vmaUnmapMemory(allocator, rchitShaderGroupHandleAlloc);
+        }
+    }
+
+    /*
+    * Create the storage image
+    */
+    VkImage       storageImage;
+    VmaAllocation storageImageAlloc;
+    VkImageView   storageImageView;
+
+    VkImageCreateInfo imageInfo = {};
+    {
+        imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        imageInfo.imageType = VK_IMAGE_TYPE_2D;
+        imageInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+        imageInfo.extent.width = 1024;
+        imageInfo.extent.height = 1024;
+        imageInfo.extent.depth = 1;
+        imageInfo.mipLevels = 1;
+        imageInfo.arrayLayers = 1;
+        imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+        imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+        imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    }
+
+    VmaAllocationCreateInfo imageAllocInfo = {};
+    {
+        imageAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        imageAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+    }
+
+    vmaCreateImage(allocator, &imageInfo, &imageAllocInfo, &storageImage, &storageImageAlloc, nullptr);
+
+    VkImageViewCreateInfo storageImageViewInfo = {};
+    {
+        storageImageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        storageImageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        storageImageViewInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+        storageImageViewInfo.image = storageImage;
+        storageImageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        storageImageViewInfo.subresourceRange.baseMipLevel = 0;
+        storageImageViewInfo.subresourceRange.levelCount = 1;
+        storageImageViewInfo.subresourceRange.baseArrayLayer = 0;
+        storageImageViewInfo.subresourceRange.layerCount = 1;
+        storageImageViewInfo.components.r = VK_COMPONENT_SWIZZLE_R;
+        storageImageViewInfo.components.g = VK_COMPONENT_SWIZZLE_G;
+        storageImageViewInfo.components.b = VK_COMPONENT_SWIZZLE_B;
+        storageImageViewInfo.components.a = VK_COMPONENT_SWIZZLE_A;
+    }
+
+    VK_CHECK(vkCreateImageView(device, &storageImageViewInfo, nullptr, &storageImageView));
+
+    // Destroy the image and its image view
+    vkDestroyImageView(device, storageImageView, nullptr);
+    vmaDestroyImage(allocator, storageImage, storageImageAlloc);
+
+    // Destroy the shader group handles
+    vmaDestroyBuffer(allocator, rgenShaderGroupHandle, rgenShaderGroupHandleAlloc);
+    vmaDestroyBuffer(allocator, rmissShaderGroupHandle, rmissShaderGroupHandleAlloc);
+    vmaDestroyBuffer(allocator, rchitShaderGroupHandle, rchitShaderGroupHandleAlloc);
 
     // Destroy the ray tracing pipeline
     vkDestroyShaderModule(device, rgenShaderModule, nullptr);
