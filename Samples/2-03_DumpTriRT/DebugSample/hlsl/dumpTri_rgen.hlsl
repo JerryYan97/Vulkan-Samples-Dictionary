@@ -30,5 +30,5 @@ void main()
     Payload payload;
     TraceRay(tlas, RAY_FLAG_FORCE_OPAQUE, 0xff, 0, 0, 0, rayDesc, payload);
     
-    image[int2(LaunchID.xy)] = float4(payload.hitValue, 0.0);
+    image[int2(LaunchID.xy)] = float4(payload.hitValue, 1.0);
 }

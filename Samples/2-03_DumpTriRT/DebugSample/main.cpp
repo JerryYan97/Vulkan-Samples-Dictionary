@@ -421,6 +421,10 @@ int main()
     VkDevice device;
     VK_CHECK(vkCreateDevice(physicalDevice, &deviceInfo, nullptr, &device));
 
+    // Get a graphics and compute queue
+    VkQueue rtQueue;
+    vkGetDeviceQueue(device, queueId, 0, &rtQueue);
+
     // Create a command buffer pool and allocate a command buffer
     VkCommandPoolCreateInfo cmdPoolInfo = {};
     {
@@ -618,6 +622,7 @@ int main()
     PFN_vkCmdBuildAccelerationStructuresKHR vkCmdBuildAccelerationStructuresKHR = reinterpret_cast<PFN_vkCmdBuildAccelerationStructuresKHR>(vkGetDeviceProcAddr(device, "vkCmdBuildAccelerationStructuresKHR"));
     PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelinesKHR = reinterpret_cast<PFN_vkCreateRayTracingPipelinesKHR>(vkGetDeviceProcAddr(device, "vkCreateRayTracingPipelinesKHR"));
     PFN_vkGetRayTracingShaderGroupHandlesKHR vkGetRayTracingShaderGroupHandlesKHR = reinterpret_cast<PFN_vkGetRayTracingShaderGroupHandlesKHR>(vkGetDeviceProcAddr(device, "vkGetRayTracingShaderGroupHandlesKHR"));
+    PFN_vkCmdTraceRaysKHR vkCmdTraceRaysKHR = reinterpret_cast<PFN_vkCmdTraceRaysKHR>(vkGetDeviceProcAddr(device, "vkCmdTraceRaysKHR"));
 
     struct BottomLevelAccelerationStructure
     {
@@ -759,6 +764,14 @@ int main()
     vkCmdBuildAccelerationStructuresKHR(cmdBuffer, 1, &blasBuildGeoInfo, blasBuildRangeInfos);
 
     VK_CHECK(vkEndCommandBuffer(cmdBuffer));
+
+    VkSubmitInfo submitInfo{};
+    {
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.pCommandBuffers = &cmdBuffer;
+        submitInfo.commandBufferCount = 1;
+    }
+    VK_CHECK(vkQueueSubmit(rtQueue, 1, &submitInfo, VK_NULL_HANDLE));
     
     vkDeviceWaitIdle(device);
 
@@ -949,6 +962,8 @@ int main()
 
     VK_CHECK(vkEndCommandBuffer(cmdBuffer));
 
+    
+
     vkDeviceWaitIdle(device);
 
     vmaDestroyBuffer(allocator,
@@ -1096,12 +1111,16 @@ int main()
     */
     VkBuffer rgenShaderGroupHandle;
     VmaAllocation rgenShaderGroupHandleAlloc;
+    VkStridedDeviceAddressRegionKHR rgenShaderSbtEntry = {};
 
     VkBuffer rmissShaderGroupHandle;
     VmaAllocation rmissShaderGroupHandleAlloc;
+    VkStridedDeviceAddressRegionKHR rmissShaderSbtEntry = {};
 
     VkBuffer rchitShaderGroupHandle;
     VmaAllocation rchitShaderGroupHandleAlloc;
+    VkStridedDeviceAddressRegionKHR rchitShaderSbtEntry = {};
+
     {
         const uint32_t handleSize = phyDevRtPipelineProperties.shaderGroupHandleSize;
         const uint32_t alignedHandleSize = alignedSize(handleSize, phyDevRtPipelineProperties.shaderGroupHandleAlignment);
@@ -1135,6 +1154,15 @@ int main()
             vmaMapMemory(allocator, rgenShaderGroupHandleAlloc, &pShaderGroupHandle);
             memcpy(pShaderGroupHandle, shaderHandles.data(), handleSize);
             vmaUnmapMemory(allocator, rgenShaderGroupHandleAlloc);
+
+            VkBufferDeviceAddressInfo bufferDeviceAddrInfo = {};
+            {
+                bufferDeviceAddrInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+                bufferDeviceAddrInfo.buffer = rgenShaderGroupHandle;
+            }
+            rgenShaderSbtEntry.deviceAddress = vkGetBufferDeviceAddress(device, &bufferDeviceAddrInfo);
+            rgenShaderSbtEntry.stride = alignedHandleSize;
+            rgenShaderSbtEntry.size = alignedHandleSize;
         }
 
         // Ray miss
@@ -1145,6 +1173,15 @@ int main()
             vmaMapMemory(allocator, rmissShaderGroupHandleAlloc, &pShaderGroupHandle);
             memcpy(pShaderGroupHandle, shaderHandles.data() + alignedHandleSize, handleSize);
             vmaUnmapMemory(allocator, rmissShaderGroupHandleAlloc);
+
+            VkBufferDeviceAddressInfo bufferDeviceAddrInfo = {};
+            {
+                bufferDeviceAddrInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+                bufferDeviceAddrInfo.buffer = rmissShaderGroupHandle;
+            }
+            rmissShaderSbtEntry.deviceAddress = vkGetBufferDeviceAddress(device, &bufferDeviceAddrInfo);
+            rmissShaderSbtEntry.stride = alignedHandleSize;
+            rmissShaderSbtEntry.size = alignedHandleSize;
         }
 
         // Ray closest hit
@@ -1155,6 +1192,15 @@ int main()
             vmaMapMemory(allocator, rchitShaderGroupHandleAlloc, &pShaderGroupHandle);
             memcpy(pShaderGroupHandle, shaderHandles.data() + 2 * alignedHandleSize, handleSize);
             vmaUnmapMemory(allocator, rchitShaderGroupHandleAlloc);
+
+            VkBufferDeviceAddressInfo bufferDeviceAddrInfo = {};
+            {
+                bufferDeviceAddrInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+                bufferDeviceAddrInfo.buffer = rchitShaderGroupHandle;
+            }
+            rchitShaderSbtEntry.deviceAddress = vkGetBufferDeviceAddress(device, &bufferDeviceAddrInfo);
+            rchitShaderSbtEntry.stride = alignedHandleSize;
+            rchitShaderSbtEntry.size = alignedHandleSize;
         }
     }
 
@@ -1164,6 +1210,9 @@ int main()
     VkImage       storageImage;
     VmaAllocation storageImageAlloc;
     VkImageView   storageImageView;
+
+    VkBuffer      storageImgDumpBuffer;
+    VmaAllocation storageImgDumpBufferAlloc;
 
     VkImageCreateInfo imageInfo = {};
     {
@@ -1208,6 +1257,28 @@ int main()
     }
 
     VK_CHECK(vkCreateImageView(device, &storageImageViewInfo, nullptr, &storageImageView));
+
+    VkBufferCreateInfo storageImgDumpBufferInfo = {};
+    {
+        storageImgDumpBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        storageImgDumpBufferInfo.size = sizeof(uint8_t) * 4 * 1024 * 1024;
+        storageImgDumpBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        storageImgDumpBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    }
+
+    VmaAllocationCreateInfo storageImgDumpBufferAllocInfo = {};
+    {
+        storageImgDumpBufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        storageImgDumpBufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
+                                              VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    }
+
+    vmaCreateBuffer(allocator,
+                    &storageImgDumpBufferInfo,
+                    &storageImgDumpBufferAllocInfo,
+                    &storageImgDumpBuffer,
+                    &storageImgDumpBufferAlloc, nullptr);
+
 
     /*
     *   Create the descriptor sets used for the ray tracing dispatch
@@ -1261,9 +1332,111 @@ int main()
 
     vkUpdateDescriptorSets(device, 2, descriptorSetWrites, 0, nullptr);
 
+    /*
+    *   Fill the command buffer and kick off the job.
+    */
+    VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &cmdBufferBeginInfo));
+
+    {
+        // Transfer the storage image from layout unknown to VK_IMAGE_LAYOUT_GENERAL.
+        VkImageMemoryBarrier storageImgToGeneralLayoutBarrier{};
+        {
+            storageImgToGeneralLayoutBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            storageImgToGeneralLayoutBarrier.srcAccessMask = VK_ACCESS_NONE;
+            storageImgToGeneralLayoutBarrier.dstAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+            storageImgToGeneralLayoutBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            storageImgToGeneralLayoutBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+            storageImgToGeneralLayoutBarrier.image = storageImage;
+            storageImgToGeneralLayoutBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            storageImgToGeneralLayoutBarrier.subresourceRange.baseMipLevel = 0;
+            storageImgToGeneralLayoutBarrier.subresourceRange.levelCount = 1;
+            storageImgToGeneralLayoutBarrier.subresourceRange.baseArrayLayer = 0;
+            storageImgToGeneralLayoutBarrier.subresourceRange.layerCount = 1;
+        }
+
+        vkCmdPipelineBarrier(cmdBuffer,
+            VK_PIPELINE_STAGE_HOST_BIT,
+            VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &storageImgToGeneralLayoutBarrier);
+
+        // Dispatch rays
+        vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rtPipeline);
+        vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipelineLayout, 0, 1, &rtDescriptorSet, 0, nullptr);
+
+        VkStridedDeviceAddressRegionKHR dummyShaderSbtEntry{};
+        vkCmdTraceRaysKHR(cmdBuffer, &rgenShaderSbtEntry, &rmissShaderSbtEntry, &rchitShaderSbtEntry, &dummyShaderSbtEntry, 1024, 1024, 1);
+
+        // Transfer the storage image from layout VK_IMAGE_LAYOUT_GENERAL to VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL.
+        VkImageMemoryBarrier storageImgToTransSrcLayoutBarrier{};
+        {
+            storageImgToTransSrcLayoutBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            storageImgToTransSrcLayoutBarrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+            storageImgToTransSrcLayoutBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+            storageImgToTransSrcLayoutBarrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+            storageImgToTransSrcLayoutBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+            storageImgToTransSrcLayoutBarrier.image = storageImage;
+            storageImgToTransSrcLayoutBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            storageImgToTransSrcLayoutBarrier.subresourceRange.baseMipLevel = 0;
+            storageImgToTransSrcLayoutBarrier.subresourceRange.levelCount = 1;
+            storageImgToTransSrcLayoutBarrier.subresourceRange.baseArrayLayer = 0;
+            storageImgToTransSrcLayoutBarrier.subresourceRange.layerCount = 1;
+        }
+
+        vkCmdPipelineBarrier(cmdBuffer,
+            VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &storageImgToTransSrcLayoutBarrier);
+
+        // Copy image data out into a staging buffer
+        VkBufferImageCopy imgToBufferCopy{};
+        {
+            imgToBufferCopy.bufferRowLength = 1024;
+            imgToBufferCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            imgToBufferCopy.imageSubresource.baseArrayLayer = 0;
+            imgToBufferCopy.imageSubresource.layerCount = 1;
+            imgToBufferCopy.imageSubresource.mipLevel = 0;
+            imgToBufferCopy.imageExtent.width = 1024;
+            imgToBufferCopy.imageExtent.height = 1024;
+            imgToBufferCopy.imageExtent.depth = 1;
+        }
+
+        vkCmdCopyImageToBuffer(cmdBuffer,
+                               storageImage,
+                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                               storageImgDumpBuffer,
+                               1, &imgToBufferCopy);
+    }
+
+    VK_CHECK(vkEndCommandBuffer(cmdBuffer));
+
+    // Submit the command buffer, wait until the work done and dump the image data on disk.
+    VK_CHECK(vkQueueSubmit(rtQueue, 1, &submitInfo, VK_NULL_HANDLE));
+
+    vkDeviceWaitIdle(device);
+
+    // Map out the data
+    const int dataInBytes = 4 * sizeof(uint8_t) * 1024 * 1024;
+    void* pStorageImgDumpBufferData;
+    std::vector<uint8_t> ramStorageImgDumpData(dataInBytes);
+    vmaMapMemory(allocator, storageImgDumpBufferAlloc, &pStorageImgDumpBufferData);
+    memcpy(ramStorageImgDumpData.data(), pStorageImgDumpBufferData, dataInBytes);
+    vmaUnmapMemory(allocator, storageImgDumpBufferAlloc);
+
+    std::string pathName = std::string(SOURCE_PATH) + std::string("/test.png");
+    std::cout << pathName << std::endl;
+    unsigned int error = lodepng::encode(pathName, ramStorageImgDumpData.data(), 1024, 1024);
+    if (error) { std::cout << "encoder error " << error << ": " << lodepng_error_text(error) << std::endl; }
+
     // Destroy the image and its image view
     vkDestroyImageView(device, storageImageView, nullptr);
     vmaDestroyImage(allocator, storageImage, storageImageAlloc);
+    vmaDestroyBuffer(allocator, storageImgDumpBuffer, storageImgDumpBufferAlloc);
 
     // Destroy the shader group handles
     vmaDestroyBuffer(allocator, rgenShaderGroupHandle, rgenShaderGroupHandleAlloc);
