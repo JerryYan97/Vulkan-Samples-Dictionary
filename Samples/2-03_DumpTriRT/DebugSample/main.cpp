@@ -114,7 +114,6 @@ uint32_t alignedSize(uint32_t value, uint32_t alignment)
 const int MAX_FRAMES_IN_FLIGHT = 2;
 uint32_t currentFrame = 0;
 VkExtent2D swapchainImageExtent;
-std::vector<VkImageView> swapchainImageViews;
 std::vector<VkImage> swapchainImages;
 VkSurfaceKHR surface;
 VkSwapchainKHR swapchain;
@@ -130,26 +129,6 @@ void CreateSwapchainImageViews()
     vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, nullptr);
     swapchainImages.resize(swapchainImageCount);
     vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, swapchainImages.data());
-
-    swapchainImageViews.resize(swapchainImageCount);
-    for (size_t i = 0; i < swapchainImageCount; i++)
-    {
-        VkImageViewCreateInfo createInfo{};
-        createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        createInfo.image = swapchainImages[i];
-        createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        createInfo.format = VK_FORMAT_B8G8R8A8_SRGB;
-        createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-        createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-        createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-        createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-        createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        createInfo.subresourceRange.baseMipLevel = 0;
-        createInfo.subresourceRange.levelCount = 1;
-        createInfo.subresourceRange.baseArrayLayer = 0;
-        createInfo.subresourceRange.layerCount = 1;
-        VK_CHECK(vkCreateImageView(device, &createInfo, nullptr, &swapchainImageViews[i]));
-    }
 }
 
 // Create the swapchain
@@ -202,11 +181,7 @@ void CreateSwapchain()
         std::clamp(static_cast<uint32_t>(glfwFrameBufferHeight), surfaceCapabilities.minImageExtent.height, surfaceCapabilities.maxImageExtent.height)
     };
 
-    uint32_t imageCount = surfaceCapabilities.minImageCount + 1;
-    if (surfaceCapabilities.maxImageCount > 0 && imageCount > surfaceCapabilities.maxImageCount)
-    {
-        imageCount = surfaceCapabilities.maxImageCount;
-    }
+    uint32_t imageCount = 2;
 
     VkSwapchainCreateInfoKHR swapchainCreateInfo{};
     {
@@ -217,7 +192,7 @@ void CreateSwapchain()
         swapchainCreateInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
         swapchainCreateInfo.imageExtent = swapchainImageExtent;
         swapchainCreateInfo.imageArrayLayers = 1;
-        swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT;
         {
             swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
         }
@@ -233,11 +208,6 @@ void CreateSwapchain()
 void CleanupSwapchain()
 {
     // Cleanup the swap chain
-    // Clean the image views
-    for (auto imgView : swapchainImageViews)
-    {
-        vkDestroyImageView(device, imgView, nullptr);
-    }
 
     // Destroy the swapchain
     vkDestroySwapchainKHR(device, swapchain, nullptr);
@@ -364,8 +334,8 @@ int main()
 
     // Init glfw window.
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    const uint32_t WIDTH = 1280;
-    const uint32_t HEIGHT = 640;
+    const uint32_t WIDTH = 1024;
+    const uint32_t HEIGHT = 1024;
     window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
     glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
 
@@ -656,8 +626,8 @@ int main()
     // Init descriptors pool
     VkDescriptorPool descriptorPool;
     std::vector<VkDescriptorPoolSize> poolSizes = {
-            { VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1 },
-            { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1 }
+            { VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 2 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2 }
     };
     
     VkDescriptorPoolCreateInfo poolInfo{};
@@ -665,7 +635,7 @@ int main()
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         poolInfo.poolSizeCount = poolSizes.size();
         poolInfo.pPoolSizes = poolSizes.data();
-        poolInfo.maxSets = 1;
+        poolInfo.maxSets = 2;
     }
 
     VK_CHECK(vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool));
@@ -1395,12 +1365,9 @@ int main()
     /*
     * Create the storage image
     */
-    VkImage       storageImage;
-    VmaAllocation storageImageAlloc;
-    VkImageView   storageImageView;
-
-    VkBuffer      storageImgDumpBuffer;
-    VmaAllocation storageImgDumpBufferAlloc;
+    std::vector<VkImage>       storageImages(MAX_FRAMES_IN_FLIGHT);
+    std::vector<VmaAllocation> storageImageAllocs(MAX_FRAMES_IN_FLIGHT);
+    std::vector<VkImageView>   storageImageViews(MAX_FRAMES_IN_FLIGHT);
 
     VkImageCreateInfo imageInfo = {};
     {
@@ -1425,14 +1392,15 @@ int main()
         imageAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
     }
 
-    vmaCreateImage(allocator, &imageInfo, &imageAllocInfo, &storageImage, &storageImageAlloc, nullptr);
+    vmaCreateImage(allocator, &imageInfo, &imageAllocInfo, &storageImages[0], &storageImageAllocs[0], nullptr);
+    vmaCreateImage(allocator, &imageInfo, &imageAllocInfo, &storageImages[1], &storageImageAllocs[1], nullptr);
 
     VkImageViewCreateInfo storageImageViewInfo = {};
     {
         storageImageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         storageImageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
         storageImageViewInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
-        storageImageViewInfo.image = storageImage;
+        storageImageViewInfo.image = storageImages[0];
         storageImageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         storageImageViewInfo.subresourceRange.baseMipLevel = 0;
         storageImageViewInfo.subresourceRange.levelCount = 1;
@@ -1444,29 +1412,9 @@ int main()
         storageImageViewInfo.components.a = VK_COMPONENT_SWIZZLE_A;
     }
 
-    VK_CHECK(vkCreateImageView(device, &storageImageViewInfo, nullptr, &storageImageView));
-
-    VkBufferCreateInfo storageImgDumpBufferInfo = {};
-    {
-        storageImgDumpBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        storageImgDumpBufferInfo.size = sizeof(uint8_t) * 4 * 1024 * 1024;
-        storageImgDumpBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-        storageImgDumpBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    }
-
-    VmaAllocationCreateInfo storageImgDumpBufferAllocInfo = {};
-    {
-        storageImgDumpBufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        storageImgDumpBufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
-                                              VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    }
-
-    vmaCreateBuffer(allocator,
-                    &storageImgDumpBufferInfo,
-                    &storageImgDumpBufferAllocInfo,
-                    &storageImgDumpBuffer,
-                    &storageImgDumpBufferAlloc, nullptr);
-
+    VK_CHECK(vkCreateImageView(device, &storageImageViewInfo, nullptr, &storageImageViews[0]));
+    storageImageViewInfo.image = storageImages[1];
+    VK_CHECK(vkCreateImageView(device, &storageImageViewInfo, nullptr, &storageImageViews[1]));
 
     /*
     *   Create the descriptor sets used for the ray tracing dispatch
@@ -1478,8 +1426,9 @@ int main()
         descriptorSetAllocInfo.descriptorSetCount = 1;
         descriptorSetAllocInfo.pSetLayouts = &desSetLayout;
     }
-    VkDescriptorSet rtDescriptorSet;
-    vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &rtDescriptorSet);
+    std::vector<VkDescriptorSet> rtDescriptorSets(MAX_FRAMES_IN_FLIGHT);
+    vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &rtDescriptorSets[0]);
+    vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &rtDescriptorSets[1]);
 
     VkWriteDescriptorSetAccelerationStructureKHR tlasDescriptorInfo = {};
     {
@@ -1492,7 +1441,7 @@ int main()
     {
         tlasDescriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         tlasDescriptorWrite.pNext = &tlasDescriptorInfo;
-        tlasDescriptorWrite.dstSet = rtDescriptorSet;
+        tlasDescriptorWrite.dstSet = rtDescriptorSets[0];
         tlasDescriptorWrite.dstBinding = 0;
         tlasDescriptorWrite.descriptorCount = 1;
         tlasDescriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
@@ -1500,14 +1449,14 @@ int main()
 
     VkDescriptorImageInfo storageImgDescriptorInfo{};
     {
-        storageImgDescriptorInfo.imageView = storageImageView;
+        storageImgDescriptorInfo.imageView = storageImageViews[0];
         storageImgDescriptorInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
     }
 
     VkWriteDescriptorSet storageImgDescriptorWrite = {};
     {
         storageImgDescriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        storageImgDescriptorWrite.dstSet = rtDescriptorSet;
+        storageImgDescriptorWrite.dstSet = rtDescriptorSets[0];
         storageImgDescriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
         storageImgDescriptorWrite.dstBinding = 1;
         storageImgDescriptorWrite.pImageInfo = &storageImgDescriptorInfo;
@@ -1520,9 +1469,219 @@ int main()
 
     vkUpdateDescriptorSets(device, 2, descriptorSetWrites, 0, nullptr);
 
+    tlasDescriptorWrite.dstSet = rtDescriptorSets[1];
+    storageImgDescriptorInfo.imageView = storageImageViews[1];
+    storageImgDescriptorWrite.dstSet = rtDescriptorSets[1];
+    descriptorSetWrites[0] = tlasDescriptorWrite;
+    descriptorSetWrites[1] = storageImgDescriptorWrite;
+
+    vkUpdateDescriptorSets(device, 2, descriptorSetWrites, 0, nullptr);
+
+    // Create the command buffers
+    std::vector<VkCommandBuffer> swapchainCommandBuffers(MAX_FRAMES_IN_FLIGHT);
+    VkCommandBufferAllocateInfo commandBufferAllocInfo{};
+    {
+        commandBufferAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        commandBufferAllocInfo.commandPool = cmdPool;
+        commandBufferAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        commandBufferAllocInfo.commandBufferCount = (uint32_t)swapchainCommandBuffers.size();
+    }
+    VK_CHECK(vkAllocateCommandBuffers(device, &commandBufferAllocInfo, swapchainCommandBuffers.data()));
+
+    // Create Sync objects
+    std::vector<VkSemaphore> imageAvailableSemaphores(MAX_FRAMES_IN_FLIGHT);
+    std::vector<VkSemaphore> renderFinishedSemaphores(MAX_FRAMES_IN_FLIGHT);
+    std::vector<VkFence> inFlightFences(MAX_FRAMES_IN_FLIGHT);
+
+    VkSemaphoreCreateInfo semaphoreInfo{};
+    {
+        semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    }
+
+    VkFenceCreateInfo fenceInfo{};
+    {
+        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+    }
+
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]));
+        VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]));
+        VK_CHECK(vkCreateFence(device, &fenceInfo, nullptr, &inFlightFences[i]))
+    }
+
+    VkImageSubresourceRange swapchainPresentSubResRange{};
+    {
+        swapchainPresentSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        swapchainPresentSubResRange.baseMipLevel = 0;
+        swapchainPresentSubResRange.levelCount = 1;
+        swapchainPresentSubResRange.baseArrayLayer = 0;
+        swapchainPresentSubResRange.layerCount = 1;
+    }
+
+    while (!glfwWindowShouldClose(window))
+    {
+        glfwPollEvents();
+        vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
+
+        // Get next available image from the swapchain
+        uint32_t imageIndex;
+        VkResult result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+
+        if (result == VK_ERROR_OUT_OF_DATE_KHR)
+        {
+            // The surface is imcompatiable with the swapchain (resize window).
+            RecreateSwapchain();
+            continue;
+        }
+        else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+        {
+            // Not success or usable.
+            throw std::runtime_error("failed to acquire swap chain image!");
+        }
+
+        // Reset unused previous frame's resource
+        vkResetFences(device, 1, &inFlightFences[currentFrame]);
+        vkResetCommandBuffer(swapchainCommandBuffers[currentFrame], 0);
+
+
+        // Fill the command buffer
+        VkCommandBufferBeginInfo beginInfo{};
+        {
+            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        }
+        VK_CHECK(vkBeginCommandBuffer(swapchainCommandBuffers[currentFrame], &beginInfo));
+
+        // Transform the layout of the storage image from undefined to general
+        VkImageMemoryBarrier rtStorageImgUndefToGeneral{};
+        {
+            rtStorageImgUndefToGeneral.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            rtStorageImgUndefToGeneral.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+            rtStorageImgUndefToGeneral.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            rtStorageImgUndefToGeneral.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+            rtStorageImgUndefToGeneral.image = storageImages[imageIndex];
+            rtStorageImgUndefToGeneral.subresourceRange = swapchainPresentSubResRange;
+        }
+
+        vkCmdPipelineBarrier(swapchainCommandBuffers[currentFrame],
+            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+            VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &rtStorageImgUndefToGeneral);
+
+
+        // Transform the layout of the swapchain from undefined to transfer dest.
+        // Transform the layout of the storage image from general to transfer source
+        VkImageMemoryBarrier swapchainUndefToTransDest{};
+        {
+            swapchainUndefToTransDest.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            swapchainUndefToTransDest.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            swapchainUndefToTransDest.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            swapchainUndefToTransDest.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            swapchainUndefToTransDest.image = swapchainImages[imageIndex];
+            swapchainUndefToTransDest.subresourceRange = swapchainPresentSubResRange;
+        }
+
+        VkImageMemoryBarrier storageImgGeneralToTransSrc{};
+        {
+            storageImgGeneralToTransSrc.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            storageImgGeneralToTransSrc.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+            storageImgGeneralToTransSrc.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+            storageImgGeneralToTransSrc.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+            storageImgGeneralToTransSrc.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+            storageImgGeneralToTransSrc.image = storageImages[imageIndex];
+            storageImgGeneralToTransSrc.subresourceRange = swapchainPresentSubResRange;
+        }
+
+        VkImageMemoryBarrier copyBarriers[2] = { swapchainUndefToTransDest, storageImgGeneralToTransSrc };
+
+        vkCmdPipelineBarrier(swapchainCommandBuffers[currentFrame],
+            VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            0,
+            0, nullptr,
+            0, nullptr,
+            2, copyBarriers);
+
+        // Copy the ray tracing result to the swapchain
+        
+
+
+        
+
+
+        // Transform the swapchain image layout from render target to present.
+        // Transform the layout of the swapchain from undefined to render target.
+        VkImageMemoryBarrier swapchainPresentTransBarrier{};
+        {
+            swapchainPresentTransBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            swapchainPresentTransBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            swapchainPresentTransBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+            swapchainPresentTransBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            swapchainPresentTransBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+            swapchainPresentTransBarrier.image = swapchainImages[imageIndex];
+            swapchainPresentTransBarrier.subresourceRange = swapchainPresentSubResRange;
+        }
+
+        vkCmdPipelineBarrier(swapchainCommandBuffers[currentFrame],
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &swapchainPresentTransBarrier);
+
+        VK_CHECK(vkEndCommandBuffer(swapchainCommandBuffers[currentFrame]));
+
+        // Submit the filled command buffer to the graphics queue to draw the image
+        VkSubmitInfo submitInfo{};
+        VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_TRANSFER_BIT };
+        {
+            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            // This draw would wait at dstStage and wait for the waitSemaphores
+            submitInfo.waitSemaphoreCount = 1;
+            submitInfo.pWaitSemaphores = &imageAvailableSemaphores[currentFrame];
+            submitInfo.pWaitDstStageMask = waitStages;
+            submitInfo.commandBufferCount = 1;
+            submitInfo.pCommandBuffers = &swapchainCommandBuffers[currentFrame];
+            // This draw would let the signalSemaphore sign when it finishes
+            submitInfo.signalSemaphoreCount = 1;
+            submitInfo.pSignalSemaphores = &renderFinishedSemaphores[currentFrame];
+        }
+        VK_CHECK(vkQueueSubmit(rtQueue, 1, &submitInfo, inFlightFences[currentFrame]));
+
+        // Put the swapchain into the present info and wait for the graphics queue previously before presenting.
+        VkPresentInfoKHR presentInfo{};
+        {
+            presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+            presentInfo.waitSemaphoreCount = 1;
+            presentInfo.pWaitSemaphores = &renderFinishedSemaphores[currentFrame];
+            presentInfo.swapchainCount = 1;
+            presentInfo.pSwapchains = &swapchain;
+            presentInfo.pImageIndices = &imageIndex;
+        }
+        result = vkQueuePresentKHR(rtQueue, &presentInfo);
+
+        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized)
+        {
+            framebufferResized = false;
+            RecreateSwapchain();
+        }
+        else if (result != VK_SUCCESS)
+        {
+            throw std::runtime_error("failed to present swap chain image!");
+        }
+
+        currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+    }
+
+    vkDeviceWaitIdle(device);
     /*
     *   Fill the command buffer and kick off the job.
-    */
+    
     VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &cmdBufferBeginInfo));
 
     {
@@ -1620,14 +1779,34 @@ int main()
     std::cout << pathName << std::endl;
     unsigned int error = lodepng::encode(pathName, ramStorageImgDumpData.data(), 1024, 1024);
     if (error) { std::cout << "encoder error " << error << ": " << lodepng_error_text(error) << std::endl; }
+    */
+
+
+
+    // Cleanup syn objects
+    for (auto itr : imageAvailableSemaphores)
+    {
+        vkDestroySemaphore(device, itr, nullptr);
+    }
+
+    for (auto itr : renderFinishedSemaphores)
+    {
+        vkDestroySemaphore(device, itr, nullptr);
+    }
+
+    for (auto itr : inFlightFences)
+    {
+        vkDestroyFence(device, itr, nullptr);
+    }
 
     CleanupSwapchain();
     vkDestroySurfaceKHR(instance, surface, nullptr);
 
     // Destroy the image and its image view
-    vkDestroyImageView(device, storageImageView, nullptr);
-    vmaDestroyImage(allocator, storageImage, storageImageAlloc);
-    vmaDestroyBuffer(allocator, storageImgDumpBuffer, storageImgDumpBufferAlloc);
+    vkDestroyImageView(device, storageImageViews[0], nullptr);
+    vkDestroyImageView(device, storageImageViews[1], nullptr);
+    vmaDestroyImage(allocator, storageImages[0], storageImageAllocs[0]);
+    vmaDestroyImage(allocator, storageImages[1], storageImageAllocs[1]);
 
     // Destroy the shader group handles
     vmaDestroyBuffer(allocator, rgenShaderGroupHandle, rgenShaderGroupHandleAlloc);
