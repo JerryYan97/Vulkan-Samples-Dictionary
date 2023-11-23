@@ -1373,7 +1373,7 @@ int main()
     {
         imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         imageInfo.imageType = VK_IMAGE_TYPE_2D;
-        imageInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+        imageInfo.format = VK_FORMAT_B8G8R8A8_UNORM;
         imageInfo.extent.width = 1024;
         imageInfo.extent.height = 1024;
         imageInfo.extent.depth = 1;
@@ -1399,7 +1399,7 @@ int main()
     {
         storageImageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         storageImageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        storageImageViewInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+        storageImageViewInfo.format = VK_FORMAT_B8G8R8A8_UNORM;
         storageImageViewInfo.image = storageImages[0];
         storageImageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         storageImageViewInfo.subresourceRange.baseMipLevel = 0;
@@ -1572,6 +1572,12 @@ int main()
             0, nullptr,
             1, &rtStorageImgUndefToGeneral);
 
+        // Dispatch rays
+        vkCmdBindPipeline(swapchainCommandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rtPipeline);
+        vkCmdBindDescriptorSets(swapchainCommandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipelineLayout, 0, 1, &rtDescriptorSets[imageIndex], 0, nullptr);
+
+        VkStridedDeviceAddressRegionKHR dummyShaderSbtEntry{};
+        vkCmdTraceRaysKHR(swapchainCommandBuffers[currentFrame], &rgenShaderSbtEntry, &rmissShaderSbtEntry, &rchitShaderSbtEntry, &dummyShaderSbtEntry, 1024, 1024, 1);
 
         // Transform the layout of the swapchain from undefined to transfer dest.
         // Transform the layout of the storage image from general to transfer source
@@ -1606,12 +1612,32 @@ int main()
             0, nullptr,
             2, copyBarriers);
 
-        // Copy the ray tracing result to the swapchain
-        
+        VkImageCopy imgCpyInfo{};
+        {
+            imgCpyInfo.srcOffset = { 0, 0, 0 };
+            imgCpyInfo.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            imgCpyInfo.srcSubresource.baseArrayLayer = 0;
+            imgCpyInfo.srcSubresource.layerCount = 1;
+            imgCpyInfo.srcSubresource.mipLevel = 0;
 
+            imgCpyInfo.dstOffset = { 0, 0, 0 };
+            imgCpyInfo.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            imgCpyInfo.dstSubresource.baseArrayLayer = 0;
+            imgCpyInfo.dstSubresource.layerCount = 1;
+            imgCpyInfo.dstSubresource.mipLevel = 0;
 
-        
+            imgCpyInfo.extent.width = 1024;
+            imgCpyInfo.extent.height = 1024;
+            imgCpyInfo.extent.depth = 1;
+        }
 
+        // Copy the storage image content to the swapchain image
+        vkCmdCopyImage(swapchainCommandBuffers[currentFrame],
+                       storageImages[imageIndex],
+                       VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                       swapchainImages[imageIndex],
+                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                       1, &imgCpyInfo);
 
         // Transform the swapchain image layout from render target to present.
         // Transform the layout of the swapchain from undefined to render target.
