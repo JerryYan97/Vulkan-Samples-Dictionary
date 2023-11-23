@@ -138,7 +138,7 @@ void CreateSwapchainImageViews()
         createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         createInfo.image = swapchainImages[i];
         createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        createInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+        createInfo.format = VK_FORMAT_B8G8R8A8_SRGB;
         createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
         createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
         createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -213,7 +213,7 @@ void CreateSwapchain()
         swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
         swapchainCreateInfo.surface = surface;
         swapchainCreateInfo.minImageCount = imageCount;
-        swapchainCreateInfo.imageFormat = VK_FORMAT_R8G8B8A8_SRGB;
+        swapchainCreateInfo.imageFormat = VK_FORMAT_B8G8R8A8_SRGB;
         swapchainCreateInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
         swapchainCreateInfo.imageExtent = swapchainImageExtent;
         swapchainCreateInfo.imageArrayLayers = 1;
@@ -258,6 +258,13 @@ void RecreateSwapchain()
     CleanupSwapchain();
     CreateSwapchain();
     CreateSwapchainImageViews();
+}
+
+bool framebufferResized = false;
+
+static void framebufferResizeCallback(GLFWwindow* window, int width, int height)
+{
+    framebufferResized = true;
 }
 
 /*******************/
@@ -316,6 +323,12 @@ int main()
         }
     }
 
+    // Init glfw and get the glfw required extension. NOTE: Initialize GLFW before calling any function that requires initialization.
+    glfwInit();
+    uint32_t glfwExtensionCount = 0;
+    const char** glfwExtensions;
+    glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+
     // Initialize instance and application
     VkApplicationInfo appInfo{}; // TIPS: You can delete this bracket to see what happens.
     {
@@ -326,11 +339,15 @@ int main()
         appInfo.engineVersion = 1;
         appInfo.apiVersion = VK_API_VERSION_1_3;
     }
-    
+
+    std::vector<const char*> requiredInstExtensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
+    requiredInstExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    requiredInstExtensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+    /*
     const std::vector<const char*> requiredInstExtensions = {
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME
     };
-
+    */
     const char* validationLayerName = "VK_LAYER_KHRONOS_validation";
     VkInstanceCreateInfo instanceCreateInfo{};
     {
@@ -344,6 +361,16 @@ int main()
     }
     VkInstance instance;
     VK_CHECK(vkCreateInstance(&instanceCreateInfo, nullptr, &instance));
+
+    // Init glfw window.
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    const uint32_t WIDTH = 1280;
+    const uint32_t HEIGHT = 640;
+    window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
+    glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
+
+    // Create vulkan surface from the glfw window.
+    VK_CHECK(glfwCreateWindowSurface(instance, window, nullptr, &surface));
 
     // Create debug messenger
     VkDebugUtilsMessengerEXT debugMessenger;
@@ -375,7 +402,8 @@ int main()
         VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
         VK_EXT_MESH_SHADER_EXTENSION_NAME, // NOTE: I don't know why the SPIRV compiled from hlsl needs it...
         VK_KHR_SPIRV_1_4_EXTENSION_NAME,
-        VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME
+        VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME,
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME
     };
 
     // VkPhysicalDevice physicalDevice;
@@ -577,6 +605,9 @@ int main()
 
     // VkDevice device;
     VK_CHECK(vkCreateDevice(physicalDevice, &deviceInfo, nullptr, &device));
+
+    CreateSwapchain();
+    CreateSwapchainImageViews();
 
     // Get a graphics and compute queue
     VkQueue rtQueue;
@@ -1590,6 +1621,9 @@ int main()
     unsigned int error = lodepng::encode(pathName, ramStorageImgDumpData.data(), 1024, 1024);
     if (error) { std::cout << "encoder error " << error << ": " << lodepng_error_text(error) << std::endl; }
 
+    CleanupSwapchain();
+    vkDestroySurfaceKHR(instance, surface, nullptr);
+
     // Destroy the image and its image view
     vkDestroyImageView(device, storageImageView, nullptr);
     vmaDestroyImage(allocator, storageImage, storageImageAlloc);
@@ -1651,4 +1685,8 @@ int main()
 
     // Destroy instance
     vkDestroyInstance(instance, nullptr);
+
+    glfwDestroyWindow(window);
+
+    glfwTerminate();
 }
