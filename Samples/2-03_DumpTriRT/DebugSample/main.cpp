@@ -3,11 +3,14 @@
 #include <unordered_set>
 #include <fstream>
 #include <cassert>
+#include <algorithm>
 #include "vulkan/vulkan.h"
 #include "lodepng.h"
 
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
+
+#include <glfw3.h>
 
 // Features: VulkanRT, Vulkan HLSL, Vulkan Dynamic Rendering.
 // Reference: 2023 SIGGRAPH Course - Real-Time Ray-Tracing with Vulkan for the Impatient.
@@ -105,6 +108,160 @@ uint32_t alignedSize(uint32_t value, uint32_t alignment)
 {
     return (value + alignment - 1) & ~(alignment - 1);
 }
+
+/* Debug swapchain */
+
+const int MAX_FRAMES_IN_FLIGHT = 2;
+uint32_t currentFrame = 0;
+VkExtent2D swapchainImageExtent;
+std::vector<VkImageView> swapchainImageViews;
+std::vector<VkImage> swapchainImages;
+VkSurfaceKHR surface;
+VkSwapchainKHR swapchain;
+GLFWwindow* window = nullptr;
+VkDevice device;
+VkPhysicalDevice physicalDevice;
+
+// Create the image views
+void CreateSwapchainImageViews()
+{
+    // Create image views for the swapchain images
+    uint32_t swapchainImageCount;
+    vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, nullptr);
+    swapchainImages.resize(swapchainImageCount);
+    vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, swapchainImages.data());
+
+    swapchainImageViews.resize(swapchainImageCount);
+    for (size_t i = 0; i < swapchainImageCount; i++)
+    {
+        VkImageViewCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        createInfo.image = swapchainImages[i];
+        createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        createInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+        createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+        createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+        createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+        createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+        createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        createInfo.subresourceRange.baseMipLevel = 0;
+        createInfo.subresourceRange.levelCount = 1;
+        createInfo.subresourceRange.baseArrayLayer = 0;
+        createInfo.subresourceRange.layerCount = 1;
+        VK_CHECK(vkCreateImageView(device, &createInfo, nullptr, &swapchainImageViews[i]));
+    }
+}
+
+// Create the swapchain
+void CreateSwapchain()
+{
+    // Create the swapchain
+    // Qurery surface capabilities.
+    VkSurfaceCapabilitiesKHR surfaceCapabilities;
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &surfaceCapabilities);
+
+    // Query surface formates
+    uint32_t surfaceFormatCount;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &surfaceFormatCount, nullptr);
+    std::vector<VkSurfaceFormatKHR> surfaceFormats(surfaceFormatCount);
+    if (surfaceFormatCount != 0)
+    {
+        vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &surfaceFormatCount, surfaceFormats.data());
+    }
+
+    // Query the present mode
+    uint32_t surfacePresentModeCount;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &surfacePresentModeCount, nullptr);
+    std::vector<VkPresentModeKHR> surfacePresentModes(surfacePresentModeCount);
+    if (surfacePresentModeCount != 0)
+    {
+        vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &surfacePresentModeCount, surfacePresentModes.data());
+    }
+
+    // Choose the VK_PRESENT_MODE_FIFO_KHR.
+    VkPresentModeKHR choisenPresentMode{};
+    bool foundMailBoxPresentMode = false;
+    for (const auto& avaPresentMode : surfacePresentModes)
+    {
+        if (avaPresentMode == VK_PRESENT_MODE_FIFO_KHR)
+        {
+            choisenPresentMode = VK_PRESENT_MODE_FIFO_KHR;
+            foundMailBoxPresentMode = true;
+            break;
+        }
+    }
+    assert(choisenPresentMode == VK_PRESENT_MODE_FIFO_KHR);
+
+    // Init swapchain's image extent
+    int glfwFrameBufferWidth;
+    int glfwFrameBufferHeight;
+    glfwGetFramebufferSize(window, &glfwFrameBufferWidth, &glfwFrameBufferHeight);
+
+    swapchainImageExtent = {
+        std::clamp(static_cast<uint32_t>(glfwFrameBufferWidth), surfaceCapabilities.minImageExtent.width, surfaceCapabilities.maxImageExtent.width),
+        std::clamp(static_cast<uint32_t>(glfwFrameBufferHeight), surfaceCapabilities.minImageExtent.height, surfaceCapabilities.maxImageExtent.height)
+    };
+
+    uint32_t imageCount = surfaceCapabilities.minImageCount + 1;
+    if (surfaceCapabilities.maxImageCount > 0 && imageCount > surfaceCapabilities.maxImageCount)
+    {
+        imageCount = surfaceCapabilities.maxImageCount;
+    }
+
+    VkSwapchainCreateInfoKHR swapchainCreateInfo{};
+    {
+        swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+        swapchainCreateInfo.surface = surface;
+        swapchainCreateInfo.minImageCount = imageCount;
+        swapchainCreateInfo.imageFormat = VK_FORMAT_R8G8B8A8_SRGB;
+        swapchainCreateInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+        swapchainCreateInfo.imageExtent = swapchainImageExtent;
+        swapchainCreateInfo.imageArrayLayers = 1;
+        swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        {
+            swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        }
+        swapchainCreateInfo.preTransform = surfaceCapabilities.currentTransform;
+        swapchainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+        swapchainCreateInfo.presentMode = choisenPresentMode;
+        swapchainCreateInfo.clipped = VK_TRUE;
+    }
+    VK_CHECK(vkCreateSwapchainKHR(device, &swapchainCreateInfo, nullptr, &swapchain));
+}
+
+// Cleanup the swapchain
+void CleanupSwapchain()
+{
+    // Cleanup the swap chain
+    // Clean the image views
+    for (auto imgView : swapchainImageViews)
+    {
+        vkDestroyImageView(device, imgView, nullptr);
+    }
+
+    // Destroy the swapchain
+    vkDestroySwapchainKHR(device, swapchain, nullptr);
+}
+
+// Recreate the swapchain
+void RecreateSwapchain()
+{
+    int width = 0, height = 0;
+    glfwGetFramebufferSize(window, &width, &height);
+    while (width == 0 || height == 0)
+    {
+        glfwGetFramebufferSize(window, &width, &height);
+        glfwWaitEvents();
+    }
+
+    vkDeviceWaitIdle(device);
+    CleanupSwapchain();
+    CreateSwapchain();
+    CreateSwapchainImageViews();
+}
+
+/*******************/
+
 
 int main()
 {
@@ -221,7 +378,7 @@ int main()
         VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME
     };
 
-    VkPhysicalDevice physicalDevice;
+    // VkPhysicalDevice physicalDevice;
     uint32_t phyDeviceCount;
     VK_CHECK(vkEnumeratePhysicalDevices(instance, &phyDeviceCount, nullptr));
     assert(phyDeviceCount >= 1);
@@ -418,7 +575,7 @@ int main()
         deviceInfo.pEnabledFeatures = nullptr;
     }
 
-    VkDevice device;
+    // VkDevice device;
     VK_CHECK(vkCreateDevice(physicalDevice, &deviceInfo, nullptr, &device));
 
     // Get a graphics and compute queue

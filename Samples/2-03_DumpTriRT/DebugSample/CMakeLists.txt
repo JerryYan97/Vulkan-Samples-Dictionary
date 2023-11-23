@@ -6,13 +6,17 @@ cmake_minimum_required(VERSION 3.5)
 project(DumpRTTri VERSION 0.1 LANGUAGES CXX)
 include_directories("$ENV{VULKAN_SDK}/Include"
                     "${CMAKE_CURRENT_SOURCE_DIR}/../../../ThirdPartyLibs/lodepng"
-                    "../../../ThirdPartyLibs/VMA")
-link_directories("$ENV{VULKAN_SDK}/lib")
+                    "../../../ThirdPartyLibs/VMA"
+                    "../../../ThirdPartyLibs/glfw/include/GLFW")
+link_directories("$ENV{VULKAN_SDK}/lib"
+                 "../../../ThirdPartyLibs/glfw/build/src/Debug/")
 add_definitions(-DSOURCE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}\")
 add_executable(${MY_APP_NAME} "main.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/../../../ThirdPartyLibs/lodepng/lodepng.cpp")
-target_link_libraries(${MY_APP_NAME} vulkan-1)
+target_link_libraries(${MY_APP_NAME} vulkan-1 glfw3)
 
 set(SHARED_LIB_HLSL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../SharedLibrary/HLSL")
+
+target_compile_features(${MY_APP_NAME} PRIVATE cxx_std_17)
 
 # Deal with the building warning.
 set(DUMMY_FILE dummy)
