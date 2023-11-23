@@ -1,3 +1,6 @@
 Real-Time Ray-Tracing with Vulkan for the Impatient
 https://github.com/SaschaWillems/Vulkan/blob/master/examples/raytracingbasic/raytracingbasic.cpp
 https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#traceray-control-flow
+
+It looks like I cannot use the RenderDoc to debug Raytracing related software:
+https://www.reddit.com/r/vulkan/comments/105ryau/how_to_debug_a_nonworking_ray_generation_shader/
