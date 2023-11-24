@@ -382,6 +382,10 @@ int main()
     VkDevice device;
     VK_CHECK(vkCreateDevice(physicalDevice, &deviceInfo, nullptr, &device));
 
+    // Get a graphics and compute queue
+    VkQueue rtQueue;
+    vkGetDeviceQueue(device, queueId, 0, &rtQueue);
+
     // Create a command buffer pool and allocate a command buffer
     VkCommandPoolCreateInfo cmdPoolInfo = {};
     {
@@ -701,6 +705,14 @@ int main()
     vkCmdBuildAccelerationStructuresKHR(cmdBuffer, 1, &blasBuildGeoInfo, blasBuildRangeInfos);
 
     VK_CHECK(vkEndCommandBuffer(cmdBuffer));
+
+    VkSubmitInfo submitInfo{};
+    {
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.pCommandBuffers = &cmdBuffer;
+        submitInfo.commandBufferCount = 1;
+    }
+    VK_CHECK(vkQueueSubmit(rtQueue, 1, &submitInfo, VK_NULL_HANDLE));
     
     vkDeviceWaitIdle(device);
 
@@ -890,6 +902,8 @@ int main()
     vkCmdBuildAccelerationStructuresKHR(cmdBuffer, 1, &tlasBuildGeoInfo, tlasBuildRangeInfos);
 
     VK_CHECK(vkEndCommandBuffer(cmdBuffer));
+
+    VK_CHECK(vkQueueSubmit(rtQueue, 1, &submitInfo, VK_NULL_HANDLE));
 
     vkDeviceWaitIdle(device);
 

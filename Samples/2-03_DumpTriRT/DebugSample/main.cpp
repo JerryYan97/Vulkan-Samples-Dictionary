@@ -962,7 +962,7 @@ int main()
 
     VK_CHECK(vkEndCommandBuffer(cmdBuffer));
 
-    
+    VK_CHECK(vkQueueSubmit(rtQueue, 1, &submitInfo, VK_NULL_HANDLE));
 
     vkDeviceWaitIdle(device);
 

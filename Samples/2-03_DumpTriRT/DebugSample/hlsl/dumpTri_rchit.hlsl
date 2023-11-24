@@ -7,6 +7,5 @@ struct Payload
 void main(inout Payload p, in BuiltInTriangleIntersectionAttributes attribs)
 {
     const float3 barycentricCoords = float3(1.0f - attribs.barycentrics.x - attribs.barycentrics.y, attribs.barycentrics.x, attribs.barycentrics.y);
-    // p.hitValue = barycentricCoords;
-    p.hitValue = float3(1.0, 0.0, 0.0);
+    p.hitValue = barycentricCoords;
 }
