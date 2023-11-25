@@ -23,7 +23,6 @@ bool CheckImgValAbove1(
     return false;
 }
 
-// TODO: Some CmdBuffer recording can be packaged.
 int main(
     int argc, 
     char** argv)
@@ -102,7 +101,16 @@ int main(
     app.AppInit();
 
     SharedLib::CubemapFormatTransApp cubemapFormatTransApp;
-    cubemapFormatTransApp.SetInputCubemapImg(app.GetOutputCubemapImg(), app.GetOutputCubemapExtent());
+    VkImageSubresourceRange outCubemapSubResRange{};
+    {
+        outCubemapSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        outCubemapSubResRange.baseArrayLayer = 0;
+        outCubemapSubResRange.layerCount = 6;
+        outCubemapSubResRange.baseMipLevel = 0;
+        outCubemapSubResRange.levelCount = 1;
+    }
+
+    cubemapFormatTransApp.SetInputCubemapImg(app.GetOutputCubemapImg(), app.GetOutputCubemapExtent(), outCubemapSubResRange);
 
     if (CheckImgValAbove1(app.GetInputHdriData(), app.GetInputHdriWidth(), app.GetInputHdriHeight()))
     {
@@ -140,17 +148,17 @@ int main(
         cubemapSubResRange.layerCount = 6;
     }
 
+    VkImageSubresourceRange hdriSubRange{};
+    {
+        hdriSubRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        hdriSubRange.baseMipLevel = 0;
+        hdriSubRange.levelCount = 1;
+        hdriSubRange.baseArrayLayer = 0;
+        hdriSubRange.layerCount = 1;
+    }
+
     // Send hdri data to its gpu objects through a staging buffer.
     {
-        VkImageSubresourceRange copySubRange{};
-        {
-            copySubRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            copySubRange.baseMipLevel = 0;
-            copySubRange.levelCount = 1;
-            copySubRange.baseArrayLayer = 0;
-            copySubRange.layerCount = 1;
-        }
-
         VkBufferImageCopy hdrBufToImgCopy{};
         {
             VkExtent3D extent{};
@@ -169,14 +177,15 @@ int main(
         }
 
         SharedLib::SendImgDataToGpu(cmdBuffer, 
-                                       device,
-                                       gfxQueue,
-                                       app.GetInputHdriData(),
-                                       3 * sizeof(float) * app.GetInputHdriWidth() * app.GetInputHdriHeight(),
-                                       app.GetHdriImg(),
-                                       copySubRange,
-                                       hdrBufToImgCopy,
-                                       allocator);
+                                    device,
+                                    gfxQueue,
+                                    app.GetInputHdriData(),
+                                    3 * sizeof(float) * app.GetInputHdriWidth() * app.GetInputHdriHeight(),
+                                    app.GetHdriImg(),
+                                    hdriSubRange,
+                                    VK_IMAGE_LAYOUT_UNDEFINED,
+                                    hdrBufToImgCopy,
+                                    allocator);
     }
 
     // Draw the Front, Back, Top, Bottom, Right, Left faces to the cubemap.
@@ -187,6 +196,25 @@ int main(
             beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         }
         VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &beginInfo));
+
+        // Transform the layout of the input hdri texture from transfer dest to shader read.
+        VkImageMemoryBarrier hdriTransDestToShaderReadBarrier{};
+        {
+            hdriTransDestToShaderReadBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            hdriTransDestToShaderReadBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            hdriTransDestToShaderReadBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            hdriTransDestToShaderReadBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            hdriTransDestToShaderReadBarrier.image = app.GetHdriImg();
+            hdriTransDestToShaderReadBarrier.subresourceRange = hdriSubRange;
+        }
+
+        vkCmdPipelineBarrier(cmdBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &hdriTransDestToShaderReadBarrier);
 
         // Transform the layout of the output cubemap from undefined to render target.
         VkImageMemoryBarrier cubemapRenderTargetTransBarrier{};
