@@ -13,3 +13,8 @@ https://computergraphics.stackexchange.com/questions/7503/what-is-the-difference
 
 Definition of solid angle (NOTE: Wiki is not exactly correct and a little bit confusing):
 https://physics.stackexchange.com/questions/98863/whats-the-dimensionality-of-a-solid-angle
+
+
+Push descriptors:
+https://github.com/SaschaWillems/Vulkan/blob/master/examples/pushdescriptors/pushdescriptors.cpp
+https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/vkCmdPushDescriptorSetKHR.html

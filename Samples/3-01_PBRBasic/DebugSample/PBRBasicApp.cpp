@@ -26,7 +26,9 @@ PBRBasicApp::PBRBasicApp() :
     m_vertBuffer(VK_NULL_HANDLE),
     m_vertBufferAlloc(VK_NULL_HANDLE),
     m_vertBufferByteCnt(0),
-    m_idxBufferByteCnt(0)
+    m_idxBufferByteCnt(0),
+    m_vpUboDesBufferInfo(),
+    m_lightPosUboDesBufferInfo()
 {
     m_pCamera = new SharedLib::Camera();
 }
@@ -93,6 +95,25 @@ void PBRBasicApp::InitVpUboObjects()
     SharedLib::MatTranspose(vpMat, 4);
 
     CopyRamDataToGpuBuffer(vpMat, m_vpUboBuffer, m_vpUboAlloc, 16 * sizeof(float));
+
+    // NOTE: For the push descriptors, the dstSet is ignored.
+    //       This app doesn't have other resources so a fixed descriptor set is enough.
+    {
+        m_vpUboDesBufferInfo.buffer = m_vpUboBuffer;
+        m_vpUboDesBufferInfo.offset = 0;
+        m_vpUboDesBufferInfo.range = sizeof(float) * 16;
+    }
+
+    VkWriteDescriptorSet writeVpBufDesSet{};
+    {
+        writeVpBufDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeVpBufDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        writeVpBufDesSet.dstBinding = 0;
+        writeVpBufDesSet.descriptorCount = 1;
+        writeVpBufDesSet.pBufferInfo = &m_vpUboDesBufferInfo;
+    }
+
+    m_writeDescriptorSet0.push_back(writeVpBufDesSet);
 }
 
 // ================================================================================================================
@@ -261,6 +282,25 @@ void PBRBasicApp::InitFragUboObjects()
     };
 
     CopyRamDataToGpuBuffer(lightPos, m_lightPosBuffer, m_lightPosBufferAlloc, sizeof(lightPos));
+
+    // NOTE: For the push descriptors, the dstSet is ignored.
+    //       This app doesn't have other resources so a fixed descriptor set is enough.
+    {
+        m_lightPosUboDesBufferInfo.buffer = m_lightPosBuffer;
+        m_lightPosUboDesBufferInfo.offset = 0;
+        m_lightPosUboDesBufferInfo.range = sizeof(float) * 16;
+    }
+
+    VkWriteDescriptorSet writeLightsDesSet{};
+    {
+        writeLightsDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeLightsDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        writeLightsDesSet.dstBinding = 1;
+        writeLightsDesSet.descriptorCount = 1;
+        writeLightsDesSet.pBufferInfo = &m_lightPosUboDesBufferInfo;
+    }
+
+    m_writeDescriptorSet0.push_back(writeLightsDesSet);
 }
 
 // ================================================================================================================
@@ -271,6 +311,7 @@ void PBRBasicApp::DestroyFragUboObjects()
 
 // ================================================================================================================
 // TODO: I may need to put most the content in this function to CreateXXXX(...) in the parent class.
+/*
 void PBRBasicApp::InitPipelineDescriptorSets()
 {
     // Create pipeline descirptor
@@ -332,6 +373,13 @@ void PBRBasicApp::InitPipelineDescriptorSets()
         vkUpdateDescriptorSets(m_device, 2, writeSkyboxPipelineDescriptors, 0, NULL);
     }
 }
+*/
+
+// ================================================================================================================
+std::vector<VkWriteDescriptorSet> PBRBasicApp::GetWriteDescriptorSets()
+{
+    return m_writeDescriptorSet0;
+}
 
 // ================================================================================================================
 void PBRBasicApp::InitPipelineLayout()
@@ -385,6 +433,8 @@ void PBRBasicApp::InitPipelineDescriptorSetLayout()
     VkDescriptorSetLayoutCreateInfo pipelineDesSetLayoutInfo{};
     {
         pipelineDesSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        // Setting this flag tells the descriptor set layouts that no actual descriptor sets are allocated but instead pushed at command buffer creation time
+        pipelineDesSetLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
         pipelineDesSetLayoutInfo.bindingCount = 2;
         pipelineDesSetLayoutInfo.pBindings = pipelineDesSetLayoutBindings;
     }
@@ -507,21 +557,13 @@ void PBRBasicApp::AppInit()
     // https://vulkan.lunarg.com/doc/view/1.2.198.0/windows/1.2-extensions/vkspec.html#VUID-VkDeviceCreateInfo-queueFamilyIndex-02802
     std::vector<VkDeviceQueueCreateInfo> deviceQueueInfos = CreateDeviceQueueInfos({ m_graphicsQueueFamilyIdx,
                                                                                      m_presentQueueFamilyIdx });
-    // We need the swap chain device extension and the dynamic rendering extension.
-    const std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-                                                        VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME };
-
-    VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeature{};
-    {
-        dynamicRenderingFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
-        dynamicRenderingFeature.dynamicRendering = VK_TRUE;
-    }
-
-    InitDevice(deviceExtensions, 2, deviceQueueInfos, &dynamicRenderingFeature);
+    // Dummy device extensions vector. Swapchain, dynamic rendering and push descriptors are enabled by default.
+    const std::vector<const char*> deviceExtensions;
+    InitDevice(deviceExtensions, deviceQueueInfos, nullptr);
+    InitKHRFuncPtrs();
     InitVmaAllocator();
     InitGraphicsQueue();
     InitPresentQueue();
-    InitDescriptorPool();
 
     InitGfxCommandPool();
     InitGfxCommandBuffers(SharedLib::MAX_FRAMES_IN_FLIGHT);
@@ -532,20 +574,6 @@ void PBRBasicApp::AppInit()
     ReadInSphereData();
     InitSphereVertexIndexBuffers();
 
-    /*
-    if (m_pVertData != nullptr)
-    {
-        free(m_pVertData);
-        m_pVertData = nullptr;
-    }
-
-    if (m_pIdxData != nullptr)
-    {
-        free(m_pIdxData);
-        m_pIdxData = nullptr;
-    }
-    */
-
     InitShaderModules();
     InitPipelineDescriptorSetLayout();
     InitPipelineLayout();
@@ -553,6 +581,5 @@ void PBRBasicApp::AppInit()
 
     InitVpUboObjects();
     InitFragUboObjects();
-    InitPipelineDescriptorSets();
     InitSwapchainSyncObjects();
 }

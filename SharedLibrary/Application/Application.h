@@ -59,8 +59,10 @@ namespace SharedLib
         VkCommandBuffer GetGfxCmdBuffer(uint32_t i) { return m_gfxCmdBufs[i]; }
         VkDevice GetVkDevice() { return m_device; }
         VkQueue GetGfxQueue() { return m_graphicsQueue; }
-        VkDescriptorPool GetDescriptorPool() { return m_descriptorPool; }
         VkCommandPool GetGfxCmdPool() { return m_gfxCmdPool; }
+
+        // The push descriptor update function is part of an extension so it has to be manually loaded
+        PFN_vkCmdPushDescriptorSetKHR m_vkCmdPushDescriptorSetKHR;
 
     protected:
         // VkInstance, VkPhysicalDevice, VkDevice, gfxFamilyQueueIdx, presentFamilyQueueIdx,
@@ -75,13 +77,13 @@ namespace SharedLib
         void InitGfxQueueFamilyIdx();
         
         void InitDevice(const std::vector<const char*>&             deviceExts,
-                        const uint32_t                              deviceExtsCnt,
                         const std::vector<VkDeviceQueueCreateInfo>& queueCreateInfos,
                         void*                                       pNext);
 
+        void InitKHRFuncPtrs();
+
         void InitGraphicsQueue();
         void InitVmaAllocator();
-        void InitDescriptorPool();
         void InitGfxCommandPool();
         void InitGfxCommandBuffers(const uint32_t cmdBufCnt);
 
@@ -97,7 +99,6 @@ namespace SharedLib
         VkPhysicalDevice m_physicalDevice;
         VkDevice         m_device;
         unsigned int     m_graphicsQueueFamilyIdx;
-        VkDescriptorPool m_descriptorPool;
         VkQueue          m_graphicsQueue;
         VkCommandPool    m_gfxCmdPool;
         

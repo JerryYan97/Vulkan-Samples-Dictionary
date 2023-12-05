@@ -21,7 +21,6 @@ int main()
         swapchainPresentSubResRange.layerCount = 1;
     }
 
-
     // Main Loop
     while (!app.WindowShouldClose())
     {
@@ -29,7 +28,6 @@ int main()
         VkFence inFlightFence = app.GetCurrentFrameFence();
         VkCommandBuffer currentCmdBuffer = app.GetCurrentFrameGfxCmdBuffer();
 
-        VkDescriptorSet currentSkyboxPipelineDesSet0 = app.GetCurrentFrameDescriptorSet0();
         VkExtent2D swapchainImageExtent = app.GetSwapchainImageExtent();
 
         app.FrameStart();
@@ -114,10 +112,11 @@ int main()
         vkCmdBeginRendering(currentCmdBuffer, &renderInfo);
 
         // Bind the pipeline descriptor sets
-        vkCmdBindDescriptorSets(currentCmdBuffer,
-                                VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                app.GetPipelineLayout(),
-                                0, 1, &currentSkyboxPipelineDesSet0, 0, NULL);
+        std::vector<VkWriteDescriptorSet> writeDescriptorSet0 = app.GetWriteDescriptorSets();
+        app.m_vkCmdPushDescriptorSetKHR(currentCmdBuffer,
+                                        VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                        app.GetPipelineLayout(),
+                                        0, writeDescriptorSet0.size(), writeDescriptorSet0.data());
 
         // Bind the graphics pipeline
         vkCmdBindPipeline(currentCmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, app.GetPipeline());

@@ -22,8 +22,9 @@ public:
 
     VkPipelineLayout GetPipelineLayout() { return m_pipelineLayout; }
 
-    VkDescriptorSet GetCurrentFrameDescriptorSet0() 
-        { return m_pipelineDescriptorSet0s[m_currentFrame]; }
+    // The first layer is the desciptor ids.
+    // The second layer is the bindings writes to that descriptor.
+    std::vector<VkWriteDescriptorSet> GetWriteDescriptorSets();
 
     VkPipeline GetPipeline() { return m_pipeline.GetVkPipeline(); }
 
@@ -37,7 +38,6 @@ private:
     void InitPipelineDescriptorSetLayout();
     void InitPipelineLayout();
     void InitShaderModules();
-    void InitPipelineDescriptorSets();
     
     void InitSphereVertexIndexBuffers(); // Read in sphere data, create Sphere's GPU buffer objects and transfer data 
                                          // to the GPU buffers.
@@ -53,14 +53,17 @@ private:
     VkPipelineVertexInputStateCreateInfo CreatePipelineVertexInputInfo();
     VkPipelineDepthStencilStateCreateInfo CreateDepthStencilStateInfo();
 
-    SharedLib::Camera* m_pCamera;
-    VkBuffer           m_vpUboBuffer;
-    VmaAllocation      m_vpUboAlloc;
+    SharedLib::Camera*     m_pCamera;
+    VkBuffer               m_vpUboBuffer;
+    VmaAllocation          m_vpUboAlloc;
+    VkDescriptorBufferInfo m_vpUboDesBufferInfo;
 
-    VkBuffer      m_lightPosBuffer;
-    VmaAllocation m_lightPosBufferAlloc;
+    VkBuffer               m_lightPosBuffer;
+    VmaAllocation          m_lightPosBufferAlloc;
+    VkDescriptorBufferInfo m_lightPosUboDesBufferInfo;
 
-    std::vector<VkDescriptorSet> m_pipelineDescriptorSet0s;
+    // Descriptor set 0 bindings
+    std::vector<VkWriteDescriptorSet> m_writeDescriptorSet0;
 
     uint32_t  m_vertBufferByteCnt;
     uint32_t  m_idxBufferByteCnt;

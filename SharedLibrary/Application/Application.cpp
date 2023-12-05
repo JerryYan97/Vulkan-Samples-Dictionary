@@ -13,9 +13,11 @@ namespace SharedLib
         m_instance(VK_NULL_HANDLE),
         m_physicalDevice(VK_NULL_HANDLE),
         m_device(VK_NULL_HANDLE),
-        m_descriptorPool(VK_NULL_HANDLE),
         m_graphicsQueue(VK_NULL_HANDLE),
-        m_pAllocator(nullptr)
+        m_pAllocator(nullptr),
+        m_debugMessenger(VK_NULL_HANDLE),
+        m_gfxCmdPool(VK_NULL_HANDLE),
+        m_vkCmdPushDescriptorSetKHR(nullptr)
     {
         m_pAllocator = new VmaAllocator();
     }
@@ -25,9 +27,6 @@ namespace SharedLib
     {
         // Destroy the command pool
         vkDestroyCommandPool(m_device, m_gfxCmdPool, nullptr);
-
-        // Destroy the descriptor pool
-        vkDestroyDescriptorPool(m_device, m_descriptorPool, nullptr);
 
         // Destroy the allocator
         vmaDestroyAllocator(*m_pAllocator);
@@ -196,31 +195,47 @@ namespace SharedLib
     }
 
     // ================================================================================================================
+    // Enable possible extensions all at once: dynamic rendering, swapchain and push descriptors.
     void Application::InitDevice(
         const std::vector<const char*>&             deviceExts,
-        const uint32_t                              deviceExtsCnt,
         const std::vector<VkDeviceQueueCreateInfo>& queueCreateInfos,
         void*                                       pNext)
     {
-        VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamic_rendering_feature{};
+        VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeature{};
         {
-            dynamic_rendering_feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
-            dynamic_rendering_feature.dynamicRendering = VK_TRUE;
+            dynamicRenderingFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
+            dynamicRenderingFeature.pNext = pNext;
+            dynamicRenderingFeature.dynamicRendering = VK_TRUE;
         }
+
+        std::vector<const char*> allDeviceExtensions = deviceExts;
+        allDeviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+        allDeviceExtensions.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+        allDeviceExtensions.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
 
         // Assembly the info into the device create info
         VkDeviceCreateInfo deviceInfo{};
         {
             deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-            deviceInfo.pNext = pNext;
+            deviceInfo.pNext = &dynamicRenderingFeature;
             deviceInfo.queueCreateInfoCount = uint32_t(queueCreateInfos.size());
             deviceInfo.pQueueCreateInfos = queueCreateInfos.data();
-            deviceInfo.enabledExtensionCount = deviceExtsCnt;
-            deviceInfo.ppEnabledExtensionNames = deviceExts.data();
+            deviceInfo.enabledExtensionCount = allDeviceExtensions.size();
+            deviceInfo.ppEnabledExtensionNames = allDeviceExtensions.data();
         }
 
         // Create the logical device
         VK_CHECK(vkCreateDevice(m_physicalDevice, &deviceInfo, nullptr, &m_device));
+    }
+
+    // ================================================================================================================
+    void Application::InitKHRFuncPtrs()
+    {
+        // Get necessary function pointers
+        m_vkCmdPushDescriptorSetKHR = (PFN_vkCmdPushDescriptorSetKHR)vkGetDeviceProcAddr(m_device, "vkCmdPushDescriptorSetKHR");
+        if (!m_vkCmdPushDescriptorSetKHR) {
+            exit(1);
+        }
     }
 
     // ================================================================================================================
@@ -249,37 +264,6 @@ namespace SharedLib
         }
         
         vmaCreateAllocator(&allocCreateInfo, m_pAllocator);
-    }
-
-    // ================================================================================================================
-    void Application::InitDescriptorPool()
-    {
-        // Create the descriptor pool
-        VkDescriptorPoolSize poolSizes[] =
-        {
-            { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
-            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
-            { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
-            { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
-            { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
-            { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
-            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
-            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
-            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
-            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
-            { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
-        };
-
-        VkDescriptorPoolCreateInfo pool_info{};
-        {
-            pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-            pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-            pool_info.maxSets = 1000 * sizeof(poolSizes) / sizeof(VkDescriptorPoolSize);
-            pool_info.poolSizeCount = (uint32_t)(sizeof(poolSizes) / sizeof(VkDescriptorPoolSize));
-            pool_info.pPoolSizes = poolSizes;
-        }
-
-        VK_CHECK(vkCreateDescriptorPool(m_device, &pool_info, nullptr, &m_descriptorPool));
     }
 
     // ================================================================================================================
