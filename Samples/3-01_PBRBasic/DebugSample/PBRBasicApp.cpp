@@ -558,7 +558,8 @@ void PBRBasicApp::AppInit()
     std::vector<VkDeviceQueueCreateInfo> deviceQueueInfos = CreateDeviceQueueInfos({ m_graphicsQueueFamilyIdx,
                                                                                      m_presentQueueFamilyIdx });
     // Dummy device extensions vector. Swapchain, dynamic rendering and push descriptors are enabled by default.
-    const std::vector<const char*> deviceExtensions;
+    // We have tools that don't need the swapchain extension and the swapchain extension requires surface instance extensions.
+    const std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
     InitDevice(deviceExtensions, deviceQueueInfos, nullptr);
     InitKHRFuncPtrs();
     InitVmaAllocator();

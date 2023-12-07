@@ -23,11 +23,10 @@ namespace SharedLib
 
     struct VulkanInfos
     {
-        VkDevice device;
-        VkDescriptorPool descriptorPool;
+        VkDevice      device; // NOTE: The push descriptors feature has to be enabled.
         VmaAllocator* pAllocator;
         VkCommandPool gfxCmdPool;
-        VkQueue gfxQueue;
+        VkQueue       gfxQueue;
     };
 
     class AppUtil
@@ -72,7 +71,6 @@ namespace SharedLib
         void InitFormatPipelineDescriptorSetLayout();
         void InitFormatPipelineLayout();
         void InitFormatShaderModules();
-        void InitFormatPipelineDescriptorSet();
 
         void InitFormatImgsObjects();
         void DestroyFormatImgsObjects();
@@ -83,16 +81,20 @@ namespace SharedLib
         VkDescriptorSetLayout m_formatPipelineDesSet0Layout;
         VkPipelineLayout      m_formatPipelineLayout;
 
-        VkDescriptorSet m_formatPipelineDescriptorSet0;
+        // VkDescriptorSet m_formatPipelineDescriptorSet0;
+        std::vector<VkWriteDescriptorSet> m_descriptorSet0Writes;
 
-        // Copy the input cubemap to an image array with 6 images as the input of the pipeline.
-        VkImage       m_formatInputImages; // 6 layers to accomodate that hlsl doesn't have separate descriptors.
-        VkImageView   m_formatInputImagesViews;
-        VmaAllocation m_formatInputImagesAllocs;
-        VkSampler     m_formatInputImagesSamplers;
+        // Copy the input cubemap to an image array with 6 images as the inputs of the pipeline.
+        // 6 layers to accomodate that hlsl doesn't have separate descriptors.
+        VkImage               m_formatInputImages;
+        VkImageView           m_formatInputImagesViews;
+        VmaAllocation         m_formatInputImagesAllocs;
+        VkSampler             m_formatInputImagesSamplers;
+        VkDescriptorImageInfo m_formatInputImageInfo;
 
-        VkBuffer      m_formatWidthHeightBuffer;
-        VmaAllocation m_formatWidthHeightAlloc;
+        VkBuffer               m_formatWidthHeightBuffer;
+        VmaAllocation          m_formatWidthHeightAlloc;
+        VkDescriptorBufferInfo m_formatWidthHeightDesBufferInfo;
 
         VkImage                 m_inputCubemap;
         VkExtent3D              m_inputCubemapExtent;
@@ -101,5 +103,8 @@ namespace SharedLib
         VkImage       m_outputCubemap;
         VkImageView   m_outputCubemapImgView;
         VmaAllocation m_outputCubemapAlloc;
+
+        // The push descriptor update function is part of an extension so it has to be manually loaded
+        PFN_vkCmdPushDescriptorSetKHR m_pfnVkCmdPushDescriptorSetKHR;
     };
 }

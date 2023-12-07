@@ -126,13 +126,11 @@ int main(
     VkQueue gfxQueue = app.GetGfxQueue();
     VkDevice device = app.GetVkDevice();
     VmaAllocator allocator = *app.GetVmaAllocator();
-    VkDescriptorSet pipelineDescriptorSet = app.GetDescriptorSet();
 
     SharedLib::VulkanInfos formatTransVkInfo{};
     {
         formatTransVkInfo.device = device;
         formatTransVkInfo.pAllocator = app.GetVmaAllocator();
-        formatTransVkInfo.descriptorPool = app.GetDescriptorPool();
         formatTransVkInfo.gfxCmdPool = app.GetGfxCmdPool();
         formatTransVkInfo.gfxQueue = gfxQueue;
     }
@@ -267,11 +265,12 @@ int main(
         vkCmdBeginRendering(cmdBuffer, &renderInfo);
 
         // Bind the graphics pipeline
-        vkCmdBindDescriptorSets(cmdBuffer, 
-                                VK_PIPELINE_BIND_POINT_GRAPHICS, 
-                                app.GetPipelineLayout(),
-                                0, 1, &pipelineDescriptorSet,
-                                0, NULL);
+        std::vector<VkWriteDescriptorSet> writeDescriptorSet0 = app.GetDescriptorSet0Writes();
+
+        app.m_vkCmdPushDescriptorSetKHR(cmdBuffer,
+                                        VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                        app.GetPipelineLayout(),
+                                        0, writeDescriptorSet0.size(), writeDescriptorSet0.data());
 
         vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, app.GetPipeline());
 

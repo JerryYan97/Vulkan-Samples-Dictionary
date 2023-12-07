@@ -209,7 +209,6 @@ namespace SharedLib
         }
 
         std::vector<const char*> allDeviceExtensions = deviceExts;
-        allDeviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
         allDeviceExtensions.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
         allDeviceExtensions.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
 

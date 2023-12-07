@@ -20,7 +20,6 @@ SphericalToCubemap::SphericalToCubemap() :
     m_outputCubemap(VK_NULL_HANDLE),
     m_outputCubemapAlloc(VK_NULL_HANDLE),
     m_outputCubemapImageView(VK_NULL_HANDLE),
-    m_pipelineDescriptorSet0(VK_NULL_HANDLE),
     m_vsShaderModule(VK_NULL_HANDLE),
     m_psShaderModule(VK_NULL_HANDLE),
     m_pipelineDesSet0Layout(VK_NULL_HANDLE),
@@ -29,7 +28,9 @@ SphericalToCubemap::SphericalToCubemap() :
     m_hdriData(nullptr),
     m_width(0),
     m_height(0),
-    m_outputCubemapExtent()
+    m_outputCubemapExtent(),
+    m_uboDesBufferInfo(),
+    m_inputHdriDesImgInfo()
 {
 }
 
@@ -159,9 +160,6 @@ void SphericalToCubemap::InitHdriGpuObjects()
         cubeMapImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     }
 
-    // CheckVkImageSupport(m_physicalDevice, cubeMapImgInfo);
-    // PrintFormatForColorRenderTarget(m_physicalDevice);
-
     VK_CHECK(vmaCreateImage(*m_pAllocator,
                             &cubeMapImgInfo,
                             &hdrAllocInfo,
@@ -199,6 +197,23 @@ void SphericalToCubemap::InitHdriGpuObjects()
         sampler_info.maxAnisotropy = 1.0f;
     }
     VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_inputHdriSampler));
+
+    // Create the descriptor set write info for the input hdri image
+    {
+        m_inputHdriDesImgInfo.imageView = m_inputHdriImageView;
+        m_inputHdriDesImgInfo.sampler = m_inputHdriSampler;
+        m_inputHdriDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    }
+
+    VkWriteDescriptorSet writeHdrDesSet{};
+    {
+        writeHdrDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeHdrDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writeHdrDesSet.dstBinding = 0;
+        writeHdrDesSet.pImageInfo = &m_inputHdriDesImgInfo;
+        writeHdrDesSet.descriptorCount = 1;
+    }
+    m_descriptorSet0Writes.push_back(writeHdrDesSet);
 }
 
 // ================================================================================================================
@@ -228,6 +243,7 @@ void SphericalToCubemap::InitPipelineDescriptorSetLayout()
     VkDescriptorSetLayoutCreateInfo pipelineDesSet0LayoutInfo{};
     {
         pipelineDesSet0LayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        pipelineDesSet0LayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
         pipelineDesSet0LayoutInfo.bindingCount = 2;
         pipelineDesSet0LayoutInfo.pBindings = pipelineDesSet0LayoutBindings;
     }
@@ -363,62 +379,30 @@ void SphericalToCubemap::InitSceneBufferInfo()
 
     // Send data to gpu
     CopyRamDataToGpuBuffer(uboBufferData, m_uboBuffer, m_uboAlloc, bufferBytesCnt);
-}
 
-// ================================================================================================================
-void SphericalToCubemap::InitPipelineDescriptorSet()
-{
-    // Create pipeline descirptor
-    VkDescriptorSetAllocateInfo pipelineDesSet0AllocInfo{};
+    // Create descriptor set write info for the ubo buffer
     {
-        pipelineDesSet0AllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        pipelineDesSet0AllocInfo.descriptorPool = m_descriptorPool;
-        pipelineDesSet0AllocInfo.pSetLayouts = &m_pipelineDesSet0Layout;
-        pipelineDesSet0AllocInfo.descriptorSetCount = 1;
-    }
-
-    VK_CHECK(vkAllocateDescriptorSets(m_device,
-                                      &pipelineDesSet0AllocInfo,
-                                      &m_pipelineDescriptorSet0));
-
-    // Link descriptors to the buffer and image
-    VkDescriptorImageInfo hdriDesImgInfo{};
-    {
-        hdriDesImgInfo.imageView = m_inputHdriImageView;
-        hdriDesImgInfo.sampler = m_inputHdriSampler;
-        hdriDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    }
-
-    VkDescriptorBufferInfo sceneBufferInfo{};
-    {
-        sceneBufferInfo.buffer = m_uboBuffer;
-        sceneBufferInfo.offset = 0;
-        sceneBufferInfo.range = sizeof(float) * ((4 * 4) * 6 + 4);
+        m_uboDesBufferInfo.buffer = m_uboBuffer;
+        m_uboDesBufferInfo.offset = 0;
+        m_uboDesBufferInfo.range = sizeof(float) * ((4 * 4) * 6 + 4);
     }
 
     VkWriteDescriptorSet writeUboBufDesSet{};
     {
         writeUboBufDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         writeUboBufDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        writeUboBufDesSet.dstSet = m_pipelineDescriptorSet0;
         writeUboBufDesSet.dstBinding = 1;
         writeUboBufDesSet.descriptorCount = 1;
-        writeUboBufDesSet.pBufferInfo = &sceneBufferInfo;
+        writeUboBufDesSet.pBufferInfo = &m_uboDesBufferInfo;
     }
 
-    VkWriteDescriptorSet writeHdrDesSet{};
-    {
-        writeHdrDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeHdrDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        writeHdrDesSet.dstSet = m_pipelineDescriptorSet0;
-        writeHdrDesSet.dstBinding = 0;
-        writeHdrDesSet.pImageInfo = &hdriDesImgInfo;
-        writeHdrDesSet.descriptorCount = 1;
-    }
+    m_descriptorSet0Writes.push_back(writeUboBufDesSet);
+}
 
-    // Linking pipeline descriptors: cubemap and scene buffer descriptors to their GPU memory and info.
-    VkWriteDescriptorSet writeSkyboxPipelineDescriptors[2] = { writeHdrDesSet, writeUboBufDesSet };
-    vkUpdateDescriptorSets(m_device, 2, writeSkyboxPipelineDescriptors, 0, NULL);
+// ================================================================================================================
+std::vector<VkWriteDescriptorSet> SphericalToCubemap::GetDescriptorSet0Writes()
+{
+    return m_descriptorSet0Writes;
 }
 
 // ================================================================================================================
@@ -457,7 +441,7 @@ void SphericalToCubemap::AppInit()
     // https://vulkan.lunarg.com/doc/view/1.2.198.0/windows/1.2-extensions/vkspec.html#VUID-VkDeviceCreateInfo-queueFamilyIndex-02802
     std::vector<VkDeviceQueueCreateInfo> deviceQueueInfos = CreateDeviceQueueInfos({ m_graphicsQueueFamilyIdx });
     // We need the swap chain device extension and the dynamic rendering extension.
-    const std::vector<const char*> deviceExtensions = { VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME, VK_KHR_MULTIVIEW_EXTENSION_NAME };
+    const std::vector<const char*> deviceExtensions = { VK_KHR_MULTIVIEW_EXTENSION_NAME };
 
     VkPhysicalDeviceVulkan11Features vulkan11Features{};
     {
@@ -465,17 +449,10 @@ void SphericalToCubemap::AppInit()
         vulkan11Features.multiview = VK_TRUE;
     }
 
-    VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeature{};
-    {
-        dynamicRenderingFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
-        dynamicRenderingFeature.pNext = &vulkan11Features;
-        dynamicRenderingFeature.dynamicRendering = VK_TRUE;
-    }
-
-    InitDevice(deviceExtensions, deviceExtensions.size(), deviceQueueInfos, &dynamicRenderingFeature);
+    InitDevice(deviceExtensions, deviceQueueInfos, &vulkan11Features);
     InitVmaAllocator();
     InitGraphicsQueue();
-    InitDescriptorPool();
+    InitKHRFuncPtrs();
 
     InitGfxCommandPool();
     InitGfxCommandBuffers(1);
@@ -487,5 +464,4 @@ void SphericalToCubemap::AppInit()
 
     InitHdriGpuObjects();
     InitSceneBufferInfo();
-    InitPipelineDescriptorSet();
 }

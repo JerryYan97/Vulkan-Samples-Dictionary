@@ -77,7 +77,6 @@ namespace SharedLib
         m_formatPipelineLayout(VK_NULL_HANDLE),
         m_formatWidthHeightBuffer(VK_NULL_HANDLE),
         m_formatWidthHeightAlloc(VK_NULL_HANDLE),
-        m_formatPipelineDescriptorSet0(VK_NULL_HANDLE),
         m_inputCubemap(VK_NULL_HANDLE),
         m_inputCubemapExtent(),
         m_outputCubemap(VK_NULL_HANDLE),
@@ -86,7 +85,11 @@ namespace SharedLib
         m_formatInputImages(VK_NULL_HANDLE),
         m_formatInputImagesViews(VK_NULL_HANDLE),
         m_formatInputImagesAllocs(VK_NULL_HANDLE),
-        m_formatInputImagesSamplers(VK_NULL_HANDLE)
+        m_formatInputImagesSamplers(VK_NULL_HANDLE),
+        m_formatInputImageInfo(),
+        m_formatWidthHeightDesBufferInfo(),
+        m_inputSubres(),
+        m_pfnVkCmdPushDescriptorSetKHR(nullptr)
     {
 
     }
@@ -102,7 +105,13 @@ namespace SharedLib
         InitFormatPipeline();
         InitFormatImgsObjects();
         InitWidthHeightBufferInfo();
-        InitFormatPipelineDescriptorSet();
+
+        // Get necessary function pointers
+        m_pfnVkCmdPushDescriptorSetKHR = (PFN_vkCmdPushDescriptorSetKHR)vkGetDeviceProcAddr(m_vkInfos.device,
+                                                                                            "vkCmdPushDescriptorSetKHR");
+        if (!m_pfnVkCmdPushDescriptorSetKHR) {
+            exit(1);
+        }
     }
 
     // ================================================================================================================
@@ -243,11 +252,10 @@ namespace SharedLib
         vkCmdBeginRendering(cmdBuffer, &renderInfo);
 
         // Bind the graphics pipeline
-        vkCmdBindDescriptorSets(cmdBuffer,
-            VK_PIPELINE_BIND_POINT_GRAPHICS,
-            m_formatPipelineLayout,
-            0, 1, &m_formatPipelineDescriptorSet0,
-            0, NULL);
+        m_pfnVkCmdPushDescriptorSetKHR(cmdBuffer, 
+                                       VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                       m_formatPipelineLayout,
+                                       0, m_descriptorSet0Writes.size(), m_descriptorSet0Writes.data());
 
         vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pPipeline->GetVkPipeline());
 
@@ -347,6 +355,7 @@ namespace SharedLib
         VkDescriptorSetLayoutCreateInfo pipelineDesSet0LayoutInfo{};
         {
             pipelineDesSet0LayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+            pipelineDesSet0LayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
             pipelineDesSet0LayoutInfo.bindingCount = 2;
             pipelineDesSet0LayoutInfo.pBindings = pipelineDesSet0LayoutBindings;
         }
@@ -377,62 +386,6 @@ namespace SharedLib
     {
         m_vsFormatShaderModule = CreateShaderModule("/hlsl/CubeMapFormat_vert.spv");
         m_psFormatShaderModule = CreateShaderModule("/hlsl/CubeMapFormat_frag.spv");
-    }
-
-    // ================================================================================================================
-    void CubemapFormatTransApp::InitFormatPipelineDescriptorSet()
-    {
-        // Create pipeline descirptor
-        VkDescriptorSetAllocateInfo pipelineDesSet0AllocInfo{};
-        {
-            pipelineDesSet0AllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-            pipelineDesSet0AllocInfo.descriptorPool = m_vkInfos.descriptorPool;
-            pipelineDesSet0AllocInfo.pSetLayouts = &m_formatPipelineDesSet0Layout;
-            pipelineDesSet0AllocInfo.descriptorSetCount = 1;
-        }
-
-        VK_CHECK(vkAllocateDescriptorSets(m_vkInfos.device,
-            &pipelineDesSet0AllocInfo,
-            &m_formatPipelineDescriptorSet0));
-
-        // Link descriptors to the buffer and image
-        VkDescriptorImageInfo formatImgInfo{};
-        {
-            formatImgInfo.imageView = m_formatInputImagesViews;
-            formatImgInfo.sampler = m_formatInputImagesSamplers;
-            formatImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        }
-
-        VkDescriptorBufferInfo screenBufferInfo{};
-        {
-            screenBufferInfo.buffer = m_formatWidthHeightBuffer;
-            screenBufferInfo.offset = 0;
-            screenBufferInfo.range = sizeof(float) * 2;
-        }
-
-        VkWriteDescriptorSet writeUboBufDesSet{};
-        {
-            writeUboBufDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            writeUboBufDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            writeUboBufDesSet.dstSet = m_formatPipelineDescriptorSet0;
-            writeUboBufDesSet.dstBinding = 1;
-            writeUboBufDesSet.descriptorCount = 1;
-            writeUboBufDesSet.pBufferInfo = &screenBufferInfo;
-        }
-
-        VkWriteDescriptorSet writeformatImgsDesSet{};
-        {
-            writeformatImgsDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            writeformatImgsDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            writeformatImgsDesSet.dstSet = m_formatPipelineDescriptorSet0;
-            writeformatImgsDesSet.dstBinding = 0;
-            writeformatImgsDesSet.pImageInfo = &formatImgInfo;
-            writeformatImgsDesSet.descriptorCount = 1;
-        }
-
-        // Linking pipeline descriptors: cubemap and scene buffer descriptors to their GPU memory and info.
-        VkWriteDescriptorSet writeFormatPipelineDescriptors[2] = { writeformatImgsDesSet, writeUboBufDesSet };
-        vkUpdateDescriptorSets(m_vkInfos.device, 2, writeFormatPipelineDescriptors, 0, NULL);
     }
 
     // ================================================================================================================
@@ -506,6 +459,23 @@ namespace SharedLib
 
         VK_CHECK(vkCreateImageView(m_vkInfos.device, &formatImgViewInfo, nullptr, &m_formatInputImagesViews));
         VK_CHECK(vkCreateSampler(m_vkInfos.device, &samplerInfo, nullptr, &m_formatInputImagesSamplers));
+
+        // Create format input images descriptor write info
+        {
+            m_formatInputImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            m_formatInputImageInfo.imageView = m_formatInputImagesViews;
+            m_formatInputImageInfo.sampler = m_formatInputImagesSamplers;
+        }
+
+        VkWriteDescriptorSet writeformatImgsDesSet{};
+        {
+            writeformatImgsDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writeformatImgsDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            writeformatImgsDesSet.dstBinding = 0;
+            writeformatImgsDesSet.pImageInfo = &m_formatInputImageInfo;
+            writeformatImgsDesSet.descriptorCount = 1;
+        }
+        m_descriptorSet0Writes.push_back(writeformatImgsDesSet);
 
         // Allocate output cubemap resources
         VmaAllocationCreateInfo outputImgAllocInfo{};
@@ -592,6 +562,23 @@ namespace SharedLib
                                m_formatWidthHeightBuffer,
                                m_formatWidthHeightAlloc,
                                sizeof(float) * 2);
+
+        // Create format width height buffer descriptor set write info
+        {
+            m_formatWidthHeightDesBufferInfo.buffer = m_formatWidthHeightBuffer;
+            m_formatWidthHeightDesBufferInfo.offset = 0;
+            m_formatWidthHeightDesBufferInfo.range = sizeof(float) * 2;
+        }
+
+        VkWriteDescriptorSet writeUboBufDesSet{};
+        {
+            writeUboBufDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writeUboBufDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            writeUboBufDesSet.dstBinding = 1;
+            writeUboBufDesSet.descriptorCount = 1;
+            writeUboBufDesSet.pBufferInfo = &m_formatWidthHeightDesBufferInfo;
+        }
+        m_descriptorSet0Writes.push_back(writeUboBufDesSet);
     }
 
     // ================================================================================================================
