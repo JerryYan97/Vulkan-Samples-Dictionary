@@ -22,7 +22,6 @@ GenIBL::GenIBL() :
     m_envBrdfPipeline(),
     m_uboCameraScreenBuffer(VK_NULL_HANDLE),
     m_uboCameraScreenAlloc(VK_NULL_HANDLE),
-    m_diffIrrPreFilterEnvMapDesSet0(VK_NULL_HANDLE),
     m_diffIrrPreFilterEnvMapDesSet0Layout(VK_NULL_HANDLE),
     m_diffuseIrradianceVsShaderModule(VK_NULL_HANDLE),
     m_diffuseIrradiancePsShaderModule(VK_NULL_HANDLE),
@@ -161,6 +160,13 @@ void GenIBL::InitInputCubemapObjects()
         sampler_info.maxAnisotropy = 1.0f;
     }
     VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_hdrCubeMapSampler));
+
+    // Create hdr cubemap descriptor info to write into descriptor 0.
+    {
+        m_hdriCubeMapDescriptorImgInfo.imageView = m_hdrCubeMapView;
+        m_hdriCubeMapDescriptorImgInfo.sampler = m_hdrCubeMapSampler;
+        m_hdriCubeMapDescriptorImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    }
 }
 
 // ================================================================================================================
@@ -238,6 +244,13 @@ void GenIBL::InitCameraScreenUbo()
                            m_uboCameraScreenBuffer,
                            m_uboCameraScreenAlloc,
                            sizeof(m_screenCameraData));
+
+    // Create ubo camera screen buffer's descriptor set write info
+    {
+        m_uboCameraScreenDescriptorBufferInfo.buffer = m_uboCameraScreenBuffer;
+        m_uboCameraScreenDescriptorBufferInfo.offset = 0;
+        m_uboCameraScreenDescriptorBufferInfo.range = CameraScreenBufferSizeInBytes;
+    }
 }
 
 // ================================================================================================================
@@ -273,6 +286,7 @@ void GenIBL::InitDiffIrrPreFilterEnvMapDescriptorSetLayout()
     VkDescriptorSetLayoutCreateInfo pipelineDesSet0LayoutInfo{};
     {
         pipelineDesSet0LayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        pipelineDesSet0LayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
         pipelineDesSet0LayoutInfo.bindingCount = 2;
         pipelineDesSet0LayoutInfo.pBindings = pipelineDesSet0LayoutBindings;
     }
@@ -284,59 +298,31 @@ void GenIBL::InitDiffIrrPreFilterEnvMapDescriptorSetLayout()
 }
 
 // ================================================================================================================
-void GenIBL::InitDiffIrrPreFilterEnvMapDescriptorSets()
+std::vector<VkWriteDescriptorSet> GenIBL::GetWriteDescriptorSet0()
 {
-    // Create pipeline descirptor
-    VkDescriptorSetAllocateInfo pipelineDesSet0AllocInfo{};
-    {
-        pipelineDesSet0AllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        pipelineDesSet0AllocInfo.descriptorPool = m_descriptorPool;
-        pipelineDesSet0AllocInfo.pSetLayouts = &m_diffIrrPreFilterEnvMapDesSet0Layout;
-        pipelineDesSet0AllocInfo.descriptorSetCount = 1;
-    }
-
-    VK_CHECK(vkAllocateDescriptorSets(m_device,
-        &pipelineDesSet0AllocInfo,
-        &m_diffIrrPreFilterEnvMapDesSet0));
-
-    // Link descriptors to the buffer and image
-    VkDescriptorImageInfo hdriDesImgInfo{};
-    {
-        hdriDesImgInfo.imageView = m_hdrCubeMapView;
-        hdriDesImgInfo.sampler = m_hdrCubeMapSampler;
-        hdriDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    }
-
-    VkDescriptorBufferInfo cameraScreenBufferInfo{};
-    {
-        cameraScreenBufferInfo.buffer = m_uboCameraScreenBuffer;
-        cameraScreenBufferInfo.offset = 0;
-        cameraScreenBufferInfo.range = CameraScreenBufferSizeInBytes;
-    }
+    std::vector<VkWriteDescriptorSet> descriptorSet0Writes{};
 
     VkWriteDescriptorSet writeUboBufDesSet{};
     {
         writeUboBufDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         writeUboBufDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        writeUboBufDesSet.dstSet = m_diffIrrPreFilterEnvMapDesSet0;
         writeUboBufDesSet.dstBinding = 1;
         writeUboBufDesSet.descriptorCount = 1;
-        writeUboBufDesSet.pBufferInfo = &cameraScreenBufferInfo;
+        writeUboBufDesSet.pBufferInfo = &m_uboCameraScreenDescriptorBufferInfo;
     }
+    descriptorSet0Writes.push_back(writeUboBufDesSet);
 
     VkWriteDescriptorSet writeHdrDesSet{};
     {
         writeHdrDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         writeHdrDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        writeHdrDesSet.dstSet = m_diffIrrPreFilterEnvMapDesSet0;
         writeHdrDesSet.dstBinding = 0;
-        writeHdrDesSet.pImageInfo = &hdriDesImgInfo;
+        writeHdrDesSet.pImageInfo = &m_hdriCubeMapDescriptorImgInfo;
         writeHdrDesSet.descriptorCount = 1;
     }
-
-    // Linking pipeline descriptors: cubemap and scene buffer descriptors to their GPU memory and info.
-    VkWriteDescriptorSet writeSkyboxPipelineDescriptors[2] = { writeHdrDesSet, writeUboBufDesSet };
-    vkUpdateDescriptorSets(m_device, 2, writeSkyboxPipelineDescriptors, 0, NULL);
+    descriptorSet0Writes.push_back(writeHdrDesSet);
+    
+    return descriptorSet0Writes;
 }
 
 // ================================================================================================================
@@ -352,7 +338,7 @@ void GenIBL::AppInit()
     // https://vulkan.lunarg.com/doc/view/1.2.198.0/windows/1.2-extensions/vkspec.html#VUID-VkDeviceCreateInfo-queueFamilyIndex-02802
     std::vector<VkDeviceQueueCreateInfo> deviceQueueInfos = CreateDeviceQueueInfos({ m_graphicsQueueFamilyIdx });
     // We need the swap chain device extension and the dynamic rendering extension.
-    const std::vector<const char*> deviceExtensions = { VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME, VK_KHR_MULTIVIEW_EXTENSION_NAME };
+    const std::vector<const char*> deviceExtensions = { VK_KHR_MULTIVIEW_EXTENSION_NAME };
 
     VkPhysicalDeviceVulkan11Features vulkan11Features{};
     {
@@ -360,17 +346,10 @@ void GenIBL::AppInit()
         vulkan11Features.multiview = VK_TRUE;
     }
 
-    VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeature{};
-    {
-        dynamicRenderingFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
-        dynamicRenderingFeature.pNext = &vulkan11Features;
-        dynamicRenderingFeature.dynamicRendering = VK_TRUE;
-    }
-
-    InitDevice(deviceExtensions, deviceExtensions.size(), deviceQueueInfos, &dynamicRenderingFeature);
+    InitDevice(deviceExtensions, deviceQueueInfos, &vulkan11Features);
     InitVmaAllocator();
     InitGraphicsQueue();
-    InitDescriptorPool();
+    InitKHRFuncPtrs();
 
     InitGfxCommandPool();
     InitGfxCommandBuffers(1);
@@ -380,7 +359,6 @@ void GenIBL::AppInit()
 
     // Shared pipeline resources
     InitDiffIrrPreFilterEnvMapDescriptorSetLayout();
-    InitDiffIrrPreFilterEnvMapDescriptorSets();
 
     // Pipeline and resources for the diffuse irradiance map gen.
     InitDiffuseIrradianceOutputObjects(); // The diffuse irradiance map itself.

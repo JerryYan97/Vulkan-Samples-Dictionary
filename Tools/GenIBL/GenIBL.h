@@ -25,7 +25,6 @@ public:
 
     virtual void AppInit() override;
 
-    VkDescriptorSet GetDiffIrrPreFilterEnvMapDesSet() { return m_diffIrrPreFilterEnvMapDesSet0; }
     VkImage GetDiffuseIrradianceCubemap() { return m_diffuseIrradianceCubemap; }
     VkImageView GetDiffuseIrradianceCubemapView() { return m_diffuseIrradianceCubemapImageView; }
     ImgInfo GetInputHdriInfo() { return m_hdrCubeMapInfo; }
@@ -38,6 +37,7 @@ public:
     VkImageView GetEnvBrdfOutputImgView() { return m_envBrdfOutputImgView; }
     VkPipeline GetEnvBrdfPipeline() { return m_envBrdfPipeline.GetVkPipeline(); }
     VkPipelineLayout GetEnvBrdfPipelineLayout() { return m_envBrdfPipelineLayout; }
+    std::vector<VkWriteDescriptorSet> GetWriteDescriptorSet0();
 
     void ReadInCubemap(const std::string& namePath);
     void GenPrefilterEnvMap();
@@ -45,7 +45,6 @@ public:
     void CmdGenInputCubemapMipMaps(VkCommandBuffer cmdBuffer); // Down scale the input cubemap first and then up scale it up to upgrade
 private:
     // Shared pipeline resources
-    void InitDiffIrrPreFilterEnvMapDescriptorSets();
     void InitDiffIrrPreFilterEnvMapDescriptorSetLayout();
 
     // Diffuse Irradiance
@@ -82,7 +81,6 @@ private:
 
     // Shared pipeline resources
     VkDescriptorSetLayout m_diffIrrPreFilterEnvMapDesSet0Layout;
-    VkDescriptorSet       m_diffIrrPreFilterEnvMapDesSet0;
     float                 m_screenCameraData[CameraScreenBufferSizeInFloats];
 
     // Resources for the diffuse irradiance generation.
@@ -115,15 +113,17 @@ private:
     VkImageView         m_envBrdfOutputImgView;
 
     // Input cubemap resources.
-    VkImage       m_hdrCubeMapImage;
-    VkImageView   m_hdrCubeMapView;
-    VkSampler     m_hdrCubeMapSampler;
-    VmaAllocation m_hdrCubeMapAlloc;
-    ImgInfo       m_hdrCubeMapInfo;
+    VkImage               m_hdrCubeMapImage;
+    VkImageView           m_hdrCubeMapView;
+    VkSampler             m_hdrCubeMapSampler;
+    VmaAllocation         m_hdrCubeMapAlloc;
+    ImgInfo               m_hdrCubeMapInfo;
+    VkDescriptorImageInfo m_hdriCubeMapDescriptorImgInfo;
 
     std::vector<float*> m_pHdrCubemapMips;
 
     // Camera and screen info buffer for cubemap gen (Diffuse irradiance and prefilter env map).
-    VkBuffer      m_uboCameraScreenBuffer;
-    VmaAllocation m_uboCameraScreenAlloc;
+    VkBuffer               m_uboCameraScreenBuffer;
+    VmaAllocation          m_uboCameraScreenAlloc;
+    VkDescriptorBufferInfo m_uboCameraScreenDescriptorBufferInfo;
 };

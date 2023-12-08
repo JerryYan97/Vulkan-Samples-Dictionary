@@ -242,12 +242,11 @@ void GenIBL::GenPrefilterEnvMap()
 
         vkCmdBeginRendering(cmdBuffer, &renderInfo);
 
-        // Bind the graphics pipeline
-        vkCmdBindDescriptorSets(cmdBuffer,
-            VK_PIPELINE_BIND_POINT_GRAPHICS,
-            m_preFilterEnvMapPipelineLayout,
-            0, 1, &m_diffIrrPreFilterEnvMapDesSet0,
-            0, NULL);
+        std::vector<VkWriteDescriptorSet> descriptorSet0Writes = GetWriteDescriptorSet0();
+        m_vkCmdPushDescriptorSetKHR(cmdBuffer,
+                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    m_preFilterEnvMapPipelineLayout,
+                                    0, descriptorSet0Writes.size(), descriptorSet0Writes.data());
 
         vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_preFilterEnvMapPipeline.GetVkPipeline());
 

@@ -105,7 +105,6 @@ int main(
         VkQueue         gfxQueue = app.GetGfxQueue();
         VkDevice        device = app.GetVkDevice();
         VmaAllocator    allocator = *app.GetVmaAllocator();
-        VkDescriptorSet pipelineDescriptorSet = app.GetDiffIrrPreFilterEnvMapDesSet();
 
         VkImageSubresourceRange cubemapSubResRangeLayer6Level1{};
         {
@@ -145,7 +144,6 @@ int main(
         {
             formatTransVkInfo.device = device;
             formatTransVkInfo.pAllocator = app.GetVmaAllocator();
-            formatTransVkInfo.descriptorPool = app.GetDescriptorPool();
             formatTransVkInfo.gfxCmdPool = app.GetGfxCmdPool();
             formatTransVkInfo.gfxQueue = gfxQueue;
         }
@@ -267,11 +265,11 @@ int main(
             vkCmdBeginRendering(cmdBuffer, &renderInfo);
 
             // Bind the graphics pipeline
-            vkCmdBindDescriptorSets(cmdBuffer,
-                VK_PIPELINE_BIND_POINT_GRAPHICS,
-                app.GetDiffuseIrradiancePipelineLayout(),
-                0, 1, &pipelineDescriptorSet,
-                0, NULL);
+            std::vector<VkWriteDescriptorSet> descriptorSet0Writes = app.GetWriteDescriptorSet0();
+            app.m_vkCmdPushDescriptorSetKHR(cmdBuffer,
+                                            VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                            app.GetDiffuseIrradiancePipelineLayout(),
+                                            0, descriptorSet0Writes.size(), descriptorSet0Writes.data());
 
             vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, app.GetDiffuseIrradiancePipeline());
 
