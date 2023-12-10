@@ -43,30 +43,35 @@ struct Mesh
     VkBuffer      modelIdxBuffer;
     VmaAllocation modelIdxBufferAlloc;
 
-    VkImage       baseColorImg;
-    VmaAllocation baseColorImgAlloc;
-    VkImageView   baseColorImgView;
-    VkSampler     baseColorImgSampler;
+    VkImage               baseColorImg;
+    VmaAllocation         baseColorImgAlloc;
+    VkImageView           baseColorImgView;
+    VkSampler             baseColorImgSampler;
+    VkDescriptorImageInfo baseColorImgDescriptorInfo;
 
-    VkImage       metallicRoughnessImg;
-    VmaAllocation metallicRoughnessImgAlloc;
-    VkImageView   metallicRoughnessImgView;
-    VkSampler     metallicRoughnessImgSampler;
+    VkImage               metallicRoughnessImg;
+    VmaAllocation         metallicRoughnessImgAlloc;
+    VkImageView           metallicRoughnessImgView;
+    VkSampler             metallicRoughnessImgSampler;
+    VkDescriptorImageInfo metallicRoughnessImgDescriptorInfo;
 
-    VkImage       normalImg;
-    VmaAllocation normalImgAlloc;
-    VkImageView   normalImgView;
-    VkSampler     normalImgSampler;
+    VkImage               normalImg;
+    VmaAllocation         normalImgAlloc;
+    VkImageView           normalImgView;
+    VkSampler             normalImgSampler;
+    VkDescriptorImageInfo normalImgDescriptorInfo;
 
-    VkImage       occlusionImg;
-    VmaAllocation occlusionImgAlloc;
-    VkImageView   occlusionImgView;
-    VkSampler     occlusionImgSampler;
+    VkImage               occlusionImg;
+    VmaAllocation         occlusionImgAlloc;
+    VkImageView           occlusionImgView;
+    VkSampler             occlusionImgSampler;
+    VkDescriptorImageInfo occlusionImgDescriptorInfo;
 
-    VkImage       emissiveImg;
-    VmaAllocation emissiveImgAlloc;
-    VkImageView   emissiveImgView;
-    VkSampler     emissiveImgSampler;
+    VkImage               emissiveImg;
+    VmaAllocation         emissiveImgAlloc;
+    VkImageView           emissiveImgView;
+    VkSampler             emissiveImgSampler;
+    VkDescriptorImageInfo emissiveImgDescriptorInfo;
 };
 
 const uint32_t VpMatBytesCnt = 4 * 4 * sizeof(float);
@@ -85,6 +90,8 @@ public:
     virtual void AppInit() override;
 
     void CmdCopyPresentImgToLogAnim(VkCommandBuffer cmdBuffer, uint32_t swapchainImgIdx);
+    void CmdPushCubemapDescriptors(VkCommandBuffer cmdBuffer);
+    void CmdPushIblModelRenderingDescriptors(VkCommandBuffer cmdBuffer, const Mesh& mesh);
 
     void DumpRenderedFrame(VkCommandBuffer cmdBuffer);
 
@@ -110,20 +117,8 @@ public:
 
     VkPipelineLayout GetSkyboxPipelineLayout() { return m_skyboxPipelineLayout; }
 
-    VkDescriptorSet GetSkyboxCurrentFrameDescriptorSet0()
-        { return m_skyboxPipelineDescriptorSet0s[m_currentFrame]; }
-
     VkPipeline GetSkyboxPipeline() { return m_skyboxPipeline.GetVkPipeline(); }
 
-    VkDescriptorSet GetIblCurrentFrameUboDescriptorSet() 
-        { return m_iblPipelineUboDescriptorSets[m_currentFrame]; }
-
-    VkDescriptorSet GetIblTexDescriptorSet()
-        { return m_iblPipelineBackgroundTexDescriptorSet; }
-
-    VkDescriptorSet GetMeshTexDescriptorSet(uint32_t i)
-        { return m_iblPipelineModelTexDescriptorSets[i]; }
-    
     VkPipeline GetIblPipeline() { return m_iblPipeline.GetVkPipeline(); }
     VkPipelineLayout GetIblPipelineLayout() { return m_iblPipelineLayout; }
     
@@ -131,15 +126,12 @@ public:
     uint32_t GetModelTexCnt();
 
     void SendCameraDataToBuffer(uint32_t i);
-    void SendModelTexDataToGPU(VkCommandBuffer cmdBuffer);
 
 private:
     VkPipelineVertexInputStateCreateInfo CreatePipelineVertexInputInfo();
     VkPipelineDepthStencilStateCreateInfo CreateDepthStencilStateInfo();
 
     // Init mesh data
-    // void InitSphereVertexIndexBuffers();
-    // void DestroySphereVertexIndexBuffers();
     void InitModelInfo();
     void DestroyModelInfo();
 
@@ -148,7 +140,6 @@ private:
     void InitSkyboxPipelineDescriptorSetLayout();
     void InitSkyboxPipelineLayout();
     void InitSkyboxShaderModules();
-    void InitSkyboxPipelineDescriptorSets();
     void DestroySkyboxPipelineRes();
 
     // IBL spheres pipeline resources init.
@@ -156,7 +147,6 @@ private:
     void InitIblPipelineDescriptorSetLayout();
     void InitIblPipelineLayout();
     void InitIblShaderModules();
-    void InitIblPipelineDescriptorSets();
     void DestroyIblPipelineRes();
 
     void InitVpMatBuffer();
@@ -176,19 +166,22 @@ private:
     VkImageView     m_hdrCubeMapView;
     VkSampler       m_hdrSampler;
     VmaAllocation   m_hdrCubeMapAlloc;
+    VkDescriptorImageInfo m_hdrCubeMapImgDescriptorInfo;
 
     ImgInfo m_hdrImgCubemap;
 
     std::vector<VkBuffer>      m_vpMatUboBuffer;
     std::vector<VmaAllocation> m_vpMatUboAlloc;
+    std::vector<VkDescriptorBufferInfo> m_vpMatUboDescriptorBuffersInfos;
 
     std::vector<VkBuffer>      m_iblMvpMatsUboBuffer;
     std::vector<VmaAllocation> m_iblMvpMatsUboAlloc;
+    std::vector<VkDescriptorBufferInfo> m_iblMvpMatsUboDescriptorBuffersInfos;
 
-    SharedLib::Camera*           m_pCamera;
-    std::vector<VkBuffer>        m_cameraParaBuffers;
-    std::vector<VmaAllocation>   m_cameraParaBufferAllocs;
-    std::vector<VkDescriptorSet> m_skyboxPipelineDescriptorSet0s;
+    SharedLib::Camera*                  m_pCamera;
+    std::vector<VkBuffer>               m_cameraParaBuffers;
+    std::vector<VmaAllocation>          m_cameraParaBufferAllocs;
+    std::vector<VkDescriptorBufferInfo> m_cameraParaBuffersDescriptorsInfos;
 
     VkShaderModule        m_vsSkyboxShaderModule;
     VkShaderModule        m_psSkyboxShaderModule;
@@ -197,32 +190,35 @@ private:
     SharedLib::Pipeline   m_skyboxPipeline;
 
     // Sphere rendering
-    VkShaderModule               m_vsIblShaderModule;
-    VkShaderModule               m_psIblShaderModule;
-    VkDescriptorSetLayout        m_iblPipelineDesSetsLayouts[3]; // 0 -- UBO; 1 -- background textures; 3 -- model textures.
-    VkPipelineLayout             m_iblPipelineLayout;
-    std::vector<VkDescriptorSet> m_iblPipelineModelTexDescriptorSets;
-    VkDescriptorSet              m_iblPipelineBackgroundTexDescriptorSet;
-    std::vector<VkDescriptorSet> m_iblPipelineUboDescriptorSets;
-    SharedLib::Pipeline          m_iblPipeline;
+    VkShaderModule                      m_vsIblShaderModule;
+    VkShaderModule                      m_psIblShaderModule;
+    VkDescriptorSetLayout               m_iblPipelineDesSetLayout; // For a pipeline, it can only have one descriptor set layout.
+    VkPipelineLayout                    m_iblPipelineLayout;
+    std::vector<VkDescriptorImageInfo>  m_iblModelTexturesDescriptorsInfos;
+    VkDescriptorImageInfo               m_iblBackgroundTextureDescriptorInfo;
+    std::vector<VkDescriptorBufferInfo> m_iblUboDescriptorInfo;
+    SharedLib::Pipeline                 m_iblPipeline;
 
-    VkImage       m_diffuseIrradianceCubemap;
-    VkImageView   m_diffuseIrradianceCubemapImgView;
-    VkSampler     m_diffuseIrradianceCubemapSampler;
-    VmaAllocation m_diffuseIrradianceCubemapAlloc;
-    ImgInfo       m_diffuseIrradianceCubemapImgInfo;
+    VkImage               m_diffuseIrradianceCubemap;
+    VkImageView           m_diffuseIrradianceCubemapImgView;
+    VkSampler             m_diffuseIrradianceCubemapSampler;
+    VmaAllocation         m_diffuseIrradianceCubemapAlloc;
+    ImgInfo               m_diffuseIrradianceCubemapImgInfo;
+    VkDescriptorImageInfo m_diffuseIrradianceCubemapDescriptorImgInfo;
 
-    VkImage              m_prefilterEnvCubemap;
-    VkImageView          m_prefilterEnvCubemapView;
-    VkSampler            m_prefilterEnvCubemapSampler;
-    VmaAllocation        m_prefilterEnvCubemapAlloc;
-    std::vector<ImgInfo> m_prefilterEnvCubemapImgsInfo;
+    VkImage               m_prefilterEnvCubemap;
+    VkImageView           m_prefilterEnvCubemapView;
+    VkSampler             m_prefilterEnvCubemapSampler;
+    VmaAllocation         m_prefilterEnvCubemapAlloc;
+    std::vector<ImgInfo>  m_prefilterEnvCubemapImgsInfo;
+    VkDescriptorImageInfo m_prefilterEnvCubemapDescriptorImgInfo;
 
-    VkImage       m_envBrdfImg;
-    VkImageView   m_envBrdfImgView;
-    VkSampler     m_envBrdfImgSampler;
-    VmaAllocation m_envBrdfImgAlloc;
-    ImgInfo       m_envBrdfImgInfo;
+    VkImage               m_envBrdfImg;
+    VkImageView           m_envBrdfImgView;
+    VkSampler             m_envBrdfImgSampler;
+    VmaAllocation         m_envBrdfImgAlloc;
+    ImgInfo               m_envBrdfImgInfo;
+    VkDescriptorImageInfo m_envBrdfImgDescriptorImgInfo;
 
     std::vector<Mesh> m_gltfModeMeshes;
 

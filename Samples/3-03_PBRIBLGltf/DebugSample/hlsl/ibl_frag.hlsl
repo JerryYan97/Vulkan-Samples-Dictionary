@@ -12,29 +12,29 @@ struct SceneInfoUbo
     float maxMipLevel;
 };
 
-[[vk::binding(0, 1)]] TextureCube i_diffuseCubeMapTexture;
-[[vk::binding(0, 1)]] SamplerState i_diffuseCubemapSamplerState;
+[[vk::binding(1, 0)]] TextureCube i_diffuseCubeMapTexture;
+[[vk::binding(1, 0)]] SamplerState i_diffuseCubemapSamplerState;
 
-[[vk::binding(1, 1)]] TextureCube i_prefilterEnvCubeMapTexture;
-[[vk::binding(1, 1)]] SamplerState i_prefilterEnvCubeMapSamplerState;
+[[vk::binding(2, 0)]] TextureCube i_prefilterEnvCubeMapTexture;
+[[vk::binding(2, 0)]] SamplerState i_prefilterEnvCubeMapSamplerState;
 
-[[vk::binding(2, 1)]] Texture2D    i_envBrdfTexture;
-[[vk::binding(2, 1)]] SamplerState i_envBrdfSamplerState;
+[[vk::binding(3, 0)]] Texture2D    i_envBrdfTexture;
+[[vk::binding(3, 0)]] SamplerState i_envBrdfSamplerState;
 
-[[vk::binding(0, 2)]] Texture2D i_baseColorTexture;
-[[vk::binding(0, 2)]] SamplerState i_baseColorSamplerState;
+[[vk::binding(4, 0)]] Texture2D i_baseColorTexture;
+[[vk::binding(4, 0)]] SamplerState i_baseColorSamplerState;
 
-[[vk::binding(1, 2)]] Texture2D i_normalTexture;
-[[vk::binding(1, 2)]] SamplerState i_normalSamplerState;
+[[vk::binding(5, 0)]] Texture2D i_normalTexture;
+[[vk::binding(5, 0)]] SamplerState i_normalSamplerState;
 
 // The textures for metalness and roughness properties are packed together in a single texture called
 // metallicRoughnessTexture. Its green channel contains roughness values and its blue channel contains metalness
 // values.
-[[vk::binding(2, 2)]] Texture2D i_metallicRoughnessTexture;
-[[vk::binding(2, 2)]] SamplerState i_metallicRoughnessSamplerState;
+[[vk::binding(6, 0)]] Texture2D i_metallicRoughnessTexture;
+[[vk::binding(6, 0)]] SamplerState i_metallicRoughnessSamplerState;
 
-[[vk::binding(3, 2)]] Texture2D i_occlusionTexture;
-[[vk::binding(3, 2)]] SamplerState i_occlusionSamplerState;
+[[vk::binding(7, 0)]] Texture2D i_occlusionTexture;
+[[vk::binding(7, 0)]] SamplerState i_occlusionSamplerState;
 
 [[vk::push_constant]] SceneInfoUbo i_sceneInfo;
 

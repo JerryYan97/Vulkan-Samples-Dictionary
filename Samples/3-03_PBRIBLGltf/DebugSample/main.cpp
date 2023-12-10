@@ -496,9 +496,6 @@ int main()
         VkDevice device = app.GetVkDevice();
         VkFence inFlightFence = app.GetCurrentFrameFence();
         VkCommandBuffer currentCmdBuffer = app.GetCurrentFrameGfxCmdBuffer();
-        VkDescriptorSet currentSkyboxPipelineDesSet0 = app.GetSkyboxCurrentFrameDescriptorSet0();
-        VkDescriptorSet currentIblPipelineUboDesSet = app.GetIblCurrentFrameUboDescriptorSet();
-        VkDescriptorSet iblPipelineIblTexDesSet = app.GetIblTexDescriptorSet();
         VkExtent2D swapchainImageExtent = app.GetSwapchainImageExtent();
 
         app.FrameStart();
@@ -611,10 +608,7 @@ int main()
 
         // Render background cubemap
         // Bind the skybox pipeline descriptor sets
-        vkCmdBindDescriptorSets(currentCmdBuffer,
-                                VK_PIPELINE_BIND_POINT_GRAPHICS, 
-                                app.GetSkyboxPipelineLayout(), 
-                                0, 1, &currentSkyboxPipelineDesSet0, 0, NULL);
+        app.CmdPushCubemapDescriptors(currentCmdBuffer);
 
         // Bind the graphics pipeline
         vkCmdBindPipeline(currentCmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, app.GetSkyboxPipeline());
@@ -681,14 +675,7 @@ int main()
         {
             const auto& mesh = gltfMeshes[i];
 
-            VkDescriptorSet iblPipelineDescriptorSets[3] = {
-                currentIblPipelineUboDesSet, iblPipelineIblTexDesSet, app.GetMeshTexDescriptorSet(i)
-            };
-
-            vkCmdBindDescriptorSets(currentCmdBuffer,
-                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    app.GetIblPipelineLayout(),
-                                    0, 3, iblPipelineDescriptorSets, 0, NULL);
+            app.CmdPushIblModelRenderingDescriptors(currentCmdBuffer, mesh);
 
             VkRenderingInfoKHR renderSpheresInfo{};
             {
