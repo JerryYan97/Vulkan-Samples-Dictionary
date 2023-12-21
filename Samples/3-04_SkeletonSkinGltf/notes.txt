@@ -1,1 +1,9 @@
 https://ocw.mit.edu/courses/6-837-computer-graphics-fall-2012/9ab6e7460a5b93d6f97b08f95de23ebc_MIT6_837F12_Lec06.pdf
+
+Gltf skinning:
+https://github.com/KhronosGroup/glTF-Tutorials/blob/master/gltfTutorial/gltfTutorial_019_SimpleSkin.md
+https://github.com/KhronosGroup/glTF-Tutorials/blob/master/gltfTutorial/gltfTutorial_020_Skins.md
+
+
+TODO:
+I may need the ImGui to toggle the skeleton draw v.s. the mesh draw.

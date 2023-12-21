@@ -1,0 +1,15 @@
+https://vkguide.dev/docs/gpudriven/draw_indirect/
+
+2nd-level - 4 draws in one indirect with different color triangles. The different colors, screen positions are stored in a storage buffer, which can be accessed by the instance ID specified in the indirect draws.
+
+3rd-level - GPU based culling:
+https://vkguide.dev/docs/gpudriven/compute_culling/
+
+Maybe a quad wall and 4 cubes. 2 of cubes are occluded. So, we use the compute shader to cull them from the scene.
+
+It would be better if I can design a suitable example to demonstrate the usage instead of just show how to use the command.
+Maybe one API demonstration at the 2nd level and another real-world usage at the 3rd level.
+
+
+GPU driven rendering:
+https://vkguide.dev/docs/gpudriven/gpu_driven_engines/
