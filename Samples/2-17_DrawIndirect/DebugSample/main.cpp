@@ -6,6 +6,9 @@
 #include "vk_mem_alloc.h"
 #include "vulkan/vulkan.h"
 #include "lodepng.h"
+#include "renderdoc_app.h"
+#include <Windows.h>
+#include <cassert>
 
 #define STR(r)    \
 	case r:       \
@@ -77,9 +80,9 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_utils_messenger_callback(
 
 // pos1, pos2, pos3
 float verts[] = {
-    -0.25f, 0.25f, 0.f, // v0 - Bottom Left
-     0.25f, 0.25f, 0.f, // v1 - Bottom Right
-     0.0f,  0.25f, 0.f  // v2 - Top
+    -0.25f,  0.25f, 0.f, 1.f, // v0 - Bottom Left
+     0.25f,  0.25f, 0.f, 1.f, // v1 - Bottom Right
+     0.0f,  -0.25f, 0.f, 1.f  // v2 - Top
 };
 
 // CCW
@@ -90,10 +93,10 @@ uint32_t vertIdx[] = {
 
 // color - r, color - g, color - b, color - a (padding), offset - x, offset - y.
 float colorStorageData[] = {
-    1.f, 0.f, 0.f, 0.f, // Upper-Left red triangle.
-    0.f, 1.f, 0.f, 0.f, // Upper-Right green triangle.
-    0.f, 0.f, 1.f, 0.f, // Bottom-Left blue triangle.
-    1.f, 1.f, 0.f, 0.f  // Bottom-Right yellow triangle.
+    1.f, 0.f, 0.f, 1.f, // Upper-Left red triangle.
+    0.f, 1.f, 0.f, 1.f, // Upper-Right green triangle.
+    0.f, 0.f, 1.f, 1.f, // Bottom-Left blue triangle.
+    1.f, 1.f, 0.f, 1.f  // Bottom-Right yellow triangle.
 };
 
 float offsetsStorageData[] = {
@@ -110,6 +113,20 @@ VkDrawIndexedIndirectCommand indirectDrawIdxCmd = {
 
 int main()
 {
+    // RenderDoc debug starts
+    RENDERDOC_API_1_6_0* rdoc_api = NULL;
+    if (HMODULE mod = GetModuleHandleA("renderdoc.dll"))
+    {
+        pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
+        int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_6_0, (void**)&rdoc_api);
+        assert(ret == 1);
+    }
+
+    if (rdoc_api)
+    {
+        rdoc_api->StartFrameCapture(NULL, NULL);
+    }
+
     // Verify that the debug extension for the callback messenger is supported.
     uint32_t propNum;
     VK_CHECK(vkEnumerateInstanceExtensionProperties(nullptr, &propNum, nullptr));
@@ -413,7 +430,7 @@ int main()
         imageInfo.arrayLayers = 1;
         imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
         imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        imageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        imageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
         imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
         imageInfo.tiling = colorBufTiling;
     }
@@ -446,6 +463,16 @@ int main()
     }
     VkImageView colorImgView;
     VK_CHECK(vkCreateImageView(device, &imageViewInfo, nullptr, &colorImgView));
+
+    VkBufferCreateInfo colorImgStagingBufferInfo = {};
+    {
+        colorImgStagingBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        colorImgStagingBufferInfo.size = imgAlloc->GetSize();
+        colorImgStagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    }
+    VkBuffer colorImgStagingBuffer;
+    VmaAllocation colorImgStagingBufferAlloc;
+    VK_CHECK(vmaCreateBuffer(vmaAllocator, &colorImgStagingBufferInfo, &mappableBufCreateInfo, &colorImgStagingBuffer, &colorImgStagingBufferAlloc, nullptr));
 
     // Create Vert Shader Module -- SOURCE_PATH is a MACRO definition passed in during compilation, which is specified in
     //                              the CMakeLists.txt file in the same level of repository.
@@ -503,7 +530,8 @@ int main()
     VkVertexInputBindingDescription vertBindingDesc = {};
     {
         vertBindingDesc.binding = 0;
-        vertBindingDesc.stride = 3 * sizeof(float);
+        // vertBindingDesc.stride = 3 * sizeof(float);
+        vertBindingDesc.stride = 4 * sizeof(float);
         vertBindingDesc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
     }
 
@@ -512,7 +540,8 @@ int main()
         // Position
         vertAttrDesc.location = 0;
         vertAttrDesc.binding = 0;
-        vertAttrDesc.format = VK_FORMAT_R32G32B32_SFLOAT;
+        // vertAttrDesc.format = VK_FORMAT_R32G32B32_SFLOAT;
+        vertAttrDesc.format = VK_FORMAT_R32G32B32A32_SFLOAT;
         vertAttrDesc.offset = 0;
     }
     VkPipelineVertexInputStateCreateInfo vertInputInfo{};
@@ -817,9 +846,10 @@ int main()
     VkImageMemoryBarrier colorAttachmentToGeneralBarrier{};
     {
         colorAttachmentToGeneralBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        colorAttachmentToGeneralBarrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+        colorAttachmentToGeneralBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        colorAttachmentToGeneralBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
         colorAttachmentToGeneralBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        colorAttachmentToGeneralBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        colorAttachmentToGeneralBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
         colorAttachmentToGeneralBarrier.image = colorImage;
         colorAttachmentToGeneralBarrier.subresourceRange = colorTargetSubRsrcRange;
     }
@@ -827,11 +857,27 @@ int main()
     vkCmdPipelineBarrier(
         cmdBuffer,
         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
         0,
         0, nullptr,
         0, nullptr,
-        1, &undefToColorAttachmentBarrier);
+        1, &colorAttachmentToGeneralBarrier);
+
+    VkBufferImageCopy imgToBufferCopyInfo{};
+    {
+        imgToBufferCopyInfo.bufferRowLength = 960;
+        imgToBufferCopyInfo.imageSubresource.aspectMask = colorTargetSubRsrcRange.aspectMask;
+        imgToBufferCopyInfo.imageSubresource.baseArrayLayer = colorTargetSubRsrcRange.baseArrayLayer;
+        imgToBufferCopyInfo.imageSubresource.layerCount = colorTargetSubRsrcRange.layerCount;
+        imgToBufferCopyInfo.imageSubresource.mipLevel = colorTargetSubRsrcRange.baseMipLevel;
+        imgToBufferCopyInfo.imageExtent = { 960, 680, 1 };
+    }
+
+    vkCmdCopyImageToBuffer(cmdBuffer,
+                           colorImage,
+                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                           colorImgStagingBuffer,
+                           1, &imgToBufferCopyInfo);
 
     VK_CHECK(vkEndCommandBuffer(cmdBuffer));
 
@@ -851,14 +897,19 @@ int main()
     VK_CHECK(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX));
     VK_CHECK(vkQueueWaitIdle(graphicsQueue));
 
+    if (rdoc_api)
+    {
+        rdoc_api->EndFrameCapture(NULL, NULL);
+    }
+
     // Make rendered image visible to the host
     void* mapped = nullptr;
-    vmaMapMemory(vmaAllocator, imgAlloc, &mapped);
+    vmaMapMemory(vmaAllocator, colorImgStagingBufferAlloc, &mapped);
 
     // Copy to RAM
     std::vector<unsigned char> imageRAM(imgAlloc->GetSize());
     memcpy(imageRAM.data(), mapped, imgAlloc->GetSize());
-    vmaUnmapMemory(vmaAllocator, imgAlloc);
+    vmaUnmapMemory(vmaAllocator, colorImgStagingBufferAlloc);
 
     std::string pathName = std::string(SOURCE_PATH) + std::string("/test.png");
     std::cout << pathName << std::endl;
@@ -892,6 +943,7 @@ int main()
 
     // Destroy the image
     vmaDestroyImage(vmaAllocator, colorImage, imgAlloc);
+    vmaDestroyBuffer(vmaAllocator, colorImgStagingBuffer, colorImgStagingBufferAlloc);
 
     // Destroy the vertex buffer
     vmaDestroyBuffer(vmaAllocator, vertBuf, vertAlloc);

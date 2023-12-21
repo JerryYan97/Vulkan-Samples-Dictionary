@@ -1,6 +1,6 @@
 struct VSInput
 {
-    [[vk::location(0)]] float3 Pos : POSITION0;
+    [[vk::location(0)]] float4 Pos : POSITION0;
 };
 
 struct VSOutput
@@ -19,9 +19,11 @@ VSOutput main(
 
     float2 offset = offsetStorageData[instId];
 
-    output.Pos = float4(input.Pos, 1.0);
+    output.Pos = input.Pos;
     output.Pos.x += offset.x;
     output.Pos.y += offset.y;
+
+    output.instId = instId;
 
     return output;
 }
