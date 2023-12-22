@@ -1,0 +1,3 @@
+https://learnopengl.com/Advanced-Lighting/Deferred-Shading
+
+4x4 spheres, 6x6x2 (Top + Bottom) point lights

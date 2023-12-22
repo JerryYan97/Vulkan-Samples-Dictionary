@@ -1,1 +1,0 @@
-https://learnopengl.com/Advanced-Lighting/Deferred-Shading
