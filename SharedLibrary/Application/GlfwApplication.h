@@ -51,11 +51,12 @@ namespace SharedLib
         uint32_t                 m_swapchainNextImgId;
         VkSurfaceKHR             m_surface;
         VkSwapchainKHR           m_swapchain;
-        GLFWwindow* m_pWindow;
+        GLFWwindow*              m_pWindow;
         unsigned int             m_presentQueueFamilyIdx;
         VkSurfaceFormatKHR       m_choisenSurfaceFormat;
         VkExtent2D               m_swapchainImageExtent;
         VkQueue                  m_presentQueue;
+        uint32_t m_swapchainImgCnt;
 
         std::vector<VkImageView>   m_swapchainColorImageViews;
         std::vector<VkImage>       m_swapchainColorImages;

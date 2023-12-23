@@ -7,7 +7,7 @@
 
 int main()
 {
-    PBRBasicApp app;
+    PBRDeferredApp app;
     app.AppInit();
 
     app.GpuWaitForIdle();

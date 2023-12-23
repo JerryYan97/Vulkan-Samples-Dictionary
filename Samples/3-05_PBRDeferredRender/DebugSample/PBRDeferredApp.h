@@ -10,6 +10,23 @@ namespace SharedLib
     class Camera;
 }
 
+constexpr uint32_t SphereCounts = 4 * 4;
+constexpr uint32_t PtLightsCounts = 6 * 6;
+
+struct GpuBuffer
+{
+    VkBuffer               buffer;
+    VmaAllocation          bufferAlloc;
+    VkDescriptorBufferInfo bufferDescInfo;
+};
+
+struct GpuImg
+{
+    VkImage               image;
+    VmaAllocation         imageAllocation;
+    VkDescriptorImageInfo imageDescInfo;
+};
+
 class PBRDeferredApp : public SharedLib::GlfwApplication
 {
 public:
@@ -20,47 +37,49 @@ public:
 
     VkFence GetFence(uint32_t i) { return m_inFlightFences[i]; }
 
-    VkPipelineLayout GetPipelineLayout() { return m_pipelineLayout; }
+    VkPipelineLayout GetGeoPassPipelineLayout() { return m_geoPassPipelineLayout; }
 
     // The first layer is the desciptor ids.
     // The second layer is the bindings writes to that descriptor.
-    std::vector<VkWriteDescriptorSet> GetWriteDescriptorSets();
+    std::vector<VkWriteDescriptorSet> GetGeoPassWriteDescriptorSets();
 
-    VkPipeline GetPipeline() { return m_pipeline.GetVkPipeline(); }
+    VkPipeline GetGeoPassPipeline() { return m_geoPassPipeline.GetVkPipeline(); }
 
     uint32_t GetIdxCnt() { return m_idxData.size(); }
 
-    VkBuffer GetIdxBuffer() { return m_idxBuffer; }
-    VkBuffer GetVertBuffer() { return m_vertBuffer; }
+    VkBuffer GetIdxBuffer() { return m_idxBuffer.buffer; }
+    VkBuffer GetVertBuffer() { return m_vertBuffer.buffer; }
 
 private:
-    void InitPipeline();
-    void InitPipelineDescriptorSetLayout();
-    void InitPipelineLayout();
-    void InitShaderModules();
+    void InitGeoPassPipeline();
+    void InitGeoPassPipelineDescriptorSetLayout();
+    void InitGeoPassPipelineLayout();
+    void InitGeoPassShaderModules();
     
     void InitSphereVertexIndexBuffers(); // Read in sphere data, create Sphere's GPU buffer objects and transfer data 
                                          // to the GPU buffers.
     void ReadInSphereData();
     void DestroySphereVertexIndexBuffers();
 
-    void InitVpUboObjects(); // Create MVP matrices's GPU buffer objects and transfer data to the GPU buffers.
+    void InitVpUboObjects();
     void DestroyVpUboObjects();
 
-    void InitFragUboObjects();
-    void DestroyFragUboObjects();
+    // void Init
+
+    // void InitFragUboObjects();
+    // void DestroyFragUboObjects();
 
     VkPipelineVertexInputStateCreateInfo CreatePipelineVertexInputInfo();
     VkPipelineDepthStencilStateCreateInfo CreateDepthStencilStateInfo();
 
     SharedLib::Camera*     m_pCamera;
-    VkBuffer               m_vpUboBuffer;
-    VmaAllocation          m_vpUboAlloc;
-    VkDescriptorBufferInfo m_vpUboDesBufferInfo;
+    std::vector<GpuBuffer> m_vpUboBuffers;
 
-    VkBuffer               m_lightPosBuffer;
-    VmaAllocation          m_lightPosBufferAlloc;
-    VkDescriptorBufferInfo m_lightPosUboDesBufferInfo;
+    // VkBuffer               m_lightPosBuffer;
+    // VmaAllocation          m_lightPosBufferAlloc;
+    // VkDescriptorBufferInfo m_lightPosSSBODescInfo;
+
+    GpuBuffer m_albedoBuffer;
 
     // Descriptor set 0 bindings
     std::vector<VkWriteDescriptorSet> m_writeDescriptorSet0;
@@ -68,17 +87,22 @@ private:
     uint32_t  m_vertBufferByteCnt;
     uint32_t  m_idxBufferByteCnt;
 
-    std::vector<float> m_vertData;
+    std::vector<float>    m_vertData;
     std::vector<uint32_t> m_idxData;
 
-    VkBuffer      m_vertBuffer;
-    VmaAllocation m_vertBufferAlloc;
-    VkBuffer      m_idxBuffer;
-    VmaAllocation m_idxBufferAlloc;
+    GpuBuffer m_vertBuffer;
+    GpuBuffer m_idxBuffer;
 
-    VkShaderModule        m_vsShaderModule;
-    VkShaderModule        m_psShaderModule;
-    VkDescriptorSetLayout m_pipelineDesSetLayout;
-    VkPipelineLayout      m_pipelineLayout;
-    SharedLib::Pipeline   m_pipeline;
+    // Geometry pass pipeline resources
+    VkShaderModule        m_geoPassVsShaderModule;
+    VkShaderModule        m_geoPassPsShaderModule;
+    VkDescriptorSetLayout m_geoPassPipelineDesSetLayout;
+    VkPipelineLayout      m_geoPassPipelineLayout;
+    SharedLib::Pipeline   m_geoPassPipeline;
+
+    // G-Buffer textures
+    std::vector<GpuImg> m_worldPosTextures;
+    std::vector<GpuImg> m_albedoTextures;
+    std::vector<GpuImg> m_normalTextures;
+    std::vector<GpuImg> m_metallicRoughnessTextures;
 };

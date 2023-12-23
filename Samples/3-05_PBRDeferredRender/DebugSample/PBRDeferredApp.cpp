@@ -12,23 +12,18 @@
 // ================================================================================================================
 PBRDeferredApp::PBRDeferredApp() :
     GlfwApplication(),
-    m_vsShaderModule(VK_NULL_HANDLE),
-    m_psShaderModule(VK_NULL_HANDLE),
-    m_pipelineDesSetLayout(VK_NULL_HANDLE),
-    m_pipelineLayout(VK_NULL_HANDLE),
-    m_pipeline(),
-    m_lightPosBuffer(VK_NULL_HANDLE),
-    m_lightPosBufferAlloc(VK_NULL_HANDLE),
-    m_vpUboBuffer(VK_NULL_HANDLE),
-    m_vpUboAlloc(VK_NULL_HANDLE),
-    m_idxBuffer(VK_NULL_HANDLE),
-    m_idxBufferAlloc(VK_NULL_HANDLE),
-    m_vertBuffer(VK_NULL_HANDLE),
-    m_vertBufferAlloc(VK_NULL_HANDLE),
+    m_geoPassVsShaderModule(VK_NULL_HANDLE),
+    m_geoPassPsShaderModule(VK_NULL_HANDLE),
+    m_geoPassPipelineDesSetLayout(VK_NULL_HANDLE),
+    m_geoPassPipelineLayout(VK_NULL_HANDLE),
+    m_geoPassPipeline(),
+    // m_lightPosBuffer(VK_NULL_HANDLE),
+    // m_lightPosBufferAlloc(VK_NULL_HANDLE),
+    m_idxBuffer(),
+    m_vertBuffer(),
     m_vertBufferByteCnt(0),
-    m_idxBufferByteCnt(0),
-    m_vpUboDesBufferInfo(),
-    m_lightPosUboDesBufferInfo()
+    m_idxBufferByteCnt(0) //,
+    // m_lightPosUboDesBufferInfo()
 {
     m_pCamera = new SharedLib::Camera();
 }
@@ -42,23 +37,26 @@ PBRDeferredApp::~PBRDeferredApp()
     DestroySphereVertexIndexBuffers();
 
     DestroyVpUboObjects();
-    DestroyFragUboObjects();
+    // DestroyFragUboObjects();
 
     // Destroy shader modules
-    vkDestroyShaderModule(m_device, m_vsShaderModule, nullptr);
-    vkDestroyShaderModule(m_device, m_psShaderModule, nullptr);
+    vkDestroyShaderModule(m_device, m_geoPassVsShaderModule, nullptr);
+    vkDestroyShaderModule(m_device, m_geoPassPsShaderModule, nullptr);
 
     // Destroy the pipeline layout
-    vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
+    vkDestroyPipelineLayout(m_device, m_geoPassPipelineLayout, nullptr);
 
     // Destroy the descriptor set layout
-    vkDestroyDescriptorSetLayout(m_device, m_pipelineDesSetLayout, nullptr);
+    vkDestroyDescriptorSetLayout(m_device, m_geoPassPipelineDesSetLayout, nullptr);
 }
 
 // ================================================================================================================
 void PBRDeferredApp::DestroyVpUboObjects()
 {
-    vmaDestroyBuffer(*m_pAllocator, m_vpUboBuffer, m_vpUboAlloc);
+    for (auto buffer : m_vpUboBuffers)
+    {
+        vmaDestroyBuffer(*m_pAllocator, buffer.buffer, buffer.bufferAlloc);
+    }    
 }
 
 // ================================================================================================================
@@ -81,39 +79,36 @@ void PBRDeferredApp::InitVpUboObjects()
                                 VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
     }
 
-    vmaCreateBuffer(*m_pAllocator,
-                    &bufferInfo,
-                    &bufferAllocInfo,
-                    &m_vpUboBuffer,
-                    &m_vpUboAlloc,
-                    nullptr);
+    m_vpUboBuffers.resize(m_swapchainImgCnt);
 
-    float vpMat[16]   = {};
-    float tmpViewMat[16]  = {};
+    float vpMat[16] = {};
+    float tmpViewMat[16] = {};
     float tmpPersMat[16] = {};
     m_pCamera->GenViewPerspectiveMatrices(tmpViewMat, tmpPersMat, vpMat);
     SharedLib::MatTranspose(vpMat, 4);
 
-    CopyRamDataToGpuBuffer(vpMat, m_vpUboBuffer, m_vpUboAlloc, 16 * sizeof(float));
-
-    // NOTE: For the push descriptors, the dstSet is ignored.
-    //       This app doesn't have other resources so a fixed descriptor set is enough.
+    for (uint32_t i = 0; i < m_swapchainImgCnt; i++)
     {
-        m_vpUboDesBufferInfo.buffer = m_vpUboBuffer;
-        m_vpUboDesBufferInfo.offset = 0;
-        m_vpUboDesBufferInfo.range = sizeof(float) * 16;
-    }
+        vmaCreateBuffer(*m_pAllocator,
+                        &bufferInfo,
+                        &bufferAllocInfo,
+                        &m_vpUboBuffers[i].buffer,
+                        &m_vpUboBuffers[i].bufferAlloc,
+                        nullptr);
 
-    VkWriteDescriptorSet writeVpBufDesSet{};
-    {
-        writeVpBufDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeVpBufDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        writeVpBufDesSet.dstBinding = 0;
-        writeVpBufDesSet.descriptorCount = 1;
-        writeVpBufDesSet.pBufferInfo = &m_vpUboDesBufferInfo;
-    }
+        CopyRamDataToGpuBuffer(vpMat,
+                               m_vpUboBuffers[i].buffer,
+                               m_vpUboBuffers[i].bufferAlloc,
+                               16 * sizeof(float));
 
-    m_writeDescriptorSet0.push_back(writeVpBufDesSet);
+        // NOTE: For the push descriptors, the dstSet is ignored.
+        //       This app doesn't have other resources so a fixed descriptor set is enough.
+        {
+            m_vpUboBuffers[i].bufferDescInfo.buffer = m_vpUboBuffers[i].buffer;
+            m_vpUboBuffers[i].bufferDescInfo.offset = 0;
+            m_vpUboBuffers[i].bufferDescInfo.range = sizeof(float) * 16;
+        }
+    }
 }
 
 // ================================================================================================================
@@ -122,7 +117,6 @@ void PBRDeferredApp::ReadInSphereData()
 {
     std::string inputfile = SOURCE_PATH;
     inputfile += "/../data/uvNormalSphere.obj";
-    // inputfile += "/../data/normalCube.obj";
     
     tinyobj::ObjReaderConfig readerConfig;
     tinyobj::ObjReader sphereObjReader;
@@ -241,6 +235,7 @@ void PBRDeferredApp::DestroySphereVertexIndexBuffers()
 }
 
 // ================================================================================================================
+/*
 void PBRDeferredApp::InitFragUboObjects()
 {
     // The alignment of a vec3 is 4 floats and the element alignment of a struct is the largest element alignment,
@@ -302,12 +297,15 @@ void PBRDeferredApp::InitFragUboObjects()
 
     m_writeDescriptorSet0.push_back(writeLightsDesSet);
 }
+*/
 
 // ================================================================================================================
+/*
 void PBRDeferredApp::DestroyFragUboObjects()
 {
     vmaDestroyBuffer(*m_pAllocator, m_lightPosBuffer, m_lightPosBufferAlloc);
 }
+*/
 
 // ================================================================================================================
 std::vector<VkWriteDescriptorSet> PBRDeferredApp::GetWriteDescriptorSets()
@@ -316,31 +314,33 @@ std::vector<VkWriteDescriptorSet> PBRDeferredApp::GetWriteDescriptorSets()
 }
 
 // ================================================================================================================
-void PBRDeferredApp::InitPipelineLayout()
+void PBRDeferredApp::InitGeoPassPipelineLayout()
 {
     // Create pipeline layout
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     {
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pipelineLayoutInfo.setLayoutCount = 1;
-        pipelineLayoutInfo.pSetLayouts = &m_pipelineDesSetLayout;
+        pipelineLayoutInfo.pSetLayouts = &m_geoPassPipelineDesSetLayout;
         pipelineLayoutInfo.pushConstantRangeCount = 0;
     }
     
-    VK_CHECK(vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_pipelineLayout));
+    VK_CHECK(vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_geoPassPipelineLayout));
 }
 
 // ================================================================================================================
-void PBRDeferredApp::InitShaderModules()
+void PBRDeferredApp::InitGeoPassShaderModules()
 {
     // Create Shader Modules.
-    m_vsShaderModule = CreateShaderModule("/hlsl/sphere_vert.spv");
-    m_psShaderModule = CreateShaderModule("/hlsl/sphere_frag.spv");
+    m_geoPassVsShaderModule = CreateShaderModule("/hlsl/geo_vert.spv");
+    m_geoPassPsShaderModule = CreateShaderModule("/hlsl/geo_frag.spv");
 }
 
 // ================================================================================================================
-void PBRDeferredApp::InitPipelineDescriptorSetLayout()
+void PBRDeferredApp::InitGeoPassPipelineDescriptorSetLayout()
 {
+    std::vector<VkDescriptorSetLayoutBinding> bindings;
+
     // Create pipeline binding and descriptor objects for the camera parameters
     VkDescriptorSetLayoutBinding cameraUboBinding{};
     {
@@ -349,21 +349,41 @@ void PBRDeferredApp::InitPipelineDescriptorSetLayout()
         cameraUboBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         cameraUboBinding.descriptorCount = 1;
     }
+    bindings.push_back(cameraUboBinding);
 
-    // Binding for the lights
-    VkDescriptorSetLayoutBinding lightsUboBinding{};
+    // Binding for the spheres' offsets
+    VkDescriptorSetLayoutBinding offsetsSSBOBinding{};
     {
-        lightsUboBinding.binding = 1;
-        lightsUboBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        lightsUboBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        lightsUboBinding.descriptorCount = 1;
+        offsetsSSBOBinding.binding = 1;
+        offsetsSSBOBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        offsetsSSBOBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        offsetsSSBOBinding.descriptorCount = 1;
+    }
+    bindings.push_back(offsetsSSBOBinding);
+
+    // Binding for the spheres' albedos
+    VkDescriptorSetLayoutBinding albedoSSBOBinding{};
+    {
+        albedoSSBOBinding.binding = 2;
+        albedoSSBOBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        albedoSSBOBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        albedoSSBOBinding.descriptorCount = 1;
+    }
+    bindings.push_back(albedoSSBOBinding);
+
+    // Binding for the spheres' metallic roughness material parameters
+    VkDescriptorSetLayoutBinding metallicRoughnessSSBOBinding{};
+    {
+        metallicRoughnessSSBOBinding.binding = 3;
+        metallicRoughnessSSBOBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        metallicRoughnessSSBOBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        metallicRoughnessSSBOBinding.descriptorCount = 1;
     }
 
     // Create pipeline's descriptors layout
     // The Vulkan spec states: The VkDescriptorSetLayoutBinding::binding members of the elements of the pBindings array 
     // must each have different values 
     // (https://vulkan.lunarg.com/doc/view/1.3.236.0/windows/1.3-extensions/vkspec.html#VUID-VkDescriptorSetLayoutCreateInfo-binding-00279)
-    VkDescriptorSetLayoutBinding pipelineDesSetLayoutBindings[2] = { cameraUboBinding, lightsUboBinding };
     VkDescriptorSetLayoutCreateInfo pipelineDesSetLayoutInfo{};
     {
         pipelineDesSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;

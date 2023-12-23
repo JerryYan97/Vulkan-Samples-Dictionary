@@ -344,6 +344,8 @@ namespace SharedLib
         }
         VK_CHECK(vkCreateSwapchainKHR(m_device, &swapchainCreateInfo, nullptr, &m_swapchain));
 
+        vkGetSwapchainImagesKHR(m_device, m_swapchain, &m_swapchainImgCnt, nullptr);
+
         VkExtent3D swapchainExtent{};
         {
             swapchainExtent.width = m_swapchainImageExtent.width;
