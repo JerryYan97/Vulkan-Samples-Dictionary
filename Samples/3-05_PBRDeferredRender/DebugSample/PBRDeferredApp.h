@@ -10,11 +10,11 @@ namespace SharedLib
     class Camera;
 }
 
-class PBRBasicApp : public SharedLib::GlfwApplication
+class PBRDeferredApp : public SharedLib::GlfwApplication
 {
 public:
-    PBRBasicApp();
-    ~PBRBasicApp();
+    PBRDeferredApp();
+    ~PBRDeferredApp();
 
     virtual void AppInit() override;
 

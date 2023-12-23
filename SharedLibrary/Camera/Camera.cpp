@@ -7,6 +7,7 @@
 
 namespace SharedLib
 {
+    // ================================================================================================================
     Camera::Camera()
     {
         memset(&m_holdStartPos, 0, sizeof(m_holdStartPos));
@@ -37,11 +38,13 @@ namespace SharedLib
         m_near = 0.1f;
     }
 
+    // ================================================================================================================
     Camera::~Camera()
     {
 
     }
 
+    // ================================================================================================================
     void Camera::SetView(
         float* iView)
     {
@@ -52,6 +55,7 @@ namespace SharedLib
         NormalizeVec(m_holdRight, 3);
     }
 
+    // ================================================================================================================
     void Camera::OnEvent(
         HEvent& ievent)
     {
@@ -59,11 +63,92 @@ namespace SharedLib
         case crc32("MOUSE_MIDDLE_BUTTON"):
             OnMiddleMouseButtonEvent(ievent);
             break;
+        case crc32("KEY_W"):
+            OnKeyWEvent(ievent);
+            break;
+        case crc32("KEY_S"):
+            OnKeySEvent(ievent);
+            break;
+        case crc32("KEY_A"):
+            OnKeyAEvent(ievent);
+            break;
+        case crc32("KEY_D"):
+            OnKeyDEvent(ievent);
+            break;
         default:
             break;
         }
     }
 
+    // ================================================================================================================
+    void Camera::OnKeyWEvent(
+        HEvent& ievent)
+    {
+        HEventArguments& args = ievent.GetArgs();
+        bool isDown = std::any_cast<bool>(args[crc32("IS_DOWN")]);
+        if (isDown)
+        {
+            float moveOffset[3] = {};
+            memcpy(moveOffset, m_view, 3 * sizeof(float));
+
+            ScalarMul(0.1f, moveOffset, 3);
+
+            VecAdd(moveOffset, m_pos, 3, m_pos);
+        }
+    }
+
+    // ================================================================================================================
+    void Camera::OnKeySEvent(
+        HEvent& ievent)
+    {
+        HEventArguments& args = ievent.GetArgs();
+        bool isDown = std::any_cast<bool>(args[crc32("IS_DOWN")]);
+        if (isDown)
+        {
+            float moveOffset[3] = {};
+            memcpy(moveOffset, m_view, 3 * sizeof(float));
+
+            ScalarMul(-0.1f, moveOffset, 3);
+
+            VecAdd(moveOffset, m_pos, 3, m_pos);
+        }
+    }
+
+    // ================================================================================================================
+    void Camera::OnKeyAEvent(
+        HEvent& ievent)
+    {
+        HEventArguments& args = ievent.GetArgs();
+        bool isDown = std::any_cast<bool>(args[crc32("IS_DOWN")]);
+        if (isDown)
+        {
+            float right[3] = {};
+            CrossProductVec3(m_view, m_up, right);
+
+            ScalarMul(-0.1f, right, 3);
+
+            VecAdd(right, m_pos, 3, m_pos);
+        }
+    }
+
+    // ================================================================================================================
+    void Camera::OnKeyDEvent(
+        HEvent& ievent)
+    {
+        HEventArguments& args = ievent.GetArgs();
+        bool isDown = std::any_cast<bool>(args[crc32("IS_DOWN")]);
+        if (isDown)
+        {
+            float right[3] = {};
+            CrossProductVec3(m_view, m_up, right);
+
+            ScalarMul(0.1f, right, 3);
+
+            VecAdd(right, m_pos, 3, m_pos);
+        }
+    }
+
+    // ================================================================================================================
     void Camera::OnMiddleMouseButtonEvent(
         HEvent& ievent)
     {
@@ -120,6 +205,7 @@ namespace SharedLib
         m_isHold = isDown;
     }
 
+    // ================================================================================================================
     // NOTE: viewMat and perspectiveMat cannot be same!
     void Camera::GenViewPerspectiveMatrices(
         float* viewMat, 
@@ -132,12 +218,14 @@ namespace SharedLib
         MatrixMul4x4(perspectiveMat, viewMat, vpMat);
     }
 
+    // ================================================================================================================
     void Camera::GenReverseViewPerspectiveMatrices(
         float* invVpMat)
     {
 
     }
 
+    // ================================================================================================================
     void Camera::GetNearPlane(
         float& width,
         float& height,
@@ -148,6 +236,7 @@ namespace SharedLib
         width  = m_aspect * height;
     }
 
+    // ================================================================================================================
     void Camera::GetRight(
         float* oVec)
     {

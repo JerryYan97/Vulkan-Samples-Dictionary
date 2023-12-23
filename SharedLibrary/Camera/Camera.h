@@ -28,6 +28,10 @@ namespace SharedLib
 
     private:
         void OnMiddleMouseButtonEvent(HEvent& ievent);
+        void OnKeyWEvent(HEvent& ievent);
+        void OnKeySEvent(HEvent& ievent);
+        void OnKeyAEvent(HEvent& ievent);
+        void OnKeyDEvent(HEvent& ievent);
 
         HFVec2 m_holdStartPos;
         float m_holdStartView[3];

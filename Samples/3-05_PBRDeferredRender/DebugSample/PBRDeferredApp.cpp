@@ -1,4 +1,4 @@
-#include "PBRBasicApp.h"
+#include "PBRDeferredApp.h"
 #include <glfw3.h>
 #include "../../../SharedLibrary/Utils/VulkanDbgUtils.h"
 #include "../../../SharedLibrary/Camera/Camera.h"
@@ -10,7 +10,7 @@
 #include "vk_mem_alloc.h"
 
 // ================================================================================================================
-PBRBasicApp::PBRBasicApp() : 
+PBRDeferredApp::PBRDeferredApp() :
     GlfwApplication(),
     m_vsShaderModule(VK_NULL_HANDLE),
     m_psShaderModule(VK_NULL_HANDLE),
@@ -34,7 +34,7 @@ PBRBasicApp::PBRBasicApp() :
 }
 
 // ================================================================================================================
-PBRBasicApp::~PBRBasicApp()
+PBRDeferredApp::~PBRDeferredApp()
 {
     vkDeviceWaitIdle(m_device);
     delete m_pCamera;
@@ -56,13 +56,13 @@ PBRBasicApp::~PBRBasicApp()
 }
 
 // ================================================================================================================
-void PBRBasicApp::DestroyVpUboObjects()
+void PBRDeferredApp::DestroyVpUboObjects()
 {
     vmaDestroyBuffer(*m_pAllocator, m_vpUboBuffer, m_vpUboAlloc);
 }
 
 // ================================================================================================================
-void PBRBasicApp::InitVpUboObjects()
+void PBRDeferredApp::InitVpUboObjects()
 {
     // The alignment of a vec3 is 4 floats and the element alignment of a struct is the largest element alignment,
     // which is also the 4 float. Therefore, we need 32 floats as the buffer to store the VP's parameters.
@@ -118,7 +118,7 @@ void PBRBasicApp::InitVpUboObjects()
 
 // ================================================================================================================
 // NOTE: A vert = pos + normal + uv.
-void PBRBasicApp::ReadInSphereData()
+void PBRDeferredApp::ReadInSphereData()
 {
     std::string inputfile = SOURCE_PATH;
     inputfile += "/../data/uvNormalSphere.obj";
@@ -181,7 +181,7 @@ void PBRBasicApp::ReadInSphereData()
 }
 
 // ================================================================================================================
-void PBRBasicApp::InitSphereVertexIndexBuffers()
+void PBRDeferredApp::InitSphereVertexIndexBuffers()
 {
     // Create sphere data GPU buffers
     VkBufferCreateInfo vertBufferInfo{};
@@ -234,14 +234,14 @@ void PBRBasicApp::InitSphereVertexIndexBuffers()
 }
 
 // ================================================================================================================
-void PBRBasicApp::DestroySphereVertexIndexBuffers()
+void PBRDeferredApp::DestroySphereVertexIndexBuffers()
 {
     vmaDestroyBuffer(*m_pAllocator, m_vertBuffer, m_vertBufferAlloc);
     vmaDestroyBuffer(*m_pAllocator, m_idxBuffer, m_idxBufferAlloc);
 }
 
 // ================================================================================================================
-void PBRBasicApp::InitFragUboObjects()
+void PBRDeferredApp::InitFragUboObjects()
 {
     // The alignment of a vec3 is 4 floats and the element alignment of a struct is the largest element alignment,
     // which is also the 4 float. Therefore, we need 16 floats as the buffer to store the Camera's parameters.
@@ -304,19 +304,19 @@ void PBRBasicApp::InitFragUboObjects()
 }
 
 // ================================================================================================================
-void PBRBasicApp::DestroyFragUboObjects()
+void PBRDeferredApp::DestroyFragUboObjects()
 {
     vmaDestroyBuffer(*m_pAllocator, m_lightPosBuffer, m_lightPosBufferAlloc);
 }
 
 // ================================================================================================================
-std::vector<VkWriteDescriptorSet> PBRBasicApp::GetWriteDescriptorSets()
+std::vector<VkWriteDescriptorSet> PBRDeferredApp::GetWriteDescriptorSets()
 {
     return m_writeDescriptorSet0;
 }
 
 // ================================================================================================================
-void PBRBasicApp::InitPipelineLayout()
+void PBRDeferredApp::InitPipelineLayout()
 {
     // Create pipeline layout
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
@@ -331,7 +331,7 @@ void PBRBasicApp::InitPipelineLayout()
 }
 
 // ================================================================================================================
-void PBRBasicApp::InitShaderModules()
+void PBRDeferredApp::InitShaderModules()
 {
     // Create Shader Modules.
     m_vsShaderModule = CreateShaderModule("/hlsl/sphere_vert.spv");
@@ -339,7 +339,7 @@ void PBRBasicApp::InitShaderModules()
 }
 
 // ================================================================================================================
-void PBRBasicApp::InitPipelineDescriptorSetLayout()
+void PBRDeferredApp::InitPipelineDescriptorSetLayout()
 {
     // Create pipeline binding and descriptor objects for the camera parameters
     VkDescriptorSetLayoutBinding cameraUboBinding{};
@@ -380,7 +380,7 @@ void PBRBasicApp::InitPipelineDescriptorSetLayout()
 }
 
 // ================================================================================================================
-VkPipelineVertexInputStateCreateInfo PBRBasicApp::CreatePipelineVertexInputInfo()
+VkPipelineVertexInputStateCreateInfo PBRDeferredApp::CreatePipelineVertexInputInfo()
 {
     // Specifying all kinds of pipeline states
     // Vertex input state
@@ -423,7 +423,7 @@ VkPipelineVertexInputStateCreateInfo PBRBasicApp::CreatePipelineVertexInputInfo(
 }
 
 // ================================================================================================================
-VkPipelineDepthStencilStateCreateInfo PBRBasicApp::CreateDepthStencilStateInfo()
+VkPipelineDepthStencilStateCreateInfo PBRDeferredApp::CreateDepthStencilStateInfo()
 {
     VkPipelineDepthStencilStateCreateInfo depthStencilInfo{};
     {
@@ -439,7 +439,7 @@ VkPipelineDepthStencilStateCreateInfo PBRBasicApp::CreateDepthStencilStateInfo()
 }
 
 // ================================================================================================================
-void PBRBasicApp::InitPipeline()
+void PBRDeferredApp::InitPipeline()
 {
     VkPipelineRenderingCreateInfoKHR pipelineRenderCreateInfo{};
     {
@@ -467,7 +467,7 @@ void PBRBasicApp::InitPipeline()
 }
 
 // ================================================================================================================
-void PBRBasicApp::AppInit()
+void PBRDeferredApp::AppInit()
 {
     glfwInit();
     uint32_t glfwExtensionCount = 0;

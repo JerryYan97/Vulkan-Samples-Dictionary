@@ -1,6 +1,6 @@
 #include "vk_mem_alloc.h"
 
-#include "PBRBasicApp.h"
+#include "PBRDeferredApp.h"
 #include "../../../SharedLibrary/Utils/VulkanDbgUtils.h"
 
 #include <vulkan/vulkan.h>
