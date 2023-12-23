@@ -1,5 +1,6 @@
 #include "PBRDeferredApp.h"
 #include <glfw3.h>
+#include <cstdlib>
 #include "../../../SharedLibrary/Utils/VulkanDbgUtils.h"
 #include "../../../SharedLibrary/Camera/Camera.h"
 #include "../../../SharedLibrary/Event/Event.h"
@@ -21,6 +22,11 @@ PBRDeferredApp::PBRDeferredApp() :
     // m_lightPosBufferAlloc(VK_NULL_HANDLE),
     m_idxBuffer(),
     m_vertBuffer(),
+    m_offsetStorageBuffer(),
+    m_albedoStorageBuffer(),
+    m_metallicRoughnessStorageBuffer(),
+    m_lightPosStorageBuffer(),
+    m_lightRadianceStorageBuffer(),
     m_vertBufferByteCnt(0),
     m_idxBufferByteCnt(0) //,
     // m_lightPosUboDesBufferInfo()
@@ -37,6 +43,9 @@ PBRDeferredApp::~PBRDeferredApp()
     DestroySphereVertexIndexBuffers();
 
     DestroyVpUboObjects();
+    DestroyGBuffer();
+    DestroyGeoPassSSBOs();
+
     // DestroyFragUboObjects();
 
     // Destroy shader modules
@@ -196,8 +205,8 @@ void PBRDeferredApp::InitSphereVertexIndexBuffers()
     vmaCreateBuffer(*m_pAllocator,
         &vertBufferInfo,
         &vertBufferAllocInfo,
-        &m_vertBuffer,
-        &m_vertBufferAlloc,
+        &m_vertBuffer.buffer,
+        &m_vertBuffer.bufferAlloc,
         nullptr);
 
     VkBufferCreateInfo idxBufferInfo{};
@@ -218,20 +227,20 @@ void PBRDeferredApp::InitSphereVertexIndexBuffers()
     vmaCreateBuffer(*m_pAllocator,
         &idxBufferInfo,
         &idxBufferAllocInfo,
-        &m_idxBuffer,
-        &m_idxBufferAlloc,
+        &m_idxBuffer.buffer,
+        &m_idxBuffer.bufferAlloc,
         nullptr);
 
     // Send sphere data to the GPU buffers
-    CopyRamDataToGpuBuffer(m_vertData.data(), m_vertBuffer, m_vertBufferAlloc, m_vertBufferByteCnt);
-    CopyRamDataToGpuBuffer(m_idxData.data(), m_idxBuffer, m_idxBufferAlloc, m_idxBufferByteCnt);
+    CopyRamDataToGpuBuffer(m_vertData.data(), m_vertBuffer.buffer, m_vertBuffer.bufferAlloc, m_vertBufferByteCnt);
+    CopyRamDataToGpuBuffer(m_idxData.data(), m_idxBuffer.buffer, m_idxBuffer.bufferAlloc, m_idxBufferByteCnt);
 }
 
 // ================================================================================================================
 void PBRDeferredApp::DestroySphereVertexIndexBuffers()
 {
-    vmaDestroyBuffer(*m_pAllocator, m_vertBuffer, m_vertBufferAlloc);
-    vmaDestroyBuffer(*m_pAllocator, m_idxBuffer, m_idxBufferAlloc);
+    vmaDestroyBuffer(*m_pAllocator, m_vertBuffer.buffer, m_vertBuffer.bufferAlloc);
+    vmaDestroyBuffer(*m_pAllocator, m_idxBuffer.buffer, m_idxBuffer.bufferAlloc);
 }
 
 // ================================================================================================================
@@ -308,9 +317,137 @@ void PBRDeferredApp::DestroyFragUboObjects()
 */
 
 // ================================================================================================================
-std::vector<VkWriteDescriptorSet> PBRDeferredApp::GetWriteDescriptorSets()
+void PBRDeferredApp::CmdGBufferToRenderTarget(
+    VkCommandBuffer cmdBuffer,
+    VkImageLayout   oldLayout)
 {
-    return m_writeDescriptorSet0;
+    VkImageSubresourceRange colorOneMipOneLevelSubResRange{};
+    {
+        colorOneMipOneLevelSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        colorOneMipOneLevelSubResRange.baseMipLevel = 0;
+        colorOneMipOneLevelSubResRange.levelCount = 1;
+        colorOneMipOneLevelSubResRange.baseArrayLayer = 0;
+        colorOneMipOneLevelSubResRange.layerCount = 1;
+    }
+
+    std::vector<VkImageMemoryBarrier> gBufferToRenderTargetBarriers;
+
+    // Transform the layout of the GBuffer textures from undefined to render target.
+    VkImageMemoryBarrier gBufferRenderTargetTransBarrierTemplate{};
+    {
+        gBufferRenderTargetTransBarrierTemplate.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        gBufferRenderTargetTransBarrierTemplate.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        gBufferRenderTargetTransBarrierTemplate.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        gBufferRenderTargetTransBarrierTemplate.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        // swapchainRenderTargetTransBarrier.image = GetSwapchainColorImage(m_currentFrame);
+        gBufferRenderTargetTransBarrierTemplate.subresourceRange = colorOneMipOneLevelSubResRange;
+    }
+
+    gBufferRenderTargetTransBarrierTemplate.image = m_worldPosTextures[m_currentFrame].image;
+    gBufferToRenderTargetBarriers.push_back(gBufferRenderTargetTransBarrierTemplate);
+
+    gBufferRenderTargetTransBarrierTemplate.image = m_normalTextures[m_currentFrame].image;
+    gBufferToRenderTargetBarriers.push_back(gBufferRenderTargetTransBarrierTemplate);
+
+    gBufferRenderTargetTransBarrierTemplate.image = m_albedoTextures[m_currentFrame].image;
+    gBufferToRenderTargetBarriers.push_back(gBufferRenderTargetTransBarrierTemplate);
+
+    gBufferRenderTargetTransBarrierTemplate.image = m_metallicRoughnessTextures[m_currentFrame].image;
+    gBufferToRenderTargetBarriers.push_back(gBufferRenderTargetTransBarrierTemplate);
+
+    vkCmdPipelineBarrier(
+        cmdBuffer,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        0,
+        0, nullptr,
+        0, nullptr,
+        gBufferToRenderTargetBarriers.size(),
+        gBufferToRenderTargetBarriers.data());
+}
+
+// ================================================================================================================
+void PBRDeferredApp::CmdGBufferToShaderInput(
+    VkCommandBuffer cmdBuffer,
+    VkImageLayout oldLayout)
+{
+    // TODO: Finish when you are implementing the lighting pass.
+}
+
+// ================================================================================================================
+std::vector<VkRenderingAttachmentInfoKHR> PBRDeferredApp::GetGBufferAttachments()
+{
+    VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
+
+    std::vector<VkRenderingAttachmentInfoKHR> attachmentsInfos;
+
+    VkRenderingAttachmentInfoKHR attachmentInfo{};
+    {
+        attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+        // colorAttachmentInfo.imageView = app.GetSwapchainColorImageView(imageIndex);
+        attachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
+        attachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        attachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        attachmentInfo.clearValue = clearColor;
+    }
+
+    attachmentInfo.imageView = m_worldPosTextures[m_currentFrame].imageView;
+    attachmentsInfos.push_back(attachmentInfo);
+
+    attachmentInfo.imageView = m_normalTextures[m_currentFrame].imageView;
+    attachmentsInfos.push_back(attachmentInfo);
+
+    attachmentInfo.imageView = m_albedoTextures[m_currentFrame].imageView;
+    attachmentsInfos.push_back(attachmentInfo);
+
+    attachmentInfo.imageView = m_metallicRoughnessTextures[m_currentFrame].imageView;
+    attachmentsInfos.push_back(attachmentInfo);
+
+    return attachmentsInfos;
+}
+
+// ================================================================================================================
+std::vector<VkWriteDescriptorSet> PBRDeferredApp::GetGeoPassWriteDescriptorSets()
+{
+    std::vector<VkWriteDescriptorSet> geoPassWriteDescSet;
+
+    VkWriteDescriptorSet writeVpUboDesc{};
+    {
+        writeVpUboDesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeVpUboDesc.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        writeVpUboDesc.dstBinding = 0;
+        writeVpUboDesc.pBufferInfo = &m_vpUboBuffers[m_currentFrame].bufferDescInfo;
+    }
+    geoPassWriteDescSet.push_back(writeVpUboDesc);
+
+    VkWriteDescriptorSet writeOffsetSSBODesc{};
+    {
+        writeOffsetSSBODesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeOffsetSSBODesc.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        writeOffsetSSBODesc.dstBinding = 1;
+        writeOffsetSSBODesc.pBufferInfo = &m_offsetStorageBuffer.bufferDescInfo;
+    }
+    geoPassWriteDescSet.push_back(writeOffsetSSBODesc);
+
+    VkWriteDescriptorSet writeAlbedoSSBODesc{};
+    {
+        writeAlbedoSSBODesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeAlbedoSSBODesc.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        writeAlbedoSSBODesc.dstBinding = 2;
+        writeAlbedoSSBODesc.pBufferInfo = &m_albedoStorageBuffer.bufferDescInfo;
+    }
+    geoPassWriteDescSet.push_back(writeAlbedoSSBODesc);
+
+    VkWriteDescriptorSet writeMetallicRoughnessSSBODesc{};
+    {
+        writeMetallicRoughnessSSBODesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeMetallicRoughnessSSBODesc.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        writeMetallicRoughnessSSBODesc.dstBinding = 3;
+        writeMetallicRoughnessSSBODesc.pBufferInfo = &m_metallicRoughnessStorageBuffer.bufferDescInfo;
+    }
+    geoPassWriteDescSet.push_back(writeMetallicRoughnessSSBODesc);
+
+    return geoPassWriteDescSet;
 }
 
 // ================================================================================================================
@@ -389,14 +526,14 @@ void PBRDeferredApp::InitGeoPassPipelineDescriptorSetLayout()
         pipelineDesSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
         // Setting this flag tells the descriptor set layouts that no actual descriptor sets are allocated but instead pushed at command buffer creation time
         pipelineDesSetLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
-        pipelineDesSetLayoutInfo.bindingCount = 2;
-        pipelineDesSetLayoutInfo.pBindings = pipelineDesSetLayoutBindings;
+        pipelineDesSetLayoutInfo.bindingCount = bindings.size();
+        pipelineDesSetLayoutInfo.pBindings = bindings.data();
     }
 
     VK_CHECK(vkCreateDescriptorSetLayout(m_device,
                                          &pipelineDesSetLayoutInfo,
                                          nullptr,
-                                         &m_pipelineDesSetLayout));
+                                         &m_geoPassPipelineDesSetLayout));
 }
 
 // ================================================================================================================
@@ -459,7 +596,7 @@ VkPipelineDepthStencilStateCreateInfo PBRDeferredApp::CreateDepthStencilStateInf
 }
 
 // ================================================================================================================
-void PBRDeferredApp::InitPipeline()
+void PBRDeferredApp::InitGeoPassPipeline()
 {
     VkPipelineRenderingCreateInfoKHR pipelineRenderCreateInfo{};
     {
@@ -469,21 +606,288 @@ void PBRDeferredApp::InitPipeline()
         pipelineRenderCreateInfo.depthAttachmentFormat = VK_FORMAT_D16_UNORM;
     }
 
-    m_pipeline.SetPNext(&pipelineRenderCreateInfo);
-    m_pipeline.SetPipelineLayout(m_pipelineLayout);
+    m_geoPassPipeline.SetPNext(&pipelineRenderCreateInfo);
+    m_geoPassPipeline.SetPipelineLayout(m_geoPassPipelineLayout);
 
     VkPipelineVertexInputStateCreateInfo vertInputInfo = CreatePipelineVertexInputInfo();
-    m_pipeline.SetVertexInputInfo(&vertInputInfo);
+    m_geoPassPipeline.SetVertexInputInfo(&vertInputInfo);
 
     VkPipelineDepthStencilStateCreateInfo depthStencilInfo = CreateDepthStencilStateInfo();
-    m_pipeline.SetDepthStencilStateInfo(&depthStencilInfo);
+    m_geoPassPipeline.SetDepthStencilStateInfo(&depthStencilInfo);
 
     VkPipelineShaderStageCreateInfo shaderStgsInfo[2] = {};
-    shaderStgsInfo[0] = CreateDefaultShaderStgCreateInfo(m_vsShaderModule, VK_SHADER_STAGE_VERTEX_BIT);
-    shaderStgsInfo[1] = CreateDefaultShaderStgCreateInfo(m_psShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT);
-    m_pipeline.SetShaderStageInfo(shaderStgsInfo, 2);
+    shaderStgsInfo[0] = CreateDefaultShaderStgCreateInfo(m_geoPassVsShaderModule, VK_SHADER_STAGE_VERTEX_BIT);
+    shaderStgsInfo[1] = CreateDefaultShaderStgCreateInfo(m_geoPassPsShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT);
+    m_geoPassPipeline.SetShaderStageInfo(shaderStgsInfo, 2);
 
-    m_pipeline.CreatePipeline(m_device);
+    m_geoPassPipeline.CreatePipeline(m_device);
+}
+
+// ================================================================================================================
+void PBRDeferredApp::InitOffsetSSBO()
+{
+    std::vector<float> offsets;
+    constexpr float XBase = -4.5f;
+    constexpr float ZBase = -4.5f;
+    constexpr float YBase =  0.f;
+
+    for (uint32_t row = 0; row < 4; row++)
+    {
+        for (uint32_t col = 0; col < 4; col++)
+        {
+            float xOffset = XBase + row * 3.f;
+            float zOffset = ZBase + col * 3.f;
+            offsets.push_back(xOffset);
+            offsets.push_back(YBase);
+            offsets.push_back(zOffset);
+        }
+    }
+
+    const uint32_t bufferBytesCnt = offsets.size() * sizeof(float);
+    VkBufferCreateInfo bufferInfo{};
+    {
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = bufferBytesCnt;
+        bufferInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    }
+
+    VmaAllocationCreateInfo bufferAllocInfo{};
+    {
+        bufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        bufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
+                                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    }
+
+    vmaCreateBuffer(
+        *m_pAllocator,
+        &bufferInfo,
+        &bufferAllocInfo,
+        &m_offsetStorageBuffer.buffer,
+        &m_offsetStorageBuffer.bufferAlloc,
+        nullptr);
+
+    CopyRamDataToGpuBuffer(offsets.data(),
+                           m_offsetStorageBuffer.buffer,
+                           m_offsetStorageBuffer.bufferAlloc,
+                           bufferBytesCnt);
+}
+
+// ================================================================================================================
+void PBRDeferredApp::DestroyGeoPassSSBOs()
+{
+    vmaDestroyBuffer(*m_pAllocator, m_offsetStorageBuffer.buffer, m_offsetStorageBuffer.bufferAlloc);
+    vmaDestroyBuffer(*m_pAllocator, m_albedoStorageBuffer.buffer, m_albedoStorageBuffer.bufferAlloc);
+    vmaDestroyBuffer(*m_pAllocator,
+                     m_metallicRoughnessStorageBuffer.buffer,
+                     m_metallicRoughnessStorageBuffer.bufferAlloc);
+}
+
+// ================================================================================================================
+void PBRDeferredApp::InitAlbedoSSBO()
+{
+    // Just all white
+    std::vector<float> albedos;
+    for (uint32_t i = 0; i < SphereCounts; i++)
+    {
+        albedos.push_back(1.f);
+        albedos.push_back(1.f);
+        albedos.push_back(1.f);
+    }
+
+    const uint32_t bufferBytesCnt = albedos.size() * sizeof(float);
+    VkBufferCreateInfo bufferInfo{};
+    {
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = bufferBytesCnt;
+        bufferInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    }
+
+    VmaAllocationCreateInfo bufferAllocInfo{};
+    {
+        bufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        bufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
+            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    }
+
+    vmaCreateBuffer(
+        *m_pAllocator,
+        &bufferInfo,
+        &bufferAllocInfo,
+        &m_albedoStorageBuffer.buffer,
+        &m_albedoStorageBuffer.bufferAlloc,
+        nullptr);
+
+    CopyRamDataToGpuBuffer(albedos.data(),
+        m_albedoStorageBuffer.buffer,
+        m_albedoStorageBuffer.bufferAlloc,
+        bufferBytesCnt);
+}
+
+// ================================================================================================================
+void PBRDeferredApp::InitMetallicRoughnessSSBO()
+{
+    std::vector<float> metallicRoughness;
+    for (uint32_t i = 0; i < SphereCounts; i++)
+    {
+        float metallic = ((float)rand()) / ((float)RAND_MAX);
+        float roughness = ((float)rand()) / ((float)RAND_MAX);
+
+        metallicRoughness.push_back(metallic);
+        metallicRoughness.push_back(roughness);
+    }
+
+    const uint32_t bufferBytesCnt = metallicRoughness.size() * sizeof(float);
+    VkBufferCreateInfo bufferInfo{};
+    {
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = bufferBytesCnt;
+        bufferInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    }
+
+    VmaAllocationCreateInfo bufferAllocInfo{};
+    {
+        bufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        bufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
+                                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    }
+
+    vmaCreateBuffer(
+        *m_pAllocator,
+        &bufferInfo,
+        &bufferAllocInfo,
+        &m_metallicRoughnessStorageBuffer.buffer,
+        &m_metallicRoughnessStorageBuffer.bufferAlloc,
+        nullptr);
+
+    CopyRamDataToGpuBuffer(metallicRoughness.data(),
+        m_metallicRoughnessStorageBuffer.buffer,
+        m_metallicRoughnessStorageBuffer.bufferAlloc,
+        bufferBytesCnt);
+}
+
+// ================================================================================================================
+void PBRDeferredApp::InitGBuffer()
+{
+    const VkFormat PosNormalAlbedoImgFormat = VK_FORMAT_R32G32B32_SFLOAT;
+    const VkFormat MetallicRoughnessImgFormat = VK_FORMAT_R32G32_SFLOAT;
+
+    VkImageCreateInfo posNormalAlbedoImageInfo{};
+    {
+        posNormalAlbedoImageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        posNormalAlbedoImageInfo.imageType = VK_IMAGE_TYPE_2D;
+        posNormalAlbedoImageInfo.format = PosNormalAlbedoImgFormat;
+        posNormalAlbedoImageInfo.extent.width = m_swapchainImageExtent.width;
+        posNormalAlbedoImageInfo.extent.height = m_swapchainImageExtent.height;
+        posNormalAlbedoImageInfo.extent.depth = 1;
+        posNormalAlbedoImageInfo.mipLevels = 1;
+        posNormalAlbedoImageInfo.arrayLayers = 1;
+        posNormalAlbedoImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+        posNormalAlbedoImageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        posNormalAlbedoImageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+        posNormalAlbedoImageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        posNormalAlbedoImageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    }
+
+    VkImageCreateInfo metallicRoughnessImageInfo = posNormalAlbedoImageInfo;
+    metallicRoughnessImageInfo.format = MetallicRoughnessImgFormat;
+
+    VmaAllocationCreateInfo gBufferImgAllocInfo{};
+    {
+        gBufferImgAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        gBufferImgAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+    }
+
+    VkImageSubresourceRange oneMipOneLayerSubRsrcRange{};
+    {
+        oneMipOneLayerSubRsrcRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        oneMipOneLayerSubRsrcRange.baseMipLevel = 0;
+        oneMipOneLayerSubRsrcRange.levelCount = 1;
+        oneMipOneLayerSubRsrcRange.baseArrayLayer = 0;
+        oneMipOneLayerSubRsrcRange.layerCount = 1;
+    }
+
+    VkImageViewCreateInfo posNormalAlbedoImageViewInfo{};
+    {
+        posNormalAlbedoImageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        // posNormalAlbedoImageViewInfo.image = colorImage;
+        posNormalAlbedoImageViewInfo.format = PosNormalAlbedoImgFormat;
+        posNormalAlbedoImageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        posNormalAlbedoImageViewInfo.components.r = VK_COMPONENT_SWIZZLE_R;
+        posNormalAlbedoImageViewInfo.components.g = VK_COMPONENT_SWIZZLE_G;
+        posNormalAlbedoImageViewInfo.components.b = VK_COMPONENT_SWIZZLE_B;
+        posNormalAlbedoImageViewInfo.components.a = VK_COMPONENT_SWIZZLE_A;
+        posNormalAlbedoImageViewInfo.subresourceRange = oneMipOneLayerSubRsrcRange;
+    }
+
+    VkImageViewCreateInfo metallicRoughnessImageViewInfo{};
+    metallicRoughnessImageViewInfo.format = MetallicRoughnessImgFormat;
+
+    m_worldPosTextures.resize(m_swapchainImgCnt);
+    m_normalTextures.resize(m_swapchainImgCnt);
+    m_albedoTextures.resize(m_swapchainImgCnt);
+    m_metallicRoughnessTextures.resize(m_swapchainImgCnt);
+
+    for (uint32_t i = 0; i < m_swapchainImgCnt; i++)
+    {
+        vmaCreateImage(*m_pAllocator,
+                       &posNormalAlbedoImageInfo,
+                       &gBufferImgAllocInfo,
+                       &m_worldPosTextures[i].image,
+                       &m_worldPosTextures[i].imageAllocation, nullptr);
+
+        vmaCreateImage(*m_pAllocator,
+                       &posNormalAlbedoImageInfo,
+                       &gBufferImgAllocInfo,
+                       &m_normalTextures[i].image,
+                       &m_normalTextures[i].imageAllocation, nullptr);
+
+        vmaCreateImage(*m_pAllocator,
+                       &posNormalAlbedoImageInfo,
+                       &gBufferImgAllocInfo,
+                       &m_albedoTextures[i].image,
+                       &m_albedoTextures[i].imageAllocation, nullptr);
+
+        vmaCreateImage(*m_pAllocator,
+                       &metallicRoughnessImageInfo,
+                       &gBufferImgAllocInfo,
+                       &m_metallicRoughnessTextures[i].image,
+                       &m_metallicRoughnessTextures[i].imageAllocation, nullptr);
+        
+        posNormalAlbedoImageViewInfo.image = m_worldPosTextures[i].image;
+        VK_CHECK(vkCreateImageView(m_device, &posNormalAlbedoImageViewInfo, nullptr, &m_worldPosTextures[i].imageView));
+
+        posNormalAlbedoImageViewInfo.image = m_normalTextures[i].image;
+        VK_CHECK(vkCreateImageView(m_device, &posNormalAlbedoImageViewInfo, nullptr, &m_normalTextures[i].imageView));
+
+        posNormalAlbedoImageViewInfo.image = m_albedoTextures[i].image;
+        VK_CHECK(vkCreateImageView(m_device, &posNormalAlbedoImageViewInfo, nullptr, &m_albedoTextures[i].imageView));
+
+        metallicRoughnessImageViewInfo.image = m_metallicRoughnessTextures[i].image;
+        VK_CHECK(vkCreateImageView(m_device, &metallicRoughnessImageViewInfo, nullptr, &m_metallicRoughnessTextures[i].imageView));
+
+        // TODO: Create samplers
+    }
+}
+
+void PBRDeferredApp::DestroyGBuffer()
+{
+    for (uint32_t i = 0; i < m_swapchainImgCnt; i++)
+    {
+        vmaDestroyImage(*m_pAllocator, m_worldPosTextures[i].image, m_worldPosTextures[i].imageAllocation);
+        vmaDestroyImage(*m_pAllocator, m_normalTextures[i].image, m_normalTextures[i].imageAllocation);
+        vmaDestroyImage(*m_pAllocator, m_albedoTextures[i].image, m_albedoTextures[i].imageAllocation);
+        vmaDestroyImage(*m_pAllocator, m_metallicRoughnessTextures[i].image, m_metallicRoughnessTextures[i].imageAllocation);
+
+        vkDestroyImageView(m_device, m_worldPosTextures[i].imageView, nullptr);
+        vkDestroyImageView(m_device, m_normalTextures[i].imageView, nullptr);
+        vkDestroyImageView(m_device, m_albedoTextures[i].imageView, nullptr);
+        vkDestroyImageView(m_device, m_metallicRoughnessTextures[i].imageView, nullptr);
+
+        // TODO: Destroy samplers
+    }
 }
 
 // ================================================================================================================
@@ -529,12 +933,16 @@ void PBRDeferredApp::AppInit()
     ReadInSphereData();
     InitSphereVertexIndexBuffers();
 
-    InitShaderModules();
-    InitPipelineDescriptorSetLayout();
-    InitPipelineLayout();
-    InitPipeline();
+    InitGeoPassShaderModules();
+    InitGeoPassPipelineDescriptorSetLayout();
+    InitGeoPassPipelineLayout();
+    InitGeoPassPipeline();
 
     InitVpUboObjects();
-    InitFragUboObjects();
+    InitOffsetSSBO();
+    InitAlbedoSSBO();
+    InitMetallicRoughnessSSBO();
+    InitGBuffer();
+    // InitFragUboObjects();
     InitSwapchainSyncObjects();
 }

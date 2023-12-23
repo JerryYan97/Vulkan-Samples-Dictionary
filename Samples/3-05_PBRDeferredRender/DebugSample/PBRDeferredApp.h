@@ -25,6 +25,8 @@ struct GpuImg
     VkImage               image;
     VmaAllocation         imageAllocation;
     VkDescriptorImageInfo imageDescInfo;
+    VkImageView           imageView;
+    VkSampler             imageSampler;
 };
 
 class PBRDeferredApp : public SharedLib::GlfwApplication
@@ -50,11 +52,23 @@ public:
     VkBuffer GetIdxBuffer() { return m_idxBuffer.buffer; }
     VkBuffer GetVertBuffer() { return m_vertBuffer.buffer; }
 
+    void CmdGBufferToRenderTarget(VkCommandBuffer cmdBuffer, VkImageLayout oldLayout);
+    void CmdGBufferToShaderInput(VkCommandBuffer cmdBuffer, VkImageLayout oldLayout);
+    std::vector<VkRenderingAttachmentInfoKHR> GetGBufferAttachments();
+
 private:
     void InitGeoPassPipeline();
     void InitGeoPassPipelineDescriptorSetLayout();
     void InitGeoPassPipelineLayout();
     void InitGeoPassShaderModules();
+
+    void InitOffsetSSBO();
+    void InitAlbedoSSBO();
+    void InitMetallicRoughnessSSBO();
+    void DestroyGeoPassSSBOs();
+
+    void InitGBuffer();
+    void DestroyGBuffer();
     
     void InitSphereVertexIndexBuffers(); // Read in sphere data, create Sphere's GPU buffer objects and transfer data 
                                          // to the GPU buffers.
@@ -72,17 +86,10 @@ private:
     VkPipelineVertexInputStateCreateInfo CreatePipelineVertexInputInfo();
     VkPipelineDepthStencilStateCreateInfo CreateDepthStencilStateInfo();
 
-    SharedLib::Camera*     m_pCamera;
-    std::vector<GpuBuffer> m_vpUboBuffers;
-
-    // VkBuffer               m_lightPosBuffer;
-    // VmaAllocation          m_lightPosBufferAlloc;
-    // VkDescriptorBufferInfo m_lightPosSSBODescInfo;
-
-    GpuBuffer m_albedoBuffer;
-
-    // Descriptor set 0 bindings
-    std::vector<VkWriteDescriptorSet> m_writeDescriptorSet0;
+    SharedLib::Camera* m_pCamera;
+    
+    GpuBuffer m_lightPosStorageBuffer;
+    GpuBuffer m_lightRadianceStorageBuffer;
 
     uint32_t  m_vertBufferByteCnt;
     uint32_t  m_idxBufferByteCnt;
@@ -105,4 +112,10 @@ private:
     std::vector<GpuImg> m_albedoTextures;
     std::vector<GpuImg> m_normalTextures;
     std::vector<GpuImg> m_metallicRoughnessTextures;
+
+    // Geo pass Gpu Rsrc inputs
+    std::vector<GpuBuffer> m_vpUboBuffers;
+    GpuBuffer m_offsetStorageBuffer;
+    GpuBuffer m_albedoStorageBuffer;
+    GpuBuffer m_metallicRoughnessStorageBuffer;
 };

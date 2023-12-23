@@ -53,38 +53,11 @@ int main()
         }
         VK_CHECK(vkBeginCommandBuffer(currentCmdBuffer, &beginInfo));
 
-        // Transform the layout of the swapchain from undefined to render target.
-        VkImageMemoryBarrier swapchainRenderTargetTransBarrier{};
-        {
-            swapchainRenderTargetTransBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            swapchainRenderTargetTransBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-            swapchainRenderTargetTransBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-            swapchainRenderTargetTransBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            swapchainRenderTargetTransBarrier.image = app.GetSwapchainColorImage(imageIndex);
-            swapchainRenderTargetTransBarrier.subresourceRange = swapchainPresentSubResRange;
-        }
+        app.CmdSwapchainColorImgToRenderTarget(currentCmdBuffer);
+        app.CmdGBufferToRenderTarget(currentCmdBuffer, VK_IMAGE_LAYOUT_UNDEFINED);
 
-        vkCmdPipelineBarrier(
-            currentCmdBuffer,
-            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            0,
-            0, nullptr,
-            0, nullptr,
-            1, &swapchainRenderTargetTransBarrier);
-
-        // Draw the scene
-        VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
-
-        VkRenderingAttachmentInfoKHR colorAttachmentInfo{};
-        {
-            colorAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-            colorAttachmentInfo.imageView = app.GetSwapchainColorImageView(imageIndex);
-            colorAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
-            colorAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            colorAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-            colorAttachmentInfo.clearValue = clearColor;
-        }
+        // Geometry pass
+        std::vector<VkRenderingAttachmentInfoKHR> gBufferAttachmentsInfos = app.GetGBufferAttachments();
 
         VkClearValue depthClearVal{};
         depthClearVal.depthStencil.depth = 0.f;
@@ -104,22 +77,22 @@ int main()
             renderInfo.renderArea.offset = { 0, 0 };
             renderInfo.renderArea.extent = swapchainImageExtent;
             renderInfo.layerCount = 1;
-            renderInfo.colorAttachmentCount = 1;
-            renderInfo.pColorAttachments = &colorAttachmentInfo;
+            renderInfo.colorAttachmentCount = gBufferAttachmentsInfos.size();
+            renderInfo.pColorAttachments = gBufferAttachmentsInfos.data();
             renderInfo.pDepthAttachment = &depthAttachmentInfo;
         }
 
         vkCmdBeginRendering(currentCmdBuffer, &renderInfo);
 
         // Bind the pipeline descriptor sets
-        std::vector<VkWriteDescriptorSet> writeDescriptorSet0 = app.GetWriteDescriptorSets();
+        std::vector<VkWriteDescriptorSet> geoPassWriteDescriptorSet0 = app.GetGeoPassWriteDescriptorSets();
         app.m_vkCmdPushDescriptorSetKHR(currentCmdBuffer,
                                         VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                        app.GetPipelineLayout(),
-                                        0, writeDescriptorSet0.size(), writeDescriptorSet0.data());
+                                        app.GetGeoPassPipelineLayout(),
+                                        0, geoPassWriteDescriptorSet0.size(), geoPassWriteDescriptorSet0.data());
 
         // Bind the graphics pipeline
-        vkCmdBindPipeline(currentCmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, app.GetPipeline());
+        vkCmdBindPipeline(currentCmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, app.GetGeoPassPipeline());
 
         // Set the viewport
         VkViewport viewport{};
@@ -149,30 +122,11 @@ int main()
         vkCmdBindVertexBuffers(currentCmdBuffer, 0, 1, &vertBuffer, &vbOffset);
         vkCmdBindIndexBuffer(currentCmdBuffer, idxBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-        vkCmdDrawIndexed(currentCmdBuffer, app.GetIdxCnt(), 14, 0, 0, 0);
+        vkCmdDrawIndexed(currentCmdBuffer, app.GetIdxCnt(), SphereCounts, 0, 0, 0);
 
         vkCmdEndRendering(currentCmdBuffer);
 
-        // Transform the swapchain image layout from render target to present.
-        // Transform the layout of the swapchain from undefined to render target.
-        VkImageMemoryBarrier swapchainPresentTransBarrier{};
-        {
-            swapchainPresentTransBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            swapchainPresentTransBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-            swapchainPresentTransBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-            swapchainPresentTransBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            swapchainPresentTransBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-            swapchainPresentTransBarrier.image = app.GetSwapchainColorImage(imageIndex);
-            swapchainPresentTransBarrier.subresourceRange = swapchainPresentSubResRange;
-        }
-
-        vkCmdPipelineBarrier(currentCmdBuffer,
-            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
-            0,
-            0, nullptr,
-            0, nullptr,
-            1, &swapchainPresentTransBarrier);
+        app.CmdSwapchainColorImgToPresent(currentCmdBuffer);
 
         VK_CHECK(vkEndCommandBuffer(currentCmdBuffer));
 
