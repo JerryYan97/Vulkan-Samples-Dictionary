@@ -112,6 +112,7 @@ private:
     std::vector<GpuImg> m_albedoTextures;
     std::vector<GpuImg> m_normalTextures;
     std::vector<GpuImg> m_metallicRoughnessTextures;
+    std::vector<VkFormat> m_gBufferFormats;
 
     // Geo pass Gpu Rsrc inputs
     std::vector<GpuBuffer> m_vpUboBuffers;

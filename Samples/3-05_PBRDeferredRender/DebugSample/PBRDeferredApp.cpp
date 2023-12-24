@@ -415,7 +415,8 @@ std::vector<VkWriteDescriptorSet> PBRDeferredApp::GetGeoPassWriteDescriptorSets(
     {
         writeVpUboDesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         writeVpUboDesc.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        writeVpUboDesc.dstBinding = 0;
+        writeVpUboDesc.descriptorCount = 1;
+        writeVpUboDesc.dstBinding = 0;        
         writeVpUboDesc.pBufferInfo = &m_vpUboBuffers[m_currentFrame].bufferDescInfo;
     }
     geoPassWriteDescSet.push_back(writeVpUboDesc);
@@ -424,6 +425,7 @@ std::vector<VkWriteDescriptorSet> PBRDeferredApp::GetGeoPassWriteDescriptorSets(
     {
         writeOffsetSSBODesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         writeOffsetSSBODesc.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        writeOffsetSSBODesc.descriptorCount = 1;
         writeOffsetSSBODesc.dstBinding = 1;
         writeOffsetSSBODesc.pBufferInfo = &m_offsetStorageBuffer.bufferDescInfo;
     }
@@ -433,6 +435,7 @@ std::vector<VkWriteDescriptorSet> PBRDeferredApp::GetGeoPassWriteDescriptorSets(
     {
         writeAlbedoSSBODesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         writeAlbedoSSBODesc.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        writeAlbedoSSBODesc.descriptorCount = 1;
         writeAlbedoSSBODesc.dstBinding = 2;
         writeAlbedoSSBODesc.pBufferInfo = &m_albedoStorageBuffer.bufferDescInfo;
     }
@@ -442,6 +445,7 @@ std::vector<VkWriteDescriptorSet> PBRDeferredApp::GetGeoPassWriteDescriptorSets(
     {
         writeMetallicRoughnessSSBODesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         writeMetallicRoughnessSSBODesc.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        writeMetallicRoughnessSSBODesc.descriptorCount = 1;
         writeMetallicRoughnessSSBODesc.dstBinding = 3;
         writeMetallicRoughnessSSBODesc.pBufferInfo = &m_metallicRoughnessStorageBuffer.bufferDescInfo;
     }
@@ -502,7 +506,7 @@ void PBRDeferredApp::InitGeoPassPipelineDescriptorSetLayout()
     VkDescriptorSetLayoutBinding albedoSSBOBinding{};
     {
         albedoSSBOBinding.binding = 2;
-        albedoSSBOBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        albedoSSBOBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
         albedoSSBOBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         albedoSSBOBinding.descriptorCount = 1;
     }
@@ -512,10 +516,11 @@ void PBRDeferredApp::InitGeoPassPipelineDescriptorSetLayout()
     VkDescriptorSetLayoutBinding metallicRoughnessSSBOBinding{};
     {
         metallicRoughnessSSBOBinding.binding = 3;
-        metallicRoughnessSSBOBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        metallicRoughnessSSBOBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
         metallicRoughnessSSBOBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         metallicRoughnessSSBOBinding.descriptorCount = 1;
     }
+    bindings.push_back(metallicRoughnessSSBOBinding);
 
     // Create pipeline's descriptors layout
     // The Vulkan spec states: The VkDescriptorSetLayoutBinding::binding members of the elements of the pBindings array 
@@ -601,8 +606,8 @@ void PBRDeferredApp::InitGeoPassPipeline()
     VkPipelineRenderingCreateInfoKHR pipelineRenderCreateInfo{};
     {
         pipelineRenderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
-        pipelineRenderCreateInfo.colorAttachmentCount = 1;
-        pipelineRenderCreateInfo.pColorAttachmentFormats = &m_choisenSurfaceFormat.format;
+        pipelineRenderCreateInfo.colorAttachmentCount = m_gBufferFormats.size();
+        pipelineRenderCreateInfo.pColorAttachmentFormats = m_gBufferFormats.data();
         pipelineRenderCreateInfo.depthAttachmentFormat = VK_FORMAT_D16_UNORM;
     }
 
@@ -671,6 +676,14 @@ void PBRDeferredApp::InitOffsetSSBO()
                            m_offsetStorageBuffer.buffer,
                            m_offsetStorageBuffer.bufferAlloc,
                            bufferBytesCnt);
+
+    VkDescriptorBufferInfo offsetSSBODescInfo{};
+    {
+        offsetSSBODescInfo.buffer = m_offsetStorageBuffer.buffer;
+        offsetSSBODescInfo.offset = 0;
+        offsetSSBODescInfo.range = bufferBytesCnt;
+    }
+    m_offsetStorageBuffer.bufferDescInfo = offsetSSBODescInfo;
 }
 
 // ================================================================================================================
@@ -723,6 +736,14 @@ void PBRDeferredApp::InitAlbedoSSBO()
         m_albedoStorageBuffer.buffer,
         m_albedoStorageBuffer.bufferAlloc,
         bufferBytesCnt);
+
+    VkDescriptorBufferInfo albedoSSBODescInfo{};
+    {
+        albedoSSBODescInfo.buffer = m_albedoStorageBuffer.buffer;
+        albedoSSBODescInfo.offset = 0;
+        albedoSSBODescInfo.range = bufferBytesCnt;
+    }
+    m_albedoStorageBuffer.bufferDescInfo = albedoSSBODescInfo;
 }
 
 // ================================================================================================================
@@ -766,12 +787,21 @@ void PBRDeferredApp::InitMetallicRoughnessSSBO()
         m_metallicRoughnessStorageBuffer.buffer,
         m_metallicRoughnessStorageBuffer.bufferAlloc,
         bufferBytesCnt);
+
+    VkDescriptorBufferInfo metallicRoughnessSSBODescInfo{};
+    {
+        metallicRoughnessSSBODescInfo.buffer = m_metallicRoughnessStorageBuffer.buffer;
+        metallicRoughnessSSBODescInfo.offset = 0;
+        metallicRoughnessSSBODescInfo.range = bufferBytesCnt;
+    }
+    m_metallicRoughnessStorageBuffer.bufferDescInfo = metallicRoughnessSSBODescInfo;
 }
 
 // ================================================================================================================
 void PBRDeferredApp::InitGBuffer()
 {
-    const VkFormat PosNormalAlbedoImgFormat = VK_FORMAT_R32G32B32_SFLOAT;
+    // It looks like AMD doesn't support the R32G32B32_SFLOAT image format.
+    const VkFormat PosNormalAlbedoImgFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
     const VkFormat MetallicRoughnessImgFormat = VK_FORMAT_R32G32_SFLOAT;
 
     VkImageCreateInfo posNormalAlbedoImageInfo{};
@@ -822,8 +852,13 @@ void PBRDeferredApp::InitGBuffer()
         posNormalAlbedoImageViewInfo.subresourceRange = oneMipOneLayerSubRsrcRange;
     }
 
-    VkImageViewCreateInfo metallicRoughnessImageViewInfo{};
+    VkImageViewCreateInfo metallicRoughnessImageViewInfo = posNormalAlbedoImageViewInfo;
     metallicRoughnessImageViewInfo.format = MetallicRoughnessImgFormat;
+
+    m_gBufferFormats.push_back(PosNormalAlbedoImgFormat);
+    m_gBufferFormats.push_back(PosNormalAlbedoImgFormat);
+    m_gBufferFormats.push_back(PosNormalAlbedoImgFormat);
+    m_gBufferFormats.push_back(MetallicRoughnessImgFormat);
 
     m_worldPosTextures.resize(m_swapchainImgCnt);
     m_normalTextures.resize(m_swapchainImgCnt);

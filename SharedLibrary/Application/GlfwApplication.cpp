@@ -500,7 +500,7 @@ namespace SharedLib
             swapchainRenderTargetTransBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
             swapchainRenderTargetTransBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
             swapchainRenderTargetTransBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            swapchainRenderTargetTransBarrier.image = GetSwapchainColorImage(m_currentFrame);
+            swapchainRenderTargetTransBarrier.image = GetSwapchainColorImage(m_swapchainNextImgId);
             swapchainRenderTargetTransBarrier.subresourceRange = swapchainPresentSubResRange;
         }
 
@@ -536,7 +536,7 @@ namespace SharedLib
             swapchainPresentTransBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
             swapchainPresentTransBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
             swapchainPresentTransBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-            swapchainPresentTransBarrier.image = GetSwapchainColorImage(m_currentFrame);
+            swapchainPresentTransBarrier.image = GetSwapchainColorImage(m_swapchainNextImgId);
             swapchainPresentTransBarrier.subresourceRange = swapchainPresentSubResRange;
         }
 
