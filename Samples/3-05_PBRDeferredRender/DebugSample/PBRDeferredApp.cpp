@@ -71,6 +71,9 @@ void PBRDeferredApp::DestroyVpUboObjects()
 // ================================================================================================================
 void PBRDeferredApp::InitVpUboObjects()
 {
+    float defaultPos[] = {-12.f, 0.f, 0.f};
+    m_pCamera->SetPos(defaultPos);
+
     // The alignment of a vec3 is 4 floats and the element alignment of a struct is the largest element alignment,
     // which is also the 4 float. Therefore, we need 32 floats as the buffer to store the VP's parameters.
     VkBufferCreateInfo bufferInfo{};
@@ -94,7 +97,6 @@ void PBRDeferredApp::InitVpUboObjects()
     float tmpViewMat[16] = {};
     float tmpPersMat[16] = {};
     m_pCamera->GenViewPerspectiveMatrices(tmpViewMat, tmpPersMat, vpMat);
-    SharedLib::MatTranspose(vpMat, 4);
 
     for (uint32_t i = 0; i < m_swapchainImgCnt; i++)
     {
@@ -542,7 +544,7 @@ void PBRDeferredApp::InitGeoPassPipelineDescriptorSetLayout()
 }
 
 // ================================================================================================================
-VkPipelineVertexInputStateCreateInfo PBRDeferredApp::CreatePipelineVertexInputInfo()
+VkPipelineVertexInputStateCreateInfo PBRDeferredApp::CreateGeoPassPipelineVertexInputInfo()
 {
     // Specifying all kinds of pipeline states
     // Vertex input state
@@ -585,7 +587,7 @@ VkPipelineVertexInputStateCreateInfo PBRDeferredApp::CreatePipelineVertexInputIn
 }
 
 // ================================================================================================================
-VkPipelineDepthStencilStateCreateInfo PBRDeferredApp::CreateDepthStencilStateInfo()
+VkPipelineDepthStencilStateCreateInfo PBRDeferredApp::CreateGeoPassDepthStencilStateInfo()
 {
     VkPipelineDepthStencilStateCreateInfo depthStencilInfo{};
     {
@@ -598,6 +600,23 @@ VkPipelineDepthStencilStateCreateInfo PBRDeferredApp::CreateDepthStencilStateInf
     }
 
     return depthStencilInfo;
+}
+
+// ================================================================================================================
+std::vector<VkPipelineColorBlendAttachmentState> PBRDeferredApp::CreateGeoPassPipelineColorBlendAttachmentStates()
+{
+    std::vector<VkPipelineColorBlendAttachmentState> colorBlendAttachmentStates;
+
+    VkPipelineColorBlendAttachmentState colorBlendAttachmentState = {};
+    colorBlendAttachmentState.colorWriteMask = 0xf;
+    colorBlendAttachmentState.blendEnable = VK_FALSE;
+
+    colorBlendAttachmentStates.push_back(colorBlendAttachmentState);
+    colorBlendAttachmentStates.push_back(colorBlendAttachmentState);
+    colorBlendAttachmentStates.push_back(colorBlendAttachmentState);
+    colorBlendAttachmentStates.push_back(colorBlendAttachmentState);
+
+    return colorBlendAttachmentStates;
 }
 
 // ================================================================================================================
@@ -614,11 +633,14 @@ void PBRDeferredApp::InitGeoPassPipeline()
     m_geoPassPipeline.SetPNext(&pipelineRenderCreateInfo);
     m_geoPassPipeline.SetPipelineLayout(m_geoPassPipelineLayout);
 
-    VkPipelineVertexInputStateCreateInfo vertInputInfo = CreatePipelineVertexInputInfo();
+    VkPipelineVertexInputStateCreateInfo vertInputInfo = CreateGeoPassPipelineVertexInputInfo();
     m_geoPassPipeline.SetVertexInputInfo(&vertInputInfo);
 
-    VkPipelineDepthStencilStateCreateInfo depthStencilInfo = CreateDepthStencilStateInfo();
+    VkPipelineDepthStencilStateCreateInfo depthStencilInfo = CreateGeoPassDepthStencilStateInfo();
     m_geoPassPipeline.SetDepthStencilStateInfo(&depthStencilInfo);
+
+    std::vector<VkPipelineColorBlendAttachmentState> colorAttachmentsBlendInfos = CreateGeoPassPipelineColorBlendAttachmentStates();
+    m_geoPassPipeline.SetPipelineColorBlendInfo(colorAttachmentsBlendInfos);
 
     VkPipelineShaderStageCreateInfo shaderStgsInfo[2] = {};
     shaderStgsInfo[0] = CreateDefaultShaderStgCreateInfo(m_geoPassVsShaderModule, VK_SHADER_STAGE_VERTEX_BIT);
@@ -645,6 +667,7 @@ void PBRDeferredApp::InitOffsetSSBO()
             offsets.push_back(xOffset);
             offsets.push_back(YBase);
             offsets.push_back(zOffset);
+            offsets.push_back(1.f);
         }
     }
 
@@ -703,6 +726,7 @@ void PBRDeferredApp::InitAlbedoSSBO()
     std::vector<float> albedos;
     for (uint32_t i = 0; i < SphereCounts; i++)
     {
+        albedos.push_back(1.f);
         albedos.push_back(1.f);
         albedos.push_back(1.f);
         albedos.push_back(1.f);
@@ -968,16 +992,17 @@ void PBRDeferredApp::AppInit()
     ReadInSphereData();
     InitSphereVertexIndexBuffers();
 
-    InitGeoPassShaderModules();
-    InitGeoPassPipelineDescriptorSetLayout();
-    InitGeoPassPipelineLayout();
-    InitGeoPassPipeline();
-
     InitVpUboObjects();
     InitOffsetSSBO();
     InitAlbedoSSBO();
     InitMetallicRoughnessSSBO();
     InitGBuffer();
+
+    InitGeoPassShaderModules();
+    InitGeoPassPipelineDescriptorSetLayout();
+    InitGeoPassPipelineLayout();
+    InitGeoPassPipeline();
+
     // InitFragUboObjects();
     InitSwapchainSyncObjects();
 }

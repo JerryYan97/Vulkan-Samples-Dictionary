@@ -11,7 +11,7 @@ namespace SharedLib
 {
     struct PipelineColorBlendInfo
     {
-        VkPipelineColorBlendAttachmentState colorBlendAttachment;
+        std::vector<VkPipelineColorBlendAttachmentState> colorBlendAttachments;
         VkPipelineColorBlendStateCreateInfo colorBlending;
     };
 
@@ -40,6 +40,8 @@ namespace SharedLib
         void SetPipelineLayout(VkPipelineLayout pipelineLayout) { m_pipelineLayout = pipelineLayout; }
         void SetDepthStencilStateInfo(VkPipelineDepthStencilStateCreateInfo* pDepthStencilInfo) 
             { m_pDepthStencilState = pDepthStencilInfo; }
+
+        void SetPipelineColorBlendInfo(std::vector<VkPipelineColorBlendAttachmentState>& pipelineColorBlendAttachmentStates); // For the MRT.
 
     protected:
 
