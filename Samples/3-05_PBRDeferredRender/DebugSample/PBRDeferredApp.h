@@ -52,8 +52,14 @@ public:
     VkBuffer GetIdxBuffer() { return m_idxBuffer.buffer; }
     VkBuffer GetVertBuffer() { return m_vertBuffer.buffer; }
 
-    void CmdGBufferToRenderTarget(VkCommandBuffer cmdBuffer, VkImageLayout oldLayout);
-    void CmdGBufferToShaderInput(VkCommandBuffer cmdBuffer, VkImageLayout oldLayout);
+    void CmdGBufferLayoutTrans(VkCommandBuffer      cmdBuffer,
+                               VkImageLayout        oldLayout,
+                               VkImageLayout        newLayout,
+                               VkAccessFlags        srcAccessMask,
+                               VkAccessFlags        dstAccessMask,
+                               VkPipelineStageFlags srcStageMask,
+                               VkPipelineStageFlags dstStageMask);
+
     std::vector<VkRenderingAttachmentInfoKHR> GetGBufferAttachments();
 
 private:
@@ -78,10 +84,8 @@ private:
     void InitVpUboObjects();
     void DestroyVpUboObjects();
 
-    // void Init
-
-    // void InitFragUboObjects();
-    // void DestroyFragUboObjects();
+    void InitLightPosRadianceSSBOs();
+    void DestroyLightPosRadianceSSBOs();
 
     VkPipelineVertexInputStateCreateInfo CreateGeoPassPipelineVertexInputInfo();
     VkPipelineDepthStencilStateCreateInfo CreateGeoPassDepthStencilStateInfo();
@@ -107,6 +111,13 @@ private:
     VkDescriptorSetLayout m_geoPassPipelineDesSetLayout;
     VkPipelineLayout      m_geoPassPipelineLayout;
     SharedLib::Pipeline   m_geoPassPipeline;
+
+    // Deferred lighting pipeline resources
+    VkShaderModule        m_deferredLightingPassVsShaderModule;
+    VkShaderModule        m_deferredLightingPassPsShaderModule;
+    VkDescriptorSetLayout m_deferredLightingPassPipelineDesSetLayout;
+    VkPipelineLayout      m_deferredLightingPassPipelineLayout;
+    SharedLib::Pipeline   m_deferredLightingPassPipeline;
 
     // G-Buffer textures
     std::vector<GpuImg> m_worldPosTextures;

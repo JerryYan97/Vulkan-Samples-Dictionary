@@ -52,37 +52,42 @@ int main()
             beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         }
         VK_CHECK(vkBeginCommandBuffer(currentCmdBuffer, &beginInfo));
+        
+        app.CmdGBufferLayoutTrans(currentCmdBuffer,
+                                  VK_IMAGE_LAYOUT_UNDEFINED,
+                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                  VK_ACCESS_NONE,
+                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                  VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 
-        app.CmdSwapchainColorImgToRenderTarget(currentCmdBuffer);
-        app.CmdGBufferToRenderTarget(currentCmdBuffer, VK_IMAGE_LAYOUT_UNDEFINED);
-
-        // Geometry pass
+        /* ------------- Geometry Pass ------------- */
         std::vector<VkRenderingAttachmentInfoKHR> gBufferAttachmentsInfos = app.GetGBufferAttachments();
 
         VkClearValue depthClearVal{};
         depthClearVal.depthStencil.depth = 0.f;
-        VkRenderingAttachmentInfoKHR depthAttachmentInfo{};
+        VkRenderingAttachmentInfoKHR geoPassDepthAttachmentInfo{};
         {
-            depthAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-            depthAttachmentInfo.imageView = app.GetSwapchainDepthImageView(imageIndex);
-            depthAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
-            depthAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            depthAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-            depthAttachmentInfo.clearValue = depthClearVal;
+            geoPassDepthAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+            geoPassDepthAttachmentInfo.imageView = app.GetSwapchainDepthImageView(imageIndex);
+            geoPassDepthAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
+            geoPassDepthAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            geoPassDepthAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            geoPassDepthAttachmentInfo.clearValue = depthClearVal;
         }
 
-        VkRenderingInfoKHR renderInfo{};
+        VkRenderingInfoKHR geoPassRenderInfo{};
         {
-            renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
-            renderInfo.renderArea.offset = { 0, 0 };
-            renderInfo.renderArea.extent = swapchainImageExtent;
-            renderInfo.layerCount = 1;
-            renderInfo.colorAttachmentCount = gBufferAttachmentsInfos.size();
-            renderInfo.pColorAttachments = gBufferAttachmentsInfos.data();
-            renderInfo.pDepthAttachment = &depthAttachmentInfo;
+            geoPassRenderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+            geoPassRenderInfo.renderArea.offset = { 0, 0 };
+            geoPassRenderInfo.renderArea.extent = swapchainImageExtent;
+            geoPassRenderInfo.layerCount = 1;
+            geoPassRenderInfo.colorAttachmentCount = gBufferAttachmentsInfos.size();
+            geoPassRenderInfo.pColorAttachments = gBufferAttachmentsInfos.data();
+            geoPassRenderInfo.pDepthAttachment = &geoPassDepthAttachmentInfo;
         }
 
-        vkCmdBeginRendering(currentCmdBuffer, &renderInfo);
+        vkCmdBeginRendering(currentCmdBuffer, &geoPassRenderInfo);
 
         // Bind the pipeline descriptor sets
         std::vector<VkWriteDescriptorSet> geoPassWriteDescriptorSet0 = app.GetGeoPassWriteDescriptorSets();
@@ -125,6 +130,42 @@ int main()
         vkCmdDrawIndexed(currentCmdBuffer, app.GetIdxCnt(), SphereCounts, 0, 0, 0);
 
         vkCmdEndRendering(currentCmdBuffer);
+
+        /* ----------------------------------------- */
+
+        app.CmdGBufferLayoutTrans(currentCmdBuffer,
+                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                  VK_ACCESS_SHADER_READ_BIT,
+                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+
+
+        app.CmdSwapchainColorImgLayoutTrans(currentCmdBuffer,
+                                            VK_IMAGE_LAYOUT_UNDEFINED,
+                                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                            VK_ACCESS_NONE,
+                                            VK_ACCESS_TRANSFER_WRITE_BIT,
+                                            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                            VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+        app.CmdSwapchainColorImgClear(currentCmdBuffer);
+
+        app.CmdSwapchainColorImgLayoutTrans(currentCmdBuffer,
+                                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                            VK_ACCESS_TRANSFER_WRITE_BIT,
+                                            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                            VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+
+        /* -------- Deferred Lighting Pass --------- */
+
+
+
+        /* ----------------------------------------- */
+
 
         app.CmdSwapchainColorImgToPresent(currentCmdBuffer);
 

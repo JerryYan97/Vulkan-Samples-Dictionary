@@ -2,17 +2,39 @@
 
 struct SceneInfoUbo
 {
-    float3 lightPositions[4];
 	float3 cameraPosition;
 };
 
-cbuffer UBO1 : register(b1) { SceneInfoUbo i_sceneInfo; }
+struct RenderTargetInfo
+{
+	float width;
+	float height;
+};
+
+[[vk::binding(2, 0)]] cbuffer UBO1 { SceneInfoUbo i_sceneInfo; }
+
+[[vk::binding(3, 0)]] Texture2D    i_worldPosTexture;
+[[vk::binding(3, 0)]] SamplerState i_worldPosSamplerState;
+
+[[vk::binding(4, 0)]] Texture2D i_worldNormalTexture;
+[[vk::binding(4, 0)]] SamplerState i_worldNormalSamplerState;
+
+[[vk::binding(5, 0)]] Texture2D i_albedoTexture;
+[[vk::binding(5, 0)]] SamplerState i_albedoSamplerState;
+
+[[vk::binding(5, 0)]] Texture2D i_metallicRoughnessTexture;
+[[vk::binding(5, 0)]] SamplerState i_metallicRoughnessSamplerState;
+
+[[vk::binding(1, 0)]] StructuredBuffer<float3> lightsPosStorageData;
+[[vk::binding(6, 0)]] StructuredBuffer<float3> lightsRadianceStorageData;
+
+[[vk::push_constant]] RenderTargetInfo pixelWidthHeight;
 
 float4 main(
-    float4 i_pixelWorldPos    : POSITION0,
-    float4 i_pixelWorldNormal : NORMAL0,
-    float2 i_params           : TEXCOORD0) : SV_Target
+	float4 i_pixelPos : SV_POSITION,
+    float4 i_instId : BLENDINDICES0) : SV_Target
 {
+	/*
     float3 lightColor = float3(24.0, 24.0, 24.0);
 
 	// Gold
@@ -68,4 +90,6 @@ float4 main(
     color = pow(color, float3(1.0/2.2, 1.0/2.2, 1.0/2.2));  
 
 	return float4(color, 1.0);
+	*/
+	return i_pixelPos;
 }

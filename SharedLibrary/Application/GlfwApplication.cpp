@@ -326,7 +326,7 @@ namespace SharedLib
             swapchainCreateInfo.imageColorSpace = m_choisenSurfaceFormat.colorSpace;
             swapchainCreateInfo.imageExtent = m_swapchainImageExtent;
             swapchainCreateInfo.imageArrayLayers = 1;
-            swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+            swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
             if (m_graphicsQueueFamilyIdx != m_presentQueueFamilyIdx)
             {
                 swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
@@ -481,8 +481,36 @@ namespace SharedLib
     }
 
     // ================================================================================================================
-    void GlfwApplication::CmdSwapchainColorImgToRenderTarget(
+    void GlfwApplication::CmdSwapchainColorImgClear(
         VkCommandBuffer cmdBuffer)
+    {
+        VkClearColorValue clearColor = { 0.0f, 0.0f, 0.0f, 1.0f };
+
+        VkImageSubresourceRange swapchainPresentSubResRange{};
+        {
+            swapchainPresentSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            swapchainPresentSubResRange.baseMipLevel = 0;
+            swapchainPresentSubResRange.levelCount = 1;
+            swapchainPresentSubResRange.baseArrayLayer = 0;
+            swapchainPresentSubResRange.layerCount = 1;
+        }
+
+        vkCmdClearColorImage(cmdBuffer,
+                             GetSwapchainColorImage(m_swapchainNextImgId),
+                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                             &clearColor,
+                             1, &swapchainPresentSubResRange);
+    }
+
+    // ================================================================================================================
+    void GlfwApplication::CmdSwapchainColorImgLayoutTrans(
+        VkCommandBuffer      cmdBuffer,
+        VkImageLayout        oldLayout,
+        VkImageLayout        newLayout,
+        VkAccessFlags        srcAccessMask,
+        VkAccessFlags        dstAccessMask,
+        VkPipelineStageFlags srcStageMask,
+        VkPipelineStageFlags dstStageMask)
     {
         VkImageSubresourceRange swapchainPresentSubResRange{};
         {
@@ -497,17 +525,21 @@ namespace SharedLib
         VkImageMemoryBarrier swapchainRenderTargetTransBarrier{};
         {
             swapchainRenderTargetTransBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            swapchainRenderTargetTransBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-            swapchainRenderTargetTransBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-            swapchainRenderTargetTransBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            swapchainRenderTargetTransBarrier.srcAccessMask = srcAccessMask;
+            swapchainRenderTargetTransBarrier.dstAccessMask = dstAccessMask;
+            swapchainRenderTargetTransBarrier.oldLayout = oldLayout;
+            swapchainRenderTargetTransBarrier.newLayout = newLayout;
+            // swapchainRenderTargetTransBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            // swapchainRenderTargetTransBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            // swapchainRenderTargetTransBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
             swapchainRenderTargetTransBarrier.image = GetSwapchainColorImage(m_swapchainNextImgId);
             swapchainRenderTargetTransBarrier.subresourceRange = swapchainPresentSubResRange;
         }
 
         vkCmdPipelineBarrier(
             cmdBuffer,
-            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            srcStageMask,
+            dstStageMask,
             0,
             0, nullptr,
             0, nullptr,

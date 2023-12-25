@@ -246,82 +246,22 @@ void PBRDeferredApp::DestroySphereVertexIndexBuffers()
 }
 
 // ================================================================================================================
-/*
-void PBRDeferredApp::InitFragUboObjects()
-{
-    // The alignment of a vec3 is 4 floats and the element alignment of a struct is the largest element alignment,
-    // which is also the 4 float. Therefore, we need 16 floats as the buffer to store the Camera's parameters.
-    VkBufferCreateInfo bufferInfo{};
-    {
-        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = 20 * sizeof(float);
-        bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    }
-
-    VmaAllocationCreateInfo bufferAllocInfo{};
-    {
-        bufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        bufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
-                                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    }
-
-    vmaCreateBuffer(
-        *m_pAllocator,
-        &bufferInfo,
-        &bufferAllocInfo,
-        &m_lightPosBuffer,
-        &m_lightPosBufferAlloc,
-        nullptr);
-
-    float cameraPos[3] = {};
-    m_pCamera->GetPos(cameraPos);
-
-    // Copy light and camera data to ubo buffer
-    // The last element of each lines is a padding float
-    float lightPos[20] = {
-        10.f,  3.f, -8.f, 0.f,
-        10.f,  3.f,  8.f, 0.f,
-        10.f, -3.f, -8.f, 0.f,
-        10.f, -3.f,  8.f, 0.f,
-        cameraPos[0], cameraPos[1], cameraPos[2], 0.f
-    };
-
-    CopyRamDataToGpuBuffer(lightPos, m_lightPosBuffer, m_lightPosBufferAlloc, sizeof(lightPos));
-
-    // NOTE: For the push descriptors, the dstSet is ignored.
-    //       This app doesn't have other resources so a fixed descriptor set is enough.
-    {
-        m_lightPosUboDesBufferInfo.buffer = m_lightPosBuffer;
-        m_lightPosUboDesBufferInfo.offset = 0;
-        m_lightPosUboDesBufferInfo.range = sizeof(float) * 16;
-    }
-
-    VkWriteDescriptorSet writeLightsDesSet{};
-    {
-        writeLightsDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeLightsDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        writeLightsDesSet.dstBinding = 1;
-        writeLightsDesSet.descriptorCount = 1;
-        writeLightsDesSet.pBufferInfo = &m_lightPosUboDesBufferInfo;
-    }
-
-    m_writeDescriptorSet0.push_back(writeLightsDesSet);
-}
-*/
+void PBRDeferredApp::InitLightPosRadianceSSBOs()
+{}
 
 // ================================================================================================================
-/*
-void PBRDeferredApp::DestroyFragUboObjects()
-{
-    vmaDestroyBuffer(*m_pAllocator, m_lightPosBuffer, m_lightPosBufferAlloc);
-}
-*/
+void PBRDeferredApp::DestroyLightPosRadianceSSBOs()
+{}
 
 // ================================================================================================================
-void PBRDeferredApp::CmdGBufferToRenderTarget(
-    VkCommandBuffer cmdBuffer,
-    VkImageLayout   oldLayout)
+void PBRDeferredApp::CmdGBufferLayoutTrans(
+    VkCommandBuffer      cmdBuffer,
+    VkImageLayout        oldLayout,
+    VkImageLayout        newLayout,
+    VkAccessFlags        srcAccessMask,
+    VkAccessFlags        dstAccessMask,
+    VkPipelineStageFlags srcStageMask,
+    VkPipelineStageFlags dstStageMask)
 {
     VkImageSubresourceRange colorOneMipOneLevelSubResRange{};
     {
@@ -338,9 +278,11 @@ void PBRDeferredApp::CmdGBufferToRenderTarget(
     VkImageMemoryBarrier gBufferRenderTargetTransBarrierTemplate{};
     {
         gBufferRenderTargetTransBarrierTemplate.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        gBufferRenderTargetTransBarrierTemplate.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        gBufferRenderTargetTransBarrierTemplate.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        gBufferRenderTargetTransBarrierTemplate.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        gBufferRenderTargetTransBarrierTemplate.srcAccessMask = srcAccessMask;
+        gBufferRenderTargetTransBarrierTemplate.dstAccessMask = dstAccessMask;
+        // gBufferRenderTargetTransBarrierTemplate.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        gBufferRenderTargetTransBarrierTemplate.oldLayout = oldLayout;
+        gBufferRenderTargetTransBarrierTemplate.newLayout = newLayout;
         // swapchainRenderTargetTransBarrier.image = GetSwapchainColorImage(m_currentFrame);
         gBufferRenderTargetTransBarrierTemplate.subresourceRange = colorOneMipOneLevelSubResRange;
     }
@@ -359,21 +301,15 @@ void PBRDeferredApp::CmdGBufferToRenderTarget(
 
     vkCmdPipelineBarrier(
         cmdBuffer,
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        srcStageMask,
+        dstStageMask,
+        // VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        // VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
         0,
         0, nullptr,
         0, nullptr,
         gBufferToRenderTargetBarriers.size(),
         gBufferToRenderTargetBarriers.data());
-}
-
-// ================================================================================================================
-void PBRDeferredApp::CmdGBufferToShaderInput(
-    VkCommandBuffer cmdBuffer,
-    VkImageLayout oldLayout)
-{
-    // TODO: Finish when you are implementing the lighting pass.
 }
 
 // ================================================================================================================
@@ -879,6 +815,20 @@ void PBRDeferredApp::InitGBuffer()
     VkImageViewCreateInfo metallicRoughnessImageViewInfo = posNormalAlbedoImageViewInfo;
     metallicRoughnessImageViewInfo.format = MetallicRoughnessImgFormat;
 
+    VkSamplerCreateInfo samplerInfo{};
+    {
+        samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        samplerInfo.magFilter = VK_FILTER_NEAREST;
+        samplerInfo.minFilter = VK_FILTER_NEAREST;
+        samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+        samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE; // outside image bounds just use border color
+        samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        samplerInfo.minLod = -1000;
+        samplerInfo.maxLod = 1000;
+        samplerInfo.maxAnisotropy = 1.0f;
+    }
+
     m_gBufferFormats.push_back(PosNormalAlbedoImgFormat);
     m_gBufferFormats.push_back(PosNormalAlbedoImgFormat);
     m_gBufferFormats.push_back(PosNormalAlbedoImgFormat);
@@ -927,7 +877,10 @@ void PBRDeferredApp::InitGBuffer()
         metallicRoughnessImageViewInfo.image = m_metallicRoughnessTextures[i].image;
         VK_CHECK(vkCreateImageView(m_device, &metallicRoughnessImageViewInfo, nullptr, &m_metallicRoughnessTextures[i].imageView));
 
-        // TODO: Create samplers
+        VK_CHECK(vkCreateSampler(m_device, &samplerInfo, nullptr, &m_worldPosTextures[i].imageSampler));
+        VK_CHECK(vkCreateSampler(m_device, &samplerInfo, nullptr, &m_normalTextures[i].imageSampler));
+        VK_CHECK(vkCreateSampler(m_device, &samplerInfo, nullptr, &m_albedoTextures[i].imageSampler));
+        VK_CHECK(vkCreateSampler(m_device, &samplerInfo, nullptr, &m_metallicRoughnessTextures[i].imageSampler));
     }
 }
 
@@ -945,7 +898,10 @@ void PBRDeferredApp::DestroyGBuffer()
         vkDestroyImageView(m_device, m_albedoTextures[i].imageView, nullptr);
         vkDestroyImageView(m_device, m_metallicRoughnessTextures[i].imageView, nullptr);
 
-        // TODO: Destroy samplers
+        vkDestroySampler(m_device, m_worldPosTextures[i].imageSampler, nullptr);
+        vkDestroySampler(m_device, m_normalTextures[i].imageSampler, nullptr);
+        vkDestroySampler(m_device, m_albedoTextures[i].imageSampler, nullptr);
+        vkDestroySampler(m_device, m_metallicRoughnessTextures[i].imageSampler, nullptr);
     }
 }
 
