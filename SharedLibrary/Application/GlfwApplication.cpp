@@ -503,6 +503,28 @@ namespace SharedLib
     }
 
     // ================================================================================================================
+    void GlfwApplication::CmdSwapchainDepthImgClear(
+        VkCommandBuffer cmdBuffer)
+    {
+        VkClearDepthStencilValue clearDepthStencil = { 0.f, 0 };
+
+        VkImageSubresourceRange swapchainPresentSubResRange{};
+        {
+            swapchainPresentSubResRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+            swapchainPresentSubResRange.baseMipLevel = 0;
+            swapchainPresentSubResRange.levelCount = 1;
+            swapchainPresentSubResRange.baseArrayLayer = 0;
+            swapchainPresentSubResRange.layerCount = 1;
+        }
+
+        vkCmdClearDepthStencilImage(cmdBuffer,
+                                    GetSwapchainDepthImage(m_swapchainNextImgId),
+                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                    &clearDepthStencil,
+                                    1, &swapchainPresentSubResRange);
+    }
+
+    // ================================================================================================================
     void GlfwApplication::CmdSwapchainColorImgLayoutTrans(
         VkCommandBuffer      cmdBuffer,
         VkImageLayout        oldLayout,
@@ -529,10 +551,49 @@ namespace SharedLib
             swapchainRenderTargetTransBarrier.dstAccessMask = dstAccessMask;
             swapchainRenderTargetTransBarrier.oldLayout = oldLayout;
             swapchainRenderTargetTransBarrier.newLayout = newLayout;
-            // swapchainRenderTargetTransBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-            // swapchainRenderTargetTransBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-            // swapchainRenderTargetTransBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
             swapchainRenderTargetTransBarrier.image = GetSwapchainColorImage(m_swapchainNextImgId);
+            swapchainRenderTargetTransBarrier.subresourceRange = swapchainPresentSubResRange;
+        }
+
+        vkCmdPipelineBarrier(
+            cmdBuffer,
+            srcStageMask,
+            dstStageMask,
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &swapchainRenderTargetTransBarrier);
+    }
+
+    // ================================================================================================================
+    // TODO: I maybe able to make more abstraction with the color image to reduce some repeated code.
+    void GlfwApplication::CmdSwapchainDepthImgLayoutTrans(
+        VkCommandBuffer      cmdBuffer,
+        VkImageLayout        oldLayout,
+        VkImageLayout        newLayout,
+        VkAccessFlags        srcAccessMask,
+        VkAccessFlags        dstAccessMask,
+        VkPipelineStageFlags srcStageMask,
+        VkPipelineStageFlags dstStageMask)
+    {
+        VkImageSubresourceRange swapchainPresentSubResRange{};
+        {
+            swapchainPresentSubResRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+            swapchainPresentSubResRange.baseMipLevel = 0;
+            swapchainPresentSubResRange.levelCount = 1;
+            swapchainPresentSubResRange.baseArrayLayer = 0;
+            swapchainPresentSubResRange.layerCount = 1;
+        }
+
+        // Transform the layout of the swapchain from undefined to render target.
+        VkImageMemoryBarrier swapchainRenderTargetTransBarrier{};
+        {
+            swapchainRenderTargetTransBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            swapchainRenderTargetTransBarrier.srcAccessMask = srcAccessMask;
+            swapchainRenderTargetTransBarrier.dstAccessMask = dstAccessMask;
+            swapchainRenderTargetTransBarrier.oldLayout = oldLayout;
+            swapchainRenderTargetTransBarrier.newLayout = newLayout;
+            swapchainRenderTargetTransBarrier.image = GetSwapchainDepthImage(m_swapchainNextImgId);
             swapchainRenderTargetTransBarrier.subresourceRange = swapchainPresentSubResRange;
         }
 

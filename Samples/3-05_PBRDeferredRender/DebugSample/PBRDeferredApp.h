@@ -1,7 +1,7 @@
 #pragma once
 #include "../../../SharedLibrary/Application/GlfwApplication.h"
 #include "../../../SharedLibrary/Pipeline/Pipeline.h"
-
+#include <array>
 
 VK_DEFINE_HANDLE(VmaAllocation);
 
@@ -11,7 +11,7 @@ namespace SharedLib
 }
 
 constexpr uint32_t SphereCounts = 4 * 4;
-constexpr uint32_t PtLightsCounts = 6 * 6;
+constexpr uint32_t PtLightsCounts = 6 * 6 * 2; // Upper 36 point lights and bottom 36 point lights.
 
 struct GpuBuffer
 {
@@ -87,6 +87,13 @@ private:
     void InitLightPosRadianceSSBOs();
     void DestroyLightPosRadianceSSBOs();
 
+    float PtLightVolumeRadius(const std::array<float, 3>& radiance);
+
+    void InitDeferredLightingPassPipeline();
+    void InitDeferredLightingPassPipelineDescriptorSetLayout();
+    void InitDeferredLightingPassPipelineLayout();
+    void InitDeferredLightingPassShaderModules();
+
     VkPipelineVertexInputStateCreateInfo CreateGeoPassPipelineVertexInputInfo();
     VkPipelineDepthStencilStateCreateInfo CreateGeoPassDepthStencilStateInfo();
     std::vector<VkPipelineColorBlendAttachmentState> CreateGeoPassPipelineColorBlendAttachmentStates();
@@ -95,6 +102,7 @@ private:
     
     GpuBuffer m_lightPosStorageBuffer;
     GpuBuffer m_lightRadianceStorageBuffer;
+    GpuBuffer m_lightVolumeRadiusStorageBuffer;
 
     uint32_t  m_vertBufferByteCnt;
     uint32_t  m_idxBufferByteCnt;

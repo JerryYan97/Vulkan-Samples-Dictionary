@@ -44,9 +44,18 @@ namespace SharedLib
                                              VkAccessFlags        dstAccessMask,
                                              VkPipelineStageFlags srcStageMask,
                                              VkPipelineStageFlags dstStageMask);
+        
+        void CmdSwapchainDepthImgLayoutTrans(VkCommandBuffer      cmdBuffer,
+                                             VkImageLayout        oldLayout,
+                                             VkImageLayout        newLayout,
+                                             VkAccessFlags        srcAccessMask,
+                                             VkAccessFlags        dstAccessMask,
+                                             VkPipelineStageFlags srcStageMask,
+                                             VkPipelineStageFlags dstStageMask);
 
         void CmdSwapchainColorImgToPresent(VkCommandBuffer cmdBuffer);
         void CmdSwapchainColorImgClear(VkCommandBuffer cmdBuffer);
+        void CmdSwapchainDepthImgClear(VkCommandBuffer cmdBuffer);
 
     protected:
         void InitSwapchain();

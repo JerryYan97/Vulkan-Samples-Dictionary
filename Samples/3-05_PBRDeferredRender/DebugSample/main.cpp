@@ -150,7 +150,19 @@ int main()
                                             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                                             VK_PIPELINE_STAGE_TRANSFER_BIT);
 
+        app.CmdSwapchainDepthImgLayoutTrans(currentCmdBuffer,
+                                            VK_IMAGE_LAYOUT_UNDEFINED,
+                                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                                            VK_ACCESS_TRANSFER_WRITE_BIT,
+                                            VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                                            VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+        // Note: We want to reuse the swapchain depth and color image. Besides, the light volumes are additive, so we
+        //       have to clear the previous draw's results after the gbuffer is ready and then add each light volumes'
+        //       depth together.
         app.CmdSwapchainColorImgClear(currentCmdBuffer);
+        app.CmdSwapchainDepthImgClear(currentCmdBuffer);
 
         app.CmdSwapchainColorImgLayoutTrans(currentCmdBuffer,
                                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -159,6 +171,14 @@ int main()
                                             VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                                             VK_PIPELINE_STAGE_TRANSFER_BIT,
                                             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+
+        app.CmdSwapchainDepthImgLayoutTrans(currentCmdBuffer,
+                                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                            VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                                            VK_ACCESS_TRANSFER_WRITE_BIT,
+                                            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                                            VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                            VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT);
 
         /* -------- Deferred Lighting Pass --------- */
 

@@ -1,6 +1,8 @@
 #include "PBRDeferredApp.h"
 #include <glfw3.h>
 #include <cstdlib>
+#include <math.h>
+#include <algorithm>
 #include "../../../SharedLibrary/Utils/VulkanDbgUtils.h"
 #include "../../../SharedLibrary/Camera/Camera.h"
 #include "../../../SharedLibrary/Event/Event.h"
@@ -18,18 +20,21 @@ PBRDeferredApp::PBRDeferredApp() :
     m_geoPassPipelineDesSetLayout(VK_NULL_HANDLE),
     m_geoPassPipelineLayout(VK_NULL_HANDLE),
     m_geoPassPipeline(),
-    // m_lightPosBuffer(VK_NULL_HANDLE),
-    // m_lightPosBufferAlloc(VK_NULL_HANDLE),
+    m_deferredLightingPassVsShaderModule(VK_NULL_HANDLE),
+    m_deferredLightingPassPsShaderModule(VK_NULL_HANDLE),
+    m_deferredLightingPassPipelineDesSetLayout(VK_NULL_HANDLE),
+    m_deferredLightingPassPipelineLayout(VK_NULL_HANDLE),
+    m_deferredLightingPassPipeline(),
+    m_lightPosStorageBuffer(),
+    m_lightRadianceStorageBuffer(),
+    m_lightVolumeRadiusStorageBuffer(),
     m_idxBuffer(),
     m_vertBuffer(),
     m_offsetStorageBuffer(),
     m_albedoStorageBuffer(),
     m_metallicRoughnessStorageBuffer(),
-    m_lightPosStorageBuffer(),
-    m_lightRadianceStorageBuffer(),
     m_vertBufferByteCnt(0),
-    m_idxBufferByteCnt(0) //,
-    // m_lightPosUboDesBufferInfo()
+    m_idxBufferByteCnt(0)
 {
     m_pCamera = new SharedLib::Camera();
 }
@@ -45,8 +50,7 @@ PBRDeferredApp::~PBRDeferredApp()
     DestroyVpUboObjects();
     DestroyGBuffer();
     DestroyGeoPassSSBOs();
-
-    // DestroyFragUboObjects();
+    DestroyLightPosRadianceSSBOs();
 
     // Destroy shader modules
     vkDestroyShaderModule(m_device, m_geoPassVsShaderModule, nullptr);
@@ -65,7 +69,7 @@ void PBRDeferredApp::DestroyVpUboObjects()
     for (auto buffer : m_vpUboBuffers)
     {
         vmaDestroyBuffer(*m_pAllocator, buffer.buffer, buffer.bufferAlloc);
-    }    
+    }
 }
 
 // ================================================================================================================
@@ -247,11 +251,124 @@ void PBRDeferredApp::DestroySphereVertexIndexBuffers()
 
 // ================================================================================================================
 void PBRDeferredApp::InitLightPosRadianceSSBOs()
-{}
+{
+    std::vector<float> lightsPos;
+    std::vector<float> lightsRadiance;
+    std::vector<float> lightsVolumeRadius;
+
+    constexpr float PtLightsXZBase = -7.5f;
+
+    for (uint32_t layer = 0; layer < 2; layer++)
+    {
+        for (uint32_t row = 0; row < 6; row++)
+        {
+            for (uint32_t col = 0; col < 6; col++)
+            {
+                float r = ((float)rand()) / ((float)RAND_MAX) * 20.f;
+                float g = ((float)rand()) / ((float)RAND_MAX) * 20.f;
+                float b = ((float)rand()) / ((float)RAND_MAX) * 20.f;
+
+                lightsRadiance.push_back(r);
+                lightsRadiance.push_back(g);
+                lightsRadiance.push_back(b);
+
+                std::array<float, 3> radiance = { r, g, b };
+
+                float radius = PtLightVolumeRadius(radiance);
+                std::cout << "Point light affect radius: " << radius << std::endl;
+
+                lightsVolumeRadius.push_back(radius);
+
+                float xPos = PtLightsXZBase + row * 3.f;
+                float yPos = (layer == 0) ? 1.5f : -1.5f;
+                float zPos = PtLightsXZBase + col * 3.f;
+
+                lightsPos.push_back(xPos);
+                lightsPos.push_back(yPos);
+                lightsPos.push_back(zPos);
+            }
+        }
+    }
+
+    VkBufferCreateInfo bufferInfoTemplate{};
+    {
+        bufferInfoTemplate.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfoTemplate.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+        bufferInfoTemplate.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    }
+
+    VmaAllocationCreateInfo bufferAllocInfo{};
+    {
+        bufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        bufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
+                                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    }
+
+    bufferInfoTemplate.size = sizeof(float) * lightsPos.size();
+    vmaCreateBuffer(*m_pAllocator,
+                    &bufferInfoTemplate,
+                    &bufferAllocInfo,
+                    &m_lightPosStorageBuffer.buffer,
+                    &m_lightPosStorageBuffer.bufferAlloc,
+                    nullptr);
+
+    bufferInfoTemplate.size = sizeof(float) * lightsRadiance.size();
+    vmaCreateBuffer(*m_pAllocator,
+                    &bufferInfoTemplate,
+                    &bufferAllocInfo,
+                    &m_lightRadianceStorageBuffer.buffer,
+                    &m_lightRadianceStorageBuffer.bufferAlloc,
+                    nullptr);
+
+    bufferInfoTemplate.size = sizeof(float) * lightsVolumeRadius.size();
+    vmaCreateBuffer(*m_pAllocator,
+                    &bufferInfoTemplate,
+                    &bufferAllocInfo,
+                    &m_lightVolumeRadiusStorageBuffer.buffer,
+                    &m_lightVolumeRadiusStorageBuffer.bufferAlloc,
+                    nullptr);
+
+    CopyRamDataToGpuBuffer(lightsPos.data(),
+                           m_lightPosStorageBuffer.buffer,
+                           m_lightPosStorageBuffer.bufferAlloc,
+                           sizeof(float) * lightsPos.size());
+
+    CopyRamDataToGpuBuffer(lightsRadiance.data(),
+                           m_lightRadianceStorageBuffer.buffer,
+                           m_lightRadianceStorageBuffer.bufferAlloc,
+                           sizeof(float) * lightsRadiance.size());
+
+    CopyRamDataToGpuBuffer(lightsVolumeRadius.data(),
+                           m_lightVolumeRadiusStorageBuffer.buffer,
+                           m_lightVolumeRadiusStorageBuffer.bufferAlloc,
+                           sizeof(float) * lightsVolumeRadius.size());
+}
+
+// ================================================================================================================
+float PBRDeferredApp::PtLightVolumeRadius(
+    const std::array<float, 3>& radiance)
+{
+    // Ref: https://learnopengl.com/Lighting/Light-casters
+    constexpr float kc = 1.f;
+    constexpr float kl = 0.14f;
+    constexpr float kq = 0.07f;
+    constexpr float minRadiance = 5.f / 256.f;
+    constexpr float minRadianceInv = 1.f / minRadiance;
+
+    float imax = *std::max_element(radiance.begin(), radiance.end());
+
+    float radius = (-kl + std::sqrtf(kl * kl - 4.f * kq * (kc - imax * minRadianceInv))) / (2 * kq);
+
+    return radius;
+}
 
 // ================================================================================================================
 void PBRDeferredApp::DestroyLightPosRadianceSSBOs()
-{}
+{
+    vmaDestroyBuffer(*m_pAllocator, m_lightPosStorageBuffer.buffer, m_lightPosStorageBuffer.bufferAlloc);
+    vmaDestroyBuffer(*m_pAllocator, m_lightRadianceStorageBuffer.buffer, m_lightRadianceStorageBuffer.bufferAlloc);
+    vmaDestroyBuffer(*m_pAllocator, m_lightVolumeRadiusStorageBuffer.buffer, m_lightVolumeRadiusStorageBuffer.bufferAlloc);
+}
 
 // ================================================================================================================
 void PBRDeferredApp::CmdGBufferLayoutTrans(
@@ -280,10 +397,8 @@ void PBRDeferredApp::CmdGBufferLayoutTrans(
         gBufferRenderTargetTransBarrierTemplate.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
         gBufferRenderTargetTransBarrierTemplate.srcAccessMask = srcAccessMask;
         gBufferRenderTargetTransBarrierTemplate.dstAccessMask = dstAccessMask;
-        // gBufferRenderTargetTransBarrierTemplate.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
         gBufferRenderTargetTransBarrierTemplate.oldLayout = oldLayout;
         gBufferRenderTargetTransBarrierTemplate.newLayout = newLayout;
-        // swapchainRenderTargetTransBarrier.image = GetSwapchainColorImage(m_currentFrame);
         gBufferRenderTargetTransBarrierTemplate.subresourceRange = colorOneMipOneLevelSubResRange;
     }
 
@@ -303,8 +418,6 @@ void PBRDeferredApp::CmdGBufferLayoutTrans(
         cmdBuffer,
         srcStageMask,
         dstStageMask,
-        // VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-        // VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
         0,
         0, nullptr,
         0, nullptr,
@@ -322,7 +435,6 @@ std::vector<VkRenderingAttachmentInfoKHR> PBRDeferredApp::GetGBufferAttachments(
     VkRenderingAttachmentInfoKHR attachmentInfo{};
     {
         attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-        // colorAttachmentInfo.imageView = app.GetSwapchainColorImageView(imageIndex);
         attachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
         attachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         attachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -884,6 +996,7 @@ void PBRDeferredApp::InitGBuffer()
     }
 }
 
+// ================================================================================================================
 void PBRDeferredApp::DestroyGBuffer()
 {
     for (uint32_t i = 0; i < m_swapchainImgCnt; i++)
@@ -903,6 +1016,30 @@ void PBRDeferredApp::DestroyGBuffer()
         vkDestroySampler(m_device, m_albedoTextures[i].imageSampler, nullptr);
         vkDestroySampler(m_device, m_metallicRoughnessTextures[i].imageSampler, nullptr);
     }
+}
+
+// ================================================================================================================
+void PBRDeferredApp::InitDeferredLightingPassPipeline()
+{
+
+}
+
+// ================================================================================================================
+void PBRDeferredApp::InitDeferredLightingPassPipelineDescriptorSetLayout()
+{
+
+}
+
+// ================================================================================================================
+void PBRDeferredApp::InitDeferredLightingPassPipelineLayout()
+{
+
+}
+
+// ================================================================================================================
+void PBRDeferredApp::InitDeferredLightingPassShaderModules()
+{
+
 }
 
 // ================================================================================================================
@@ -953,12 +1090,12 @@ void PBRDeferredApp::AppInit()
     InitAlbedoSSBO();
     InitMetallicRoughnessSSBO();
     InitGBuffer();
+    InitLightPosRadianceSSBOs();
 
     InitGeoPassShaderModules();
     InitGeoPassPipelineDescriptorSetLayout();
     InitGeoPassPipelineLayout();
     InitGeoPassPipeline();
 
-    // InitFragUboObjects();
     InitSwapchainSyncObjects();
 }
