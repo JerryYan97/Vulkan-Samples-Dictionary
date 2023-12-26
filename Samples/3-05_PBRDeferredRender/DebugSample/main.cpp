@@ -46,6 +46,8 @@ int main()
         vkResetFences(device, 1, &inFlightFence);
         vkResetCommandBuffer(currentCmdBuffer, 0);
 
+        app.UpdateCameraAndGpuBuffer();
+
         // Fill the command buffer
         VkCommandBufferBeginInfo beginInfo{};
         {
@@ -186,8 +188,9 @@ int main()
             deferredLightingPassDepthAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
             deferredLightingPassDepthAttachmentInfo.imageView = app.GetSwapchainDepthImageView(imageIndex);
             deferredLightingPassDepthAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
-            deferredLightingPassDepthAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+            deferredLightingPassDepthAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             deferredLightingPassDepthAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            deferredLightingPassDepthAttachmentInfo.clearValue = depthClearVal;
         }
 
         VkRenderingAttachmentInfoKHR deferredLightingPassColorAttachmentInfo{};
@@ -207,7 +210,7 @@ int main()
             deferredLightingPassRenderInfo.layerCount = 1;
             deferredLightingPassRenderInfo.colorAttachmentCount = 1;
             deferredLightingPassRenderInfo.pColorAttachments = &deferredLightingPassColorAttachmentInfo;
-            deferredLightingPassRenderInfo.pDepthAttachment = &deferredLightingPassDepthAttachmentInfo;
+            // deferredLightingPassRenderInfo.pDepthAttachment = &deferredLightingPassDepthAttachmentInfo;
         }
 
         vkCmdBeginRendering(currentCmdBuffer, &deferredLightingPassRenderInfo);

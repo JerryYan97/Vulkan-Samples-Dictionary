@@ -68,6 +68,8 @@ public:
 
     std::vector<float> GetDeferredLightingPushConstantData();
 
+    void UpdateCameraAndGpuBuffer();
+
 private:
     void InitGeoPassPipeline();
     void InitGeoPassPipelineDescriptorSetLayout();
@@ -103,10 +105,18 @@ private:
     // NOTE: Light volumes are also spheres.
     VkPipelineVertexInputStateCreateInfo CreateGeoPassPipelineVertexInputInfo();
     VkPipelineVertexInputStateCreateInfo CreateDeferredLightingPassPipelineVertexInputInfo();
+
+    // The color is additive, which makes the depth stencil tricky. Each point lights should have their own depth buffer?
+    // Not really... We can just use the face culling... Thus, we need two deferred lighting pipeline... One for face
+    // culling and another for none culling...
+    // We need to draw point lights one by one and check whether a point light includes the camera. If it includes the
+    // camera then we need to disable the face culling of the point light volume.
     VkPipelineDepthStencilStateCreateInfo CreateGeoLightingPassDepthStencilStateInfo();
 
     SharedLib::PipelineColorBlendInfo CreateGeoPassPipelineColorBlendAttachmentStates();
     SharedLib::PipelineColorBlendInfo CreateDeferredLightingPassPipelineColorBlendAttachmentStates();
+
+    void SendCameraDataToBuffer(uint32_t i);
 
     SharedLib::Camera* m_pCamera;
     

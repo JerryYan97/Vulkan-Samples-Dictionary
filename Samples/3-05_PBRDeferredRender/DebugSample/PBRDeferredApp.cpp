@@ -12,6 +12,68 @@
 
 #include "vk_mem_alloc.h"
 
+static bool g_isMiddleDown = false;
+static bool g_isWDown = false;
+static bool g_isSDown = false;
+static bool g_isADown = false;
+static bool g_isDDown = false;
+
+static void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
+{
+    if (button == GLFW_MOUSE_BUTTON_MIDDLE && action == GLFW_PRESS)
+    {
+        g_isMiddleDown = true;
+    }
+
+    if (button == GLFW_MOUSE_BUTTON_MIDDLE && action == GLFW_RELEASE)
+    {
+        g_isMiddleDown = false;
+    }
+}
+
+static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+    if (key == GLFW_KEY_W && action == GLFW_PRESS)
+    {
+        g_isWDown = true;
+    }
+
+    if (key == GLFW_KEY_W && action == GLFW_RELEASE)
+    {
+        g_isWDown = false;
+    }
+
+    if (key == GLFW_KEY_S && action == GLFW_PRESS)
+    {
+        g_isSDown = true;
+    }
+
+    if (key == GLFW_KEY_S && action == GLFW_RELEASE)
+    {
+        g_isSDown = false;
+    }
+
+    if (key == GLFW_KEY_A && action == GLFW_PRESS)
+    {
+        g_isADown = true;
+    }
+
+    if (key == GLFW_KEY_A && action == GLFW_RELEASE)
+    {
+        g_isADown = false;
+    }
+
+    if (key == GLFW_KEY_D && action == GLFW_PRESS)
+    {
+        g_isDDown = true;
+    }
+
+    if (key == GLFW_KEY_D && action == GLFW_RELEASE)
+    {
+        g_isDDown = false;
+    }
+}
+
 // ================================================================================================================
 PBRDeferredApp::PBRDeferredApp() :
     GlfwApplication(),
@@ -268,9 +330,9 @@ void PBRDeferredApp::InitLightPosRadianceSSBOs()
         {
             for (uint32_t col = 0; col < 6; col++)
             {
-                float r = ((float)rand()) / ((float)RAND_MAX) * 20.f;
-                float g = ((float)rand()) / ((float)RAND_MAX) * 20.f;
-                float b = ((float)rand()) / ((float)RAND_MAX) * 20.f;
+                float r = ((float)rand()) / ((float)RAND_MAX) * 0.5f;
+                float g = ((float)rand()) / ((float)RAND_MAX) * 0.5f;
+                float b = ((float)rand()) / ((float)RAND_MAX) * 0.5f;
 
                 lightsRadiance.push_back(r);
                 lightsRadiance.push_back(g);
@@ -378,8 +440,10 @@ float PBRDeferredApp::PtLightVolumeRadius(
 {
     // Ref: https://learnopengl.com/Lighting/Light-casters
     constexpr float kc = 1.f;
-    constexpr float kl = 0.14f;
-    constexpr float kq = 0.07f;
+    // constexpr float kl = 0.14f;
+    constexpr float kl = 1.f;
+    // constexpr float kq = 0.07f;
+    constexpr float kq = 1.f;
     constexpr float minRadiance = 5.f / 256.f;
     constexpr float minRadianceInv = 1.f / minRadiance;
 
@@ -388,6 +452,42 @@ float PBRDeferredApp::PtLightVolumeRadius(
     float radius = (-kl + std::sqrtf(kl * kl - 4.f * kq * (kc - imax * minRadianceInv))) / (2 * kq);
 
     return radius;
+}
+
+// ================================================================================================================
+void PBRDeferredApp::SendCameraDataToBuffer(
+    uint32_t i)
+{
+    float vpMat[16] = {};
+    float tmpViewMat[16] = {};
+    float tmpPersMat[16] = {};
+    m_pCamera->GenViewPerspectiveMatrices(tmpViewMat, tmpPersMat, vpMat);
+
+    CopyRamDataToGpuBuffer(vpMat,
+                           m_vpUboBuffers[i].buffer,
+                           m_vpUboBuffers[i].bufferAlloc,
+                           16 * sizeof(float));
+}
+
+// ================================================================================================================
+void PBRDeferredApp::UpdateCameraAndGpuBuffer()
+{
+    SharedLib::HEvent midMouseDownEvent = CreateMiddleMouseEvent(g_isMiddleDown);
+    m_pCamera->OnEvent(midMouseDownEvent);
+
+    SharedLib::HEvent keyADownEvent = CreateKeyboardEvent(g_isADown, "KEY_A");
+    m_pCamera->OnEvent(keyADownEvent);
+
+    SharedLib::HEvent keyDDownEvent = CreateKeyboardEvent(g_isDDown, "KEY_D");
+    m_pCamera->OnEvent(keyDDownEvent);
+
+    SharedLib::HEvent keyWDownEvent = CreateKeyboardEvent(g_isWDown, "KEY_W");
+    m_pCamera->OnEvent(keyWDownEvent);
+
+    SharedLib::HEvent keySDownEvent = CreateKeyboardEvent(g_isSDown, "KEY_S");
+    m_pCamera->OnEvent(keySDownEvent);
+
+    SendCameraDataToBuffer(m_currentFrame);
 }
 
 // ================================================================================================================
@@ -1421,6 +1521,8 @@ void PBRDeferredApp::AppInit()
 
     // Init glfw window.
     InitGlfwWindowAndCallbacks();
+    glfwSetMouseButtonCallback(m_pWindow, MouseButtonCallback);
+    glfwSetKeyCallback(m_pWindow, KeyCallback);
 
     // Create vulkan surface from the glfw window.
     VK_CHECK(glfwCreateWindowSurface(m_instance, m_pWindow, nullptr, &m_surface));

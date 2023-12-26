@@ -29,8 +29,10 @@ float PointLightAttenuation(
 
 	// TODO: Same as the c++ implementation.
 	const float kc = 1.f;
-	const float kl = 0.14f;
-	const float kq = 0.07f;
+	const float kl = 1.f;
+	const float kq = 1.f;
+	// const float kl = 0.14f;
+	// const float kq = 0.07f;
 	float attenuation = 1.0 / (kc + kl * distance + kq * distance * distance);
 
 	return attenuation;

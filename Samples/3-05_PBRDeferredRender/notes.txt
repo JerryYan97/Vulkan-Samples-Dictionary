@@ -1,5 +1,9 @@
 https://learnopengl.com/Advanced-Lighting/Deferred-Shading
 
+https://www.intel.com/content/www/us/en/developer/articles/technical/deferred-rendering-for-current-and-future-rendering-pipelines.html
+
+https://ogldev.org/www/tutorial35/tutorial35.html
+
 4x4 spheres, 6x6x2 (Top + Bottom) point lights
 
 Not loops through all the lights. Using the light volumes -- Maybe just always render out two faces of all light spheres/volumes. It has some overhead but it is an easy way to make sure that when our camera roam in the scene we don't need to check which light volumes include the camera and disabling the culling of that light volume specifically.

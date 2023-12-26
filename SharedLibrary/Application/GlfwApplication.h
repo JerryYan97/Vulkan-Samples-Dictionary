@@ -65,6 +65,7 @@ namespace SharedLib
         void InitGlfwWindowAndCallbacks();
 
         HEvent CreateMiddleMouseEvent(bool isDown);
+        HEvent CreateKeyboardEvent(bool isDown, std::string eventName);
 
         // The class manages both of the creation and destruction of the objects below.
         uint32_t                 m_currentFrame;

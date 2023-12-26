@@ -94,6 +94,17 @@ namespace SharedLib
     }
 
     // ================================================================================================================
+    HEvent GlfwApplication::CreateKeyboardEvent(
+        bool        isDown,
+        std::string eventName)
+    {
+        SharedLib::HEventArguments args;
+        args[crc32("IS_DOWN")] = isDown;
+        SharedLib::HEvent mEvent(args, eventName);
+        return mEvent;
+    }
+
+    // ================================================================================================================
     void GlfwApplication::FrameStart()
     {
         glfwPollEvents();
