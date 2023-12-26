@@ -40,12 +40,16 @@ public:
     VkFence GetFence(uint32_t i) { return m_inFlightFences[i]; }
 
     VkPipelineLayout GetGeoPassPipelineLayout() { return m_geoPassPipelineLayout; }
+    VkPipelineLayout GetDeferredLightingPassPipelineLayout() { return m_deferredLightingPassPipelineLayout; }
 
     // The first layer is the desciptor ids.
     // The second layer is the bindings writes to that descriptor.
     std::vector<VkWriteDescriptorSet> GetGeoPassWriteDescriptorSets();
 
+    std::vector<VkWriteDescriptorSet> GetDeferredLightingWriteDescriptorSets();
+
     VkPipeline GetGeoPassPipeline() { return m_geoPassPipeline.GetVkPipeline(); }
+    VkPipeline GetDeferredLightingPassPipeline() { return m_deferredLightingPassPipeline.GetVkPipeline(); }
 
     uint32_t GetIdxCnt() { return m_idxData.size(); }
 
@@ -61,6 +65,8 @@ public:
                                VkPipelineStageFlags dstStageMask);
 
     std::vector<VkRenderingAttachmentInfoKHR> GetGBufferAttachments();
+
+    std::vector<float> GetDeferredLightingPushConstantData();
 
 private:
     void InitGeoPassPipeline();
@@ -94,9 +100,13 @@ private:
     void InitDeferredLightingPassPipelineLayout();
     void InitDeferredLightingPassShaderModules();
 
+    // NOTE: Light volumes are also spheres.
     VkPipelineVertexInputStateCreateInfo CreateGeoPassPipelineVertexInputInfo();
-    VkPipelineDepthStencilStateCreateInfo CreateGeoPassDepthStencilStateInfo();
-    std::vector<VkPipelineColorBlendAttachmentState> CreateGeoPassPipelineColorBlendAttachmentStates();
+    VkPipelineVertexInputStateCreateInfo CreateDeferredLightingPassPipelineVertexInputInfo();
+    VkPipelineDepthStencilStateCreateInfo CreateGeoLightingPassDepthStencilStateInfo();
+
+    SharedLib::PipelineColorBlendInfo CreateGeoPassPipelineColorBlendAttachmentStates();
+    SharedLib::PipelineColorBlendInfo CreateDeferredLightingPassPipelineColorBlendAttachmentStates();
 
     SharedLib::Camera* m_pCamera;
     

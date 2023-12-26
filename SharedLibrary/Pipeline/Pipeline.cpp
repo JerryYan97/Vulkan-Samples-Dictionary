@@ -154,20 +154,14 @@ namespace SharedLib
     }
 
     void Pipeline::SetPipelineColorBlendInfo(
-        std::vector<VkPipelineColorBlendAttachmentState>& pipelineColorBlendAttachmentStates)
+        PipelineColorBlendInfo& pipelineColorBlendAttachmentStates)
     {
         m_pColorBlending = new PipelineColorBlendInfo();
         memset(m_pColorBlending, 0, sizeof(PipelineColorBlendInfo));
         {
-            m_pColorBlending->colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-            m_pColorBlending->colorBlending.logicOpEnable = VK_FALSE;
-            m_pColorBlending->colorBlending.logicOp = VK_LOGIC_OP_COPY;
-            m_pColorBlending->colorBlending.attachmentCount = pipelineColorBlendAttachmentStates.size();
-            m_pColorBlending->colorBlending.pAttachments = pipelineColorBlendAttachmentStates.data();
-            m_pColorBlending->colorBlending.blendConstants[0] = 0.0f;
-            m_pColorBlending->colorBlending.blendConstants[1] = 0.0f;
-            m_pColorBlending->colorBlending.blendConstants[2] = 0.0f;
-            m_pColorBlending->colorBlending.blendConstants[3] = 0.0f;
+            *m_pColorBlending = pipelineColorBlendAttachmentStates;
+            m_pColorBlending->colorBlending.attachmentCount = m_pColorBlending->colorBlendAttachments.size();
+            m_pColorBlending->colorBlending.pAttachments = m_pColorBlending->colorBlendAttachments.data();
         }
     }
 

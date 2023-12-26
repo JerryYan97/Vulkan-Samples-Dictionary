@@ -55,12 +55,16 @@ PBRDeferredApp::~PBRDeferredApp()
     // Destroy shader modules
     vkDestroyShaderModule(m_device, m_geoPassVsShaderModule, nullptr);
     vkDestroyShaderModule(m_device, m_geoPassPsShaderModule, nullptr);
+    vkDestroyShaderModule(m_device, m_deferredLightingPassVsShaderModule, nullptr);
+    vkDestroyShaderModule(m_device, m_deferredLightingPassPsShaderModule, nullptr);
 
     // Destroy the pipeline layout
     vkDestroyPipelineLayout(m_device, m_geoPassPipelineLayout, nullptr);
+    vkDestroyPipelineLayout(m_device, m_deferredLightingPassPipelineLayout, nullptr);
 
     // Destroy the descriptor set layout
     vkDestroyDescriptorSetLayout(m_device, m_geoPassPipelineDesSetLayout, nullptr);
+    vkDestroyDescriptorSetLayout(m_device, m_deferredLightingPassPipelineDesSetLayout, nullptr);
 }
 
 // ================================================================================================================
@@ -342,6 +346,30 @@ void PBRDeferredApp::InitLightPosRadianceSSBOs()
                            m_lightVolumeRadiusStorageBuffer.buffer,
                            m_lightVolumeRadiusStorageBuffer.bufferAlloc,
                            sizeof(float) * lightsVolumeRadius.size());
+
+    VkDescriptorBufferInfo lightsPosSSBODescInfo{};
+    {
+        lightsPosSSBODescInfo.buffer = m_lightPosStorageBuffer.buffer;
+        lightsPosSSBODescInfo.offset = 0;
+        lightsPosSSBODescInfo.range = sizeof(float) * lightsPos.size();
+    }
+    m_lightPosStorageBuffer.bufferDescInfo = lightsPosSSBODescInfo;
+
+    VkDescriptorBufferInfo lightsRadianceSSBODescInfo{};
+    {
+        lightsRadianceSSBODescInfo.buffer = m_lightRadianceStorageBuffer.buffer;
+        lightsRadianceSSBODescInfo.offset = 0;
+        lightsRadianceSSBODescInfo.range = sizeof(float) * lightsRadiance.size();
+    }
+    m_lightRadianceStorageBuffer.bufferDescInfo = lightsRadianceSSBODescInfo;
+
+    VkDescriptorBufferInfo lightsVolumeRadiusSSBODescInfo{};
+    {
+        lightsVolumeRadiusSSBODescInfo.buffer = m_lightVolumeRadiusStorageBuffer.buffer;
+        lightsVolumeRadiusSSBODescInfo.offset = 0;
+        lightsVolumeRadiusSSBODescInfo.range = sizeof(float) * lightsVolumeRadius.size();
+    }
+    m_lightVolumeRadiusStorageBuffer.bufferDescInfo = lightsVolumeRadiusSSBODescInfo;
 }
 
 // ================================================================================================================
@@ -505,6 +533,121 @@ std::vector<VkWriteDescriptorSet> PBRDeferredApp::GetGeoPassWriteDescriptorSets(
 }
 
 // ================================================================================================================
+std::vector<VkWriteDescriptorSet> PBRDeferredApp::GetDeferredLightingWriteDescriptorSets()
+{
+    std::vector<VkWriteDescriptorSet> writeDescriptorSet0;
+
+    VkWriteDescriptorSet writeVpUboDesc{};
+    {
+        writeVpUboDesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeVpUboDesc.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        writeVpUboDesc.descriptorCount = 1;
+        writeVpUboDesc.dstBinding = 0;
+        writeVpUboDesc.pBufferInfo = &m_vpUboBuffers[m_currentFrame].bufferDescInfo;
+    }
+    writeDescriptorSet0.push_back(writeVpUboDesc);
+
+    VkWriteDescriptorSet writeLightsPosSSBODesc{};
+    {
+        writeLightsPosSSBODesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeLightsPosSSBODesc.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        writeLightsPosSSBODesc.descriptorCount = 1;
+        writeLightsPosSSBODesc.dstBinding = 1;
+        writeLightsPosSSBODesc.pBufferInfo = &m_lightPosStorageBuffer.bufferDescInfo;
+    }
+    writeDescriptorSet0.push_back(writeLightsPosSSBODesc);
+
+    VkWriteDescriptorSet writeLightsVolumeRadiusSSBODesc{};
+    {
+        writeLightsVolumeRadiusSSBODesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeLightsVolumeRadiusSSBODesc.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        writeLightsVolumeRadiusSSBODesc.descriptorCount = 1;
+        writeLightsVolumeRadiusSSBODesc.dstBinding = 2;
+        writeLightsVolumeRadiusSSBODesc.pBufferInfo = &m_lightVolumeRadiusStorageBuffer.bufferDescInfo;
+    }
+    writeDescriptorSet0.push_back(writeLightsVolumeRadiusSSBODesc);
+
+    VkWriteDescriptorSet writeLightsRadianceSSBODesc{};
+    {
+        writeLightsRadianceSSBODesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeLightsRadianceSSBODesc.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        writeLightsRadianceSSBODesc.descriptorCount = 1;
+        writeLightsRadianceSSBODesc.dstBinding = 3;
+        writeLightsRadianceSSBODesc.pBufferInfo = &m_lightRadianceStorageBuffer.bufferDescInfo;
+    }
+    writeDescriptorSet0.push_back(writeLightsRadianceSSBODesc);
+
+    VkWriteDescriptorSet writeWorldPosTexDesc{};
+    {
+        writeWorldPosTexDesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeWorldPosTexDesc.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writeWorldPosTexDesc.descriptorCount = 1;
+        writeWorldPosTexDesc.dstBinding = 4;
+        writeWorldPosTexDesc.pImageInfo = &m_worldPosTextures[m_currentFrame].imageDescInfo;
+    }
+    writeDescriptorSet0.push_back(writeWorldPosTexDesc);
+
+    VkWriteDescriptorSet writeAlbedoTexDesc{};
+    {
+        writeAlbedoTexDesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeAlbedoTexDesc.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writeAlbedoTexDesc.descriptorCount = 1;
+        writeAlbedoTexDesc.dstBinding = 5;
+        writeAlbedoTexDesc.pImageInfo = &m_albedoTextures[m_currentFrame].imageDescInfo;
+    }
+    writeDescriptorSet0.push_back(writeAlbedoTexDesc);
+
+    VkWriteDescriptorSet writeNormalTexDesc{};
+    {
+        writeNormalTexDesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeNormalTexDesc.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writeNormalTexDesc.descriptorCount = 1;
+        writeNormalTexDesc.dstBinding = 6;
+        writeNormalTexDesc.pImageInfo = &m_normalTextures[m_currentFrame].imageDescInfo;
+    }
+    writeDescriptorSet0.push_back(writeNormalTexDesc);
+
+    VkWriteDescriptorSet writeMetallicRoughnessTexDesc{};
+    {
+        writeMetallicRoughnessTexDesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeMetallicRoughnessTexDesc.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writeMetallicRoughnessTexDesc.descriptorCount = 1;
+        writeMetallicRoughnessTexDesc.dstBinding = 7;
+        writeMetallicRoughnessTexDesc.pImageInfo = &m_metallicRoughnessTextures[m_currentFrame].imageDescInfo;
+    }
+    writeDescriptorSet0.push_back(writeMetallicRoughnessTexDesc);
+
+    return writeDescriptorSet0;
+}
+
+// ================================================================================================================
+SharedLib::PipelineColorBlendInfo PBRDeferredApp::CreateDeferredLightingPassPipelineColorBlendAttachmentStates()
+{
+    SharedLib::PipelineColorBlendInfo pipelineColorBlendInfo{};
+
+    pipelineColorBlendInfo.colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    pipelineColorBlendInfo.colorBlending.logicOpEnable = VK_FALSE;
+    pipelineColorBlendInfo.colorBlending.logicOp = VK_LOGIC_OP_COPY;
+    pipelineColorBlendInfo.colorBlending.blendConstants[0] = 0.0f;
+    pipelineColorBlendInfo.colorBlending.blendConstants[1] = 0.0f;
+    pipelineColorBlendInfo.colorBlending.blendConstants[2] = 0.0f;
+    pipelineColorBlendInfo.colorBlending.blendConstants[3] = 0.0f;
+
+    VkPipelineColorBlendAttachmentState colorBlendAttachmentState = {};
+    colorBlendAttachmentState.colorWriteMask = 0xf;
+    colorBlendAttachmentState.blendEnable = VK_TRUE;
+    colorBlendAttachmentState.colorBlendOp = VK_BLEND_OP_ADD;
+    colorBlendAttachmentState.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+    colorBlendAttachmentState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    colorBlendAttachmentState.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+    colorBlendAttachmentState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+
+    pipelineColorBlendInfo.colorBlendAttachments.push_back(colorBlendAttachmentState);
+
+    return pipelineColorBlendInfo;
+}
+
+// ================================================================================================================
 void PBRDeferredApp::InitGeoPassPipelineLayout()
 {
     // Create pipeline layout
@@ -635,7 +778,46 @@ VkPipelineVertexInputStateCreateInfo PBRDeferredApp::CreateGeoPassPipelineVertex
 }
 
 // ================================================================================================================
-VkPipelineDepthStencilStateCreateInfo PBRDeferredApp::CreateGeoPassDepthStencilStateInfo()
+// In the deferred lighting pass, we don't need the light volumes' normals.
+VkPipelineVertexInputStateCreateInfo PBRDeferredApp::CreateDeferredLightingPassPipelineVertexInputInfo()
+{
+    // Specifying all kinds of pipeline states
+    // Vertex input state
+    VkVertexInputBindingDescription* pVertBindingDesc = new VkVertexInputBindingDescription();
+    memset(pVertBindingDesc, 0, sizeof(VkVertexInputBindingDescription));
+    {
+        pVertBindingDesc->binding = 0;
+        pVertBindingDesc->stride = 6 * sizeof(float);
+        pVertBindingDesc->inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    }
+    m_heapMemPtrVec.push_back(pVertBindingDesc);
+
+    VkVertexInputAttributeDescription* pVertAttrDescs = new VkVertexInputAttributeDescription();
+    memset(pVertAttrDescs, 0, sizeof(VkVertexInputAttributeDescription));
+    {
+        // Position
+        pVertAttrDescs[0].location = 0;
+        pVertAttrDescs[0].binding = 0;
+        pVertAttrDescs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+        pVertAttrDescs[0].offset = 0;
+    }
+    m_heapArrayMemPtrVec.push_back(pVertAttrDescs);
+
+    VkPipelineVertexInputStateCreateInfo vertInputInfo{};
+    {
+        vertInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        vertInputInfo.pNext = nullptr;
+        vertInputInfo.vertexBindingDescriptionCount = 1;
+        vertInputInfo.pVertexBindingDescriptions = pVertBindingDesc;
+        vertInputInfo.vertexAttributeDescriptionCount = 1;
+        vertInputInfo.pVertexAttributeDescriptions = pVertAttrDescs;
+    }
+
+    return vertInputInfo;
+}
+
+// ================================================================================================================
+VkPipelineDepthStencilStateCreateInfo PBRDeferredApp::CreateGeoLightingPassDepthStencilStateInfo()
 {
     VkPipelineDepthStencilStateCreateInfo depthStencilInfo{};
     {
@@ -651,20 +833,28 @@ VkPipelineDepthStencilStateCreateInfo PBRDeferredApp::CreateGeoPassDepthStencilS
 }
 
 // ================================================================================================================
-std::vector<VkPipelineColorBlendAttachmentState> PBRDeferredApp::CreateGeoPassPipelineColorBlendAttachmentStates()
+SharedLib::PipelineColorBlendInfo PBRDeferredApp::CreateGeoPassPipelineColorBlendAttachmentStates()
 {
-    std::vector<VkPipelineColorBlendAttachmentState> colorBlendAttachmentStates;
+    SharedLib::PipelineColorBlendInfo pipelineColorBlendInfo{};
+
+    pipelineColorBlendInfo.colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    pipelineColorBlendInfo.colorBlending.logicOpEnable = VK_FALSE;
+    pipelineColorBlendInfo.colorBlending.logicOp = VK_LOGIC_OP_COPY;
+    pipelineColorBlendInfo.colorBlending.blendConstants[0] = 0.0f;
+    pipelineColorBlendInfo.colorBlending.blendConstants[1] = 0.0f;
+    pipelineColorBlendInfo.colorBlending.blendConstants[2] = 0.0f;
+    pipelineColorBlendInfo.colorBlending.blendConstants[3] = 0.0f;
 
     VkPipelineColorBlendAttachmentState colorBlendAttachmentState = {};
     colorBlendAttachmentState.colorWriteMask = 0xf;
     colorBlendAttachmentState.blendEnable = VK_FALSE;
 
-    colorBlendAttachmentStates.push_back(colorBlendAttachmentState);
-    colorBlendAttachmentStates.push_back(colorBlendAttachmentState);
-    colorBlendAttachmentStates.push_back(colorBlendAttachmentState);
-    colorBlendAttachmentStates.push_back(colorBlendAttachmentState);
+    pipelineColorBlendInfo.colorBlendAttachments.push_back(colorBlendAttachmentState);
+    pipelineColorBlendInfo.colorBlendAttachments.push_back(colorBlendAttachmentState);
+    pipelineColorBlendInfo.colorBlendAttachments.push_back(colorBlendAttachmentState);
+    pipelineColorBlendInfo.colorBlendAttachments.push_back(colorBlendAttachmentState);
 
-    return colorBlendAttachmentStates;
+    return pipelineColorBlendInfo;
 }
 
 // ================================================================================================================
@@ -684,11 +874,11 @@ void PBRDeferredApp::InitGeoPassPipeline()
     VkPipelineVertexInputStateCreateInfo vertInputInfo = CreateGeoPassPipelineVertexInputInfo();
     m_geoPassPipeline.SetVertexInputInfo(&vertInputInfo);
 
-    VkPipelineDepthStencilStateCreateInfo depthStencilInfo = CreateGeoPassDepthStencilStateInfo();
+    VkPipelineDepthStencilStateCreateInfo depthStencilInfo = CreateGeoLightingPassDepthStencilStateInfo();
     m_geoPassPipeline.SetDepthStencilStateInfo(&depthStencilInfo);
 
-    std::vector<VkPipelineColorBlendAttachmentState> colorAttachmentsBlendInfos = CreateGeoPassPipelineColorBlendAttachmentStates();
-    m_geoPassPipeline.SetPipelineColorBlendInfo(colorAttachmentsBlendInfos);
+    SharedLib::PipelineColorBlendInfo colorBlendInfo = CreateGeoPassPipelineColorBlendAttachmentStates();
+    m_geoPassPipeline.SetPipelineColorBlendInfo(colorBlendInfo);
 
     VkPipelineShaderStageCreateInfo shaderStgsInfo[2] = {};
     shaderStgsInfo[0] = CreateDefaultShaderStgCreateInfo(m_geoPassVsShaderModule, VK_SHADER_STAGE_VERTEX_BIT);
@@ -870,6 +1060,26 @@ void PBRDeferredApp::InitMetallicRoughnessSSBO()
 }
 
 // ================================================================================================================
+std::vector<float> PBRDeferredApp::GetDeferredLightingPushConstantData()
+{
+    std::vector<float> data;
+
+    // Camera pos:
+    float cameraPos[3];
+    m_pCamera->GetPos(cameraPos);
+    
+    data.push_back(cameraPos[0]);
+    data.push_back(cameraPos[1]);
+    data.push_back(cameraPos[2]);
+
+    VkExtent2D extent = GetSwapchainImageExtent();
+    data.push_back(extent.width);
+    data.push_back(extent.height);
+
+    return data;
+}
+
+// ================================================================================================================
 void PBRDeferredApp::InitGBuffer()
 {
     // It looks like AMD doesn't support the R32G32B32_SFLOAT image format.
@@ -993,6 +1203,22 @@ void PBRDeferredApp::InitGBuffer()
         VK_CHECK(vkCreateSampler(m_device, &samplerInfo, nullptr, &m_normalTextures[i].imageSampler));
         VK_CHECK(vkCreateSampler(m_device, &samplerInfo, nullptr, &m_albedoTextures[i].imageSampler));
         VK_CHECK(vkCreateSampler(m_device, &samplerInfo, nullptr, &m_metallicRoughnessTextures[i].imageSampler));
+
+        m_worldPosTextures[i].imageDescInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        m_worldPosTextures[i].imageDescInfo.imageView = m_worldPosTextures[i].imageView;
+        m_worldPosTextures[i].imageDescInfo.sampler = m_worldPosTextures[i].imageSampler;
+
+        m_normalTextures[i].imageDescInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        m_normalTextures[i].imageDescInfo.imageView = m_normalTextures[i].imageView;
+        m_normalTextures[i].imageDescInfo.sampler = m_normalTextures[i].imageSampler;
+
+        m_albedoTextures[i].imageDescInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        m_albedoTextures[i].imageDescInfo.imageView = m_albedoTextures[i].imageView;
+        m_albedoTextures[i].imageDescInfo.sampler = m_albedoTextures[i].imageSampler;
+
+        m_metallicRoughnessTextures[i].imageDescInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        m_metallicRoughnessTextures[i].imageDescInfo.imageView = m_metallicRoughnessTextures[i].imageView;
+        m_metallicRoughnessTextures[i].imageDescInfo.sampler = m_metallicRoughnessTextures[i].imageSampler;
     }
 }
 
@@ -1021,25 +1247,165 @@ void PBRDeferredApp::DestroyGBuffer()
 // ================================================================================================================
 void PBRDeferredApp::InitDeferredLightingPassPipeline()
 {
+    VkPipelineRenderingCreateInfoKHR pipelineRenderCreateInfo{};
+    {
+        pipelineRenderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+        pipelineRenderCreateInfo.colorAttachmentCount = 1;
+        pipelineRenderCreateInfo.pColorAttachmentFormats = &m_choisenSurfaceFormat.format;
+        pipelineRenderCreateInfo.depthAttachmentFormat = VK_FORMAT_D16_UNORM;
+    }
 
+    m_deferredLightingPassPipeline.SetPNext(&pipelineRenderCreateInfo);
+    m_deferredLightingPassPipeline.SetPipelineLayout(m_deferredLightingPassPipelineLayout);
+
+    VkPipelineVertexInputStateCreateInfo vertInputInfo = CreateDeferredLightingPassPipelineVertexInputInfo();
+    m_deferredLightingPassPipeline.SetVertexInputInfo(&vertInputInfo);
+
+    VkPipelineDepthStencilStateCreateInfo depthStencilInfo = CreateGeoLightingPassDepthStencilStateInfo();
+    m_deferredLightingPassPipeline.SetDepthStencilStateInfo(&depthStencilInfo);
+
+    SharedLib::PipelineColorBlendInfo colorBlendInfo = CreateDeferredLightingPassPipelineColorBlendAttachmentStates();
+    m_deferredLightingPassPipeline.SetPipelineColorBlendInfo(colorBlendInfo);
+
+    VkPipelineShaderStageCreateInfo shaderStgsInfo[2] = {};
+    shaderStgsInfo[0] = CreateDefaultShaderStgCreateInfo(m_deferredLightingPassVsShaderModule, VK_SHADER_STAGE_VERTEX_BIT);
+    shaderStgsInfo[1] = CreateDefaultShaderStgCreateInfo(m_deferredLightingPassPsShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT);
+    m_deferredLightingPassPipeline.SetShaderStageInfo(shaderStgsInfo, 2);
+
+    m_deferredLightingPassPipeline.CreatePipeline(m_device);
 }
 
 // ================================================================================================================
 void PBRDeferredApp::InitDeferredLightingPassPipelineDescriptorSetLayout()
 {
+    std::vector<VkDescriptorSetLayoutBinding> bindings;
 
+    // Create pipeline binding and descriptor objects for the camera parameters
+    VkDescriptorSetLayoutBinding cameraUboBinding{};
+    {
+        cameraUboBinding.binding = 0;
+        cameraUboBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        cameraUboBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        cameraUboBinding.descriptorCount = 1;
+    }
+    bindings.push_back(cameraUboBinding);
+
+    // Binding for the point lights' positions
+    VkDescriptorSetLayoutBinding lightPosSSBOBinding{};
+    {
+        lightPosSSBOBinding.binding = 1;
+        lightPosSSBOBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        lightPosSSBOBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        lightPosSSBOBinding.descriptorCount = 1;
+    }
+    bindings.push_back(lightPosSSBOBinding);
+
+    // Binding for the point lights volumes' radius.
+    VkDescriptorSetLayoutBinding lightVolumeRadiusSSBOBinding{};
+    {
+        lightVolumeRadiusSSBOBinding.binding = 2;
+        lightVolumeRadiusSSBOBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        lightVolumeRadiusSSBOBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        lightVolumeRadiusSSBOBinding.descriptorCount = 1;
+    }
+    bindings.push_back(lightVolumeRadiusSSBOBinding);
+
+    // Binding for the point lights radiance.
+    VkDescriptorSetLayoutBinding lightRadianceSSBOBinding{};
+    {
+        lightRadianceSSBOBinding.binding = 3;
+        lightRadianceSSBOBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        lightRadianceSSBOBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        lightRadianceSSBOBinding.descriptorCount = 1;
+    }
+    bindings.push_back(lightRadianceSSBOBinding);
+
+    VkDescriptorSetLayoutBinding worldPosTexBinding{};
+    {
+        worldPosTexBinding.binding = 4;
+        worldPosTexBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        worldPosTexBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        worldPosTexBinding.descriptorCount = 1;
+    }
+    bindings.push_back(worldPosTexBinding);
+
+    VkDescriptorSetLayoutBinding worldNormalTexBinding{};
+    {
+        worldNormalTexBinding.binding = 5;
+        worldNormalTexBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        worldNormalTexBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        worldNormalTexBinding.descriptorCount = 1;
+    }
+    bindings.push_back(worldNormalTexBinding);
+
+    VkDescriptorSetLayoutBinding albedoTexBinding{};
+    {
+        albedoTexBinding.binding = 6;
+        albedoTexBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        albedoTexBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        albedoTexBinding.descriptorCount = 1;
+    }
+    bindings.push_back(albedoTexBinding);
+
+    VkDescriptorSetLayoutBinding metallicRoughnessTexBinding{};
+    {
+        metallicRoughnessTexBinding.binding = 7;
+        metallicRoughnessTexBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        metallicRoughnessTexBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        metallicRoughnessTexBinding.descriptorCount = 1;
+    }
+    bindings.push_back(metallicRoughnessTexBinding);
+
+    // Create pipeline's descriptors layout
+    // The Vulkan spec states: The VkDescriptorSetLayoutBinding::binding members of the elements of the pBindings array 
+    // must each have different values 
+    // (https://vulkan.lunarg.com/doc/view/1.3.236.0/windows/1.3-extensions/vkspec.html#VUID-VkDescriptorSetLayoutCreateInfo-binding-00279)
+    VkDescriptorSetLayoutCreateInfo pipelineDesSetLayoutInfo{};
+    {
+        pipelineDesSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        // Setting this flag tells the descriptor set layouts that no actual descriptor sets are allocated but instead pushed at command buffer creation time
+        pipelineDesSetLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
+        pipelineDesSetLayoutInfo.bindingCount = bindings.size();
+        pipelineDesSetLayoutInfo.pBindings = bindings.data();
+    }
+
+    VK_CHECK(vkCreateDescriptorSetLayout(m_device,
+                                         &pipelineDesSetLayoutInfo,
+                                         nullptr,
+                                         &m_deferredLightingPassPipelineDesSetLayout));
 }
 
 // ================================================================================================================
 void PBRDeferredApp::InitDeferredLightingPassPipelineLayout()
 {
+    // Create pipeline layout
+    std::vector<float> pushConstantData = GetDeferredLightingPushConstantData();
 
+    VkPushConstantRange pushConstantInfo{};
+    {
+        pushConstantInfo.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        pushConstantInfo.offset = 0;
+        pushConstantInfo.size = sizeof(float) * pushConstantData.size();
+    }
+
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+    {
+        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        pipelineLayoutInfo.setLayoutCount = 1;
+        pipelineLayoutInfo.pSetLayouts = &m_deferredLightingPassPipelineDesSetLayout;
+        pipelineLayoutInfo.pushConstantRangeCount = 1;
+        pipelineLayoutInfo.pPushConstantRanges = &pushConstantInfo;
+    }
+
+    VK_CHECK(vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_deferredLightingPassPipelineLayout));
 }
 
 // ================================================================================================================
 void PBRDeferredApp::InitDeferredLightingPassShaderModules()
 {
-
+    // Create Shader Modules.
+    m_deferredLightingPassVsShaderModule = CreateShaderModule("/hlsl/lighting_vert.spv");
+    m_deferredLightingPassPsShaderModule = CreateShaderModule("/hlsl/lighting_frag.spv");
 }
 
 // ================================================================================================================
@@ -1096,6 +1462,11 @@ void PBRDeferredApp::AppInit()
     InitGeoPassPipelineDescriptorSetLayout();
     InitGeoPassPipelineLayout();
     InitGeoPassPipeline();
+
+    InitDeferredLightingPassShaderModules();
+    InitDeferredLightingPassPipelineDescriptorSetLayout();
+    InitDeferredLightingPassPipelineLayout();
+    InitDeferredLightingPassPipeline();
 
     InitSwapchainSyncObjects();
 }

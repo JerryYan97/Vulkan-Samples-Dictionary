@@ -41,7 +41,7 @@ namespace SharedLib
         void SetDepthStencilStateInfo(VkPipelineDepthStencilStateCreateInfo* pDepthStencilInfo) 
             { m_pDepthStencilState = pDepthStencilInfo; }
 
-        void SetPipelineColorBlendInfo(std::vector<VkPipelineColorBlendAttachmentState>& pipelineColorBlendAttachmentStates); // For the MRT.
+        void SetPipelineColorBlendInfo(PipelineColorBlendInfo& pipelineColorBlendAttachmentStates); // For the MRT.
 
     protected:
 
