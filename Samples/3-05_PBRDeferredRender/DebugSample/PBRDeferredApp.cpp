@@ -587,25 +587,25 @@ std::vector<VkWriteDescriptorSet> PBRDeferredApp::GetDeferredLightingWriteDescri
     }
     writeDescriptorSet0.push_back(writeWorldPosTexDesc);
 
-    VkWriteDescriptorSet writeAlbedoTexDesc{};
-    {
-        writeAlbedoTexDesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeAlbedoTexDesc.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        writeAlbedoTexDesc.descriptorCount = 1;
-        writeAlbedoTexDesc.dstBinding = 5;
-        writeAlbedoTexDesc.pImageInfo = &m_albedoTextures[m_currentFrame].imageDescInfo;
-    }
-    writeDescriptorSet0.push_back(writeAlbedoTexDesc);
-
     VkWriteDescriptorSet writeNormalTexDesc{};
     {
         writeNormalTexDesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         writeNormalTexDesc.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         writeNormalTexDesc.descriptorCount = 1;
-        writeNormalTexDesc.dstBinding = 6;
+        writeNormalTexDesc.dstBinding = 5;
         writeNormalTexDesc.pImageInfo = &m_normalTextures[m_currentFrame].imageDescInfo;
     }
     writeDescriptorSet0.push_back(writeNormalTexDesc);
+
+    VkWriteDescriptorSet writeAlbedoTexDesc{};
+    {
+        writeAlbedoTexDesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeAlbedoTexDesc.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writeAlbedoTexDesc.descriptorCount = 1;
+        writeAlbedoTexDesc.dstBinding = 6;
+        writeAlbedoTexDesc.pImageInfo = &m_albedoTextures[m_currentFrame].imageDescInfo;
+    }
+    writeDescriptorSet0.push_back(writeAlbedoTexDesc);  
 
     VkWriteDescriptorSet writeMetallicRoughnessTexDesc{};
     {
