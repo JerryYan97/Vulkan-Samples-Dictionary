@@ -25,11 +25,17 @@ float4x4 PosToModelMat(float3 pos, float radius)
     // NOTE: HLSL's matrices are column major.
     // But, it is filled column by column in this way. So it's good.
     // As for the UBO mat input, we still need to transpose the row-major matrix.
+    /*
     float4x4 mat = { float4(radius, 0.0, 0.0, pos.x),
                      float4(0.0, radius, 0.0, pos.y),
                      float4(0.0, 0.0, radius, pos.z),
                      float4(0.0, 0.0, 0.0,    1.0) };
-                     
+    */
+    float4x4 mat = { float4(1.0, 0.0, 0.0, pos.x),
+                     float4(0.0, 1.0, 0.0, pos.y),
+                     float4(0.0, 0.0, 1.0, pos.z),
+                     float4(0.0, 0.0, 0.0,    1.0) };
+
     return mat;
 }
 

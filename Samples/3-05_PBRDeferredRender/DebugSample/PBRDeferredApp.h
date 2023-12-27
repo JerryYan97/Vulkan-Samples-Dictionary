@@ -155,7 +155,7 @@ private:
     std::vector<VkFormat> m_gBufferFormats;
 
     // Geo pass Gpu Rsrc inputs
-    // NOTE: SSBO needs to have size of the multiple of 2. HLSL always takes 4 or 2 elements per entry.
+    // NOTE: SSBO's entry needs to have size of the multiple of 2. HLSL always takes 4 or 2 elements per entry.
     std::vector<GpuBuffer> m_vpUboBuffers;
     GpuBuffer m_offsetStorageBuffer;
     GpuBuffer m_albedoStorageBuffer;

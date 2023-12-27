@@ -337,6 +337,7 @@ void PBRDeferredApp::InitLightPosRadianceSSBOs()
                 lightsRadiance.push_back(r);
                 lightsRadiance.push_back(g);
                 lightsRadiance.push_back(b);
+                lightsRadiance.push_back(1.f);
 
                 std::array<float, 3> radiance = { r, g, b };
 
@@ -352,6 +353,7 @@ void PBRDeferredApp::InitLightPosRadianceSSBOs()
                 lightsPos.push_back(xPos);
                 lightsPos.push_back(yPos);
                 lightsPos.push_back(zPos);
+                lightsPos.push_back(1.f);
             }
         }
     }
