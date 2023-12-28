@@ -170,7 +170,7 @@ namespace SharedLib
         vkGetPhysicalDeviceProperties(m_physicalDevice, &physicalDevProperties);
         std::cout << "Device name:" << physicalDevProperties.deviceName << std::endl;
 
-        SharedLib::PrintDeviceImageCapbility(m_physicalDevice);
+        // SharedLib::PrintDeviceImageCapbility(m_physicalDevice);
     }
 
     // ================================================================================================================
