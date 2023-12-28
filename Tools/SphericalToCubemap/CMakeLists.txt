@@ -32,7 +32,3 @@ execute_process(COMMAND glslc ./glsl/ToCubeMap.vert -o ToCubeMap_vert.spv
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 execute_process(COMMAND glslc ./glsl/ToCubeMap.frag -o ToCubeMap_frag.spv
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-execute_process(COMMAND glslc ./glsl/CubeMapFormat.vert -o CubeMapFormat_vert.spv
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-execute_process(COMMAND glslc ./glsl/CubeMapFormat.frag -o CubeMapFormat_frag.spv
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
