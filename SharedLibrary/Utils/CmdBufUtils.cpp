@@ -132,7 +132,9 @@ namespace SharedLib
             submitInfo.pCommandBuffers = &cmdBuffer;
         }
         VK_CHECK(vkQueueSubmit(queue, 1, &submitInfo, submitFence));
-        vkWaitForFences(device, 1, &submitFence, VK_TRUE, UINT64_MAX);
+        VK_CHECK(vkWaitForFences(device, 1, &submitFence, VK_TRUE, UINT64_MAX));
+
+        // VK_CHECK(vkDeviceWaitIdle(device));
 
         vkDestroyFence(device, submitFence, nullptr);
     }

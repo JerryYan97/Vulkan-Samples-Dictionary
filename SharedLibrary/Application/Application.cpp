@@ -3,6 +3,7 @@
 
 #include "Application.h"
 #include "VulkanDbgUtils.h"
+#include "AppUtils.h"
 #include <cassert>
 
 namespace SharedLib
@@ -168,6 +169,8 @@ namespace SharedLib
         VkPhysicalDeviceProperties physicalDevProperties;
         vkGetPhysicalDeviceProperties(m_physicalDevice, &physicalDevProperties);
         std::cout << "Device name:" << physicalDevProperties.deviceName << std::endl;
+
+        SharedLib::PrintDeviceImageCapbility(m_physicalDevice);
     }
 
     // ================================================================================================================

@@ -154,7 +154,8 @@ void SphericalToCubemap::InitHdriGpuObjects()
         cubeMapImgInfo.mipLevels = 1;
         cubeMapImgInfo.arrayLayers = 6;
         cubeMapImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-        cubeMapImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
+        cubeMapImgInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+        // cubeMapImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
         cubeMapImgInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
         // cubeMapImgInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT; // It's just an output. We don't need a cubemap sampler.
         cubeMapImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;

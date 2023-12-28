@@ -21,6 +21,8 @@ namespace SharedLib
 
     void Img4EleTo3Ele(float* pSrc, float* pDst, uint32_t pixCnt);
 
+    void PrintDeviceImageCapbility(VkPhysicalDevice phyDevice);
+
     struct VulkanInfos
     {
         VkDevice      device; // NOTE: The push descriptors feature has to be enabled.
@@ -49,6 +51,7 @@ namespace SharedLib
     private:
     };
 
+    // NOTE: Nvidia doesn't support 6 image layers for the R32G32B32A32 linear tiling, so we use the optimal tiling.
     class CubemapFormatTransApp : public AppUtil
     {
     public:

@@ -173,7 +173,7 @@ int main(
                 device,
                 gfxQueue,
                 inputHdriInfo.pData,
-                3 * sizeof(float) * inputHdriInfo.width * inputHdriInfo.height,
+                4 * sizeof(float) * inputHdriInfo.width * inputHdriInfo.height,
                 app.GetInputCubemap(),
                 cubemapSubResRangeLayer6Level1,
                 VK_IMAGE_LAYOUT_UNDEFINED,

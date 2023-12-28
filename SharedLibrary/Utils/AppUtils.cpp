@@ -419,7 +419,8 @@ namespace SharedLib
             formatImgInfo.mipLevels = 1;
             formatImgInfo.arrayLayers = 6;
             formatImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-            formatImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
+            // formatImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
+            formatImgInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
             formatImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
             formatImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         }
@@ -493,7 +494,8 @@ namespace SharedLib
             outputImgInfo.mipLevels = 1;
             outputImgInfo.arrayLayers = 6;
             outputImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-            outputImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
+            // outputImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
+            outputImgInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
             outputImgInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
             outputImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         }
@@ -723,5 +725,22 @@ namespace SharedLib
             pDst[ele3Idx1] = pSrc[ele4Idx1];
             pDst[ele3Idx2] = pSrc[ele4Idx2];
         }
+    }
+
+    // ================================================================================================================
+    void PrintDeviceImageCapbility(
+        VkPhysicalDevice phyDevice)
+    {
+        VkImageFormatProperties imgFormatProperties{};
+        vkGetPhysicalDeviceImageFormatProperties(phyDevice,
+                                                 VK_FORMAT_R32G32B32_SFLOAT,
+                                                 VK_IMAGE_TYPE_2D,
+                                                 VK_IMAGE_TILING_OPTIMAL,
+                                                 // VK_IMAGE_TILING_LINEAR,
+                                                 VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT,
+                                                 VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT, &imgFormatProperties);
+
+        std::cout << "Max array layers:" << imgFormatProperties.maxArrayLayers << std::endl;
+        std::cout << "Max array layers:" << imgFormatProperties.maxMipLevels << std::endl;
     }
 }

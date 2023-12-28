@@ -67,7 +67,7 @@ void GenIBL::DestroyInputCubemapRenderObjs()
 
 // ================================================================================================================
 // Clamp the high radiance so that diffuse irradiance sampling is happy.
-void DataPreprosess(
+float* DataPreprosess(
     float* pData,
     uint32_t width,
     uint32_t height)
@@ -79,6 +79,18 @@ void DataPreprosess(
             pData[i] = 50.f;
         }
     }
+
+    float* pFourChannelsData = new float[4 * width * height];
+    for (uint32_t pixelId = 0; pixelId < width * height; pixelId++)
+    {
+        uint32_t fourChannelBaseId = 4 * pixelId;
+        uint32_t threeChannelBaseId = 3 * pixelId;
+        memcpy(&pFourChannelsData[fourChannelBaseId], &pData[threeChannelBaseId], sizeof(float) * 3);
+        pFourChannelsData[fourChannelBaseId + 3] = 1.f;
+    }
+
+    delete pData;
+    return pFourChannelsData;
 }
 
 // ================================================================================================================
@@ -91,7 +103,9 @@ void GenIBL::ReadInCubemap(
     m_hdrCubeMapInfo.width = (uint32_t)width;
     m_hdrCubeMapInfo.height = (uint32_t)height;
 
-    DataPreprosess(m_hdrCubeMapInfo.pData, m_hdrCubeMapInfo.width, m_hdrCubeMapInfo.height);
+    // NOTE: Nvidia doesn't support the R32G32B32 format so we will just use the R32G32B32A32 format.
+    //       In the preprocess, we need to add the dummy 'A' channel.
+    m_hdrCubeMapInfo.pData = DataPreprosess(m_hdrCubeMapInfo.pData, m_hdrCubeMapInfo.width, m_hdrCubeMapInfo.height);
 }
 
 // ================================================================================================================
@@ -116,12 +130,14 @@ void GenIBL::InitInputCubemapObjects()
     {
         cubeMapImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         cubeMapImgInfo.imageType = VK_IMAGE_TYPE_2D;
-        cubeMapImgInfo.format = VK_FORMAT_R32G32B32_SFLOAT;
+        // cubeMapImgInfo.format = VK_FORMAT_R32G32B32_SFLOAT;
+        cubeMapImgInfo.format = VK_FORMAT_R32G32B32A32_SFLOAT;
         cubeMapImgInfo.extent = extent;
         cubeMapImgInfo.mipLevels = 10;
         cubeMapImgInfo.arrayLayers = 6;
         cubeMapImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-        cubeMapImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
+        // cubeMapImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
+        cubeMapImgInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
         cubeMapImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
         cubeMapImgInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
         cubeMapImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -139,7 +155,8 @@ void GenIBL::InitInputCubemapObjects()
         info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         info.image = m_hdrCubeMapImage;
         info.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
-        info.format = VK_FORMAT_R32G32B32_SFLOAT;
+        // info.format = VK_FORMAT_R32G32B32_SFLOAT;
+        info.format = VK_FORMAT_R32G32B32A32_SFLOAT;
         info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         info.subresourceRange.levelCount = 10;
         info.subresourceRange.layerCount = 6;
@@ -380,7 +397,8 @@ void GenIBL::AppInit()
 }
 
 // ================================================================================================================
-// Only for the rectangle pic now. 3 channels per color element.
+// Only for the rectangle pic now. 4 channels per color element. The 4th channel is a dummy channel that is used to
+// accomodate the hw image format capbility difference.
 void GenHalfMipmapLinearMean(
     float* pSrc,
     uint32_t srcDim,
@@ -401,20 +419,22 @@ void GenHalfMipmapLinearMean(
             uint32_t srcPixelId2 = (srcRowId + 1) * srcDim + srcColId;
             uint32_t srcPixelId3 = (srcRowId + 1) * srcDim + srcColId + 1;
 
-            pDst[3 * dstPixelId] = (pSrc[srcPixelId0 * 3] +
-                                    pSrc[srcPixelId1 * 3] +
-                                    pSrc[srcPixelId2 * 3] +
-                                    pSrc[srcPixelId3 * 3]) / 4.f;
+            pDst[4 * dstPixelId] = (pSrc[srcPixelId0 * 4] +
+                                    pSrc[srcPixelId1 * 4] +
+                                    pSrc[srcPixelId2 * 4] +
+                                    pSrc[srcPixelId3 * 4]) / 4.f;
 
-            pDst[3 * dstPixelId + 1] = (pSrc[srcPixelId0 * 3 + 1] +
-                                        pSrc[srcPixelId1 * 3 + 1] +
-                                        pSrc[srcPixelId2 * 3 + 1] +
-                                        pSrc[srcPixelId3 * 3 + 1]) / 4.f;
+            pDst[4 * dstPixelId + 1] = (pSrc[srcPixelId0 * 4 + 1] +
+                                        pSrc[srcPixelId1 * 4 + 1] +
+                                        pSrc[srcPixelId2 * 4 + 1] +
+                                        pSrc[srcPixelId3 * 4 + 1]) / 4.f;
 
-            pDst[3 * dstPixelId + 2] = (pSrc[srcPixelId0 * 3 + 2] +
-                                        pSrc[srcPixelId1 * 3 + 2] +
-                                        pSrc[srcPixelId2 * 3 + 2] +
-                                        pSrc[srcPixelId3 * 3 + 2]) / 4.f;
+            pDst[4 * dstPixelId + 2] = (pSrc[srcPixelId0 * 4 + 2] +
+                                        pSrc[srcPixelId1 * 4 + 2] +
+                                        pSrc[srcPixelId2 * 4 + 2] +
+                                        pSrc[srcPixelId3 * 4 + 2]) / 4.f;
+
+            pDst[4 * dstPixelId + 3] = 1.f;
         }
     }
 }
@@ -430,10 +450,10 @@ void GenHalfCubemapMipmapLinearMean(
     for (uint32_t face = 0; face < 6; face++)
     {
         uint32_t faceSrcPixelStartId = face * (srcDim * srcDim);
-        float* pFaceSrc = &pSrc[3 * faceSrcPixelStartId];
+        float* pFaceSrc = &pSrc[4 * faceSrcPixelStartId];
 
         uint32_t faceDstPixelStartId = face * (dstDim * dstDim);
-        float* pFaceDst = &pDst[3 * faceDstPixelStartId];
+        float* pFaceDst = &pDst[4 * faceDstPixelStartId];
 
         GenHalfMipmapLinearMean(pFaceSrc, srcDim, pFaceDst);
     }
@@ -455,7 +475,8 @@ void GenIBL::CmdGenInputCubemapMipMaps(
     {
         uint32_t dstDivFactor = 2 << mipLevel;
         uint32_t mipPixelCnt = (m_hdrCubeMapInfo.width / dstDivFactor) * (m_hdrCubeMapInfo.height / dstDivFactor);
-        float* pDstMip = new float[3 * mipPixelCnt];
+        // float* pDstMip = new float[3 * mipPixelCnt];
+        float* pDstMip = new float[4 * mipPixelCnt];
 
         m_pHdrCubemapMips[mipLevel + 1] = pDstMip;
 
@@ -474,7 +495,7 @@ void GenIBL::CmdGenInputCubemapMipMaps(
                                   3, pDstMip);
         }
 
-        uint32_t mipBytesCnt = 3 * sizeof(float) *
+        uint32_t mipBytesCnt = 4 * sizeof(float) *
                                (m_hdrCubeMapInfo.width / dstDivFactor) *
                                (m_hdrCubeMapInfo.height / dstDivFactor);
 

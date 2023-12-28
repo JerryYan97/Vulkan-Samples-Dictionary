@@ -77,7 +77,8 @@ void GenIBL::InitEnvBrdfOutputObjects()
         envBrdfMapImgInfo.mipLevels = 1;
         envBrdfMapImgInfo.arrayLayers = 1;
         envBrdfMapImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-        envBrdfMapImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
+        // envBrdfMapImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
+        envBrdfMapImgInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
         envBrdfMapImgInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
         envBrdfMapImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     }

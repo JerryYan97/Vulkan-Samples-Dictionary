@@ -54,8 +54,11 @@ float4 main(
     
     up = normalize(cross(normal, right));
 
-    float sampleDelta = 0.025;
+    // NOTE: On low-end GPU, if the sample delta is too small, it can make GPU reset itself, because it spends too much time in the shader.
+    // float sampleDelta = 0.025;
+    float sampleDelta = 0.05;
     float nrSamples = 0.f;
+
     for(float phi = 0.f; phi < 2.f * PI; phi += sampleDelta)
     {
         for(float theta = 0.f; theta < 0.5 * PI; theta += sampleDelta)
