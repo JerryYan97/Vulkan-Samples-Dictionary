@@ -5,12 +5,12 @@
 layout (location = 0) flat out int outViewId;
 
 vec2 positions[6] = vec2[](
-    vec2(-1.f, -1.f),
-    vec2( 1.f, -1.f),
     vec2(-1.f,  1.f),
     vec2( 1.f, -1.f),
+    vec2(-1.f, -1.f),
+    vec2(-1.f,  1.f),
     vec2( 1.f,  1.f),
-    vec2(-1.f,  1.f)
+    vec2( 1.f, -1.f)
 );
 
 void main() 

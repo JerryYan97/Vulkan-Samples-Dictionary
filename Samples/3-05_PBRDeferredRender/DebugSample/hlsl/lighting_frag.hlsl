@@ -23,7 +23,8 @@ struct RenderInfo
 
 float PointLightAttenuation(
 	float3 pixelPos,
-	float3 ptLightPos)
+	float3 ptLightPos,
+	float radius)
 {
 	float distance  = length(pixelPos - ptLightPos);
 
@@ -35,13 +36,19 @@ float PointLightAttenuation(
 	// const float kq = 0.07f;
 	float attenuation = 1.0 / (kc + kl * distance + kq * distance * distance);
 
+	if(distance > radius)
+	{
+		attenuation = 0.0;
+	}
+
 	return attenuation;
 }
 
 float4 main(
 	float4 i_fragCoord : SV_POSITION,
     float4 i_lightPos  : POSITION0,
-	float4 i_radiance  : POSITION1) : SV_Target
+	float4 i_radiance  : POSITION1,
+	float  i_radius    : BLENDWEIGHT0) : SV_Target
 {
 	float x = i_fragCoord[0] / i_renderInfo.width;
 	float y = i_fragCoord[1] / i_renderInfo.height;
@@ -54,7 +61,7 @@ float4 main(
 
 	float3 pixelWorldPos = i_worldPosTexture.Sample(i_worldPosSamplerState, uv).xyz;
 	float3 pixelWorldNormal = i_worldNormalTexture.Sample(i_worldNormalSamplerState, uv).xyz;
-	float2 metallicRoughness = i_metallicRoughnessTexture.Sample(i_metallicRoughnessSamplerState, uv).xyz;
+	float2 metallicRoughness = i_metallicRoughnessTexture.Sample(i_metallicRoughnessSamplerState, uv).xy;
 
 	float3 wo = normalize(i_renderInfo.cameraPosition - pixelWorldPos);
 	
@@ -69,7 +76,16 @@ float4 main(
 	float3 wi = normalize(i_lightPos.xyz - pixelWorldPos);
 	float3 H  = normalize(wi + wo);
 
-	float  attenuation = PointLightAttenuation(pixelWorldPos, i_lightPos.xyz);
+	float attenuation = PointLightAttenuation(pixelWorldPos, i_lightPos.xyz, i_radius);
+
+	// Discard the pixel if the attenuation is smaller than the threshold
+	if(attenuation < 5.0 / 256.0)
+	{
+		// The discard in HLSL needs more extention so we don't use it...
+		// discard;
+		attenuation = 0.0;
+	}
+
 	float3 radiance    = lightColor * attenuation; 
 
 	float lightNormalCosTheta = max(dot(worldNormal, wi), 0.0);
@@ -98,7 +114,19 @@ float4 main(
     color = color / (color + float3(1.0, 1.0, 1.0));
     color = pow(color, float3(1.0/2.2, 1.0/2.2, 1.0/2.2));  
 
-	return float4(1.0, 1.0, 1.0, 1.0);
 
-	// return float4(color, 1.0);
+	float cameraLightDist = length(i_renderInfo.cameraPosition - i_lightPos.xyz);
+
+	/*
+	if(cameraLightDist > 1.0)
+	{
+		return float4(1.0, 0.0, 0.0, 1.0);
+	}
+	else
+	{
+		return float4(1.0, 1.0, 1.0, 1.0);
+	}
+	*/
+	return float4(color, 1.0);
+	
 }

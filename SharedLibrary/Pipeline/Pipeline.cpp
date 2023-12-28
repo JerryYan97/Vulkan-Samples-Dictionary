@@ -18,6 +18,7 @@ namespace SharedLib
         m_pDynamicState(nullptr),
         m_pipelineLayout(VK_NULL_HANDLE),
         m_isVertexInputInfoDefault(false),
+        m_isRasterizationInputInfoDefault(false),
         m_device(VK_NULL_HANDLE),
         m_pDepthStencilState(nullptr)
     {}
@@ -39,7 +40,7 @@ namespace SharedLib
             delete m_pViewportState;
         }
 
-        if (m_pRasterizer != nullptr)
+        if (m_pRasterizer != nullptr && m_isRasterizationInputInfoDefault)
         {
             delete m_pRasterizer;
         }
@@ -104,16 +105,14 @@ namespace SharedLib
     {
         m_pRasterizer = new VkPipelineRasterizationStateCreateInfo();
         memset(m_pRasterizer, 0, sizeof(VkPipelineRasterizationStateCreateInfo));
+        m_isRasterizationInputInfoDefault = true;
         {
             m_pRasterizer->sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
             m_pRasterizer->depthClampEnable = VK_FALSE;
             m_pRasterizer->rasterizerDiscardEnable = VK_FALSE;
             m_pRasterizer->polygonMode = VK_POLYGON_MODE_FILL;
             m_pRasterizer->lineWidth = 1.0f;
-            // m_pRasterizer->cullMode = VK_CULL_MODE_FRONT_BIT;
-            m_pRasterizer->cullMode = VK_CULL_MODE_NONE;
-            // NOTE: We reverse the depth so the faces' winding is also reversed.
-            // m_pRasterizer->frontFace = VK_FRONT_FACE_CLOCKWISE;
+            m_pRasterizer->cullMode = VK_CULL_MODE_BACK_BIT;
             m_pRasterizer->frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
             m_pRasterizer->depthBiasEnable = VK_FALSE;
         }

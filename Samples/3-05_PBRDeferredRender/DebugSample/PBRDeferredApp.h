@@ -50,6 +50,7 @@ public:
 
     VkPipeline GetGeoPassPipeline() { return m_geoPassPipeline.GetVkPipeline(); }
     VkPipeline GetDeferredLightingPassPipeline() { return m_deferredLightingPassPipeline.GetVkPipeline(); }
+    VkPipeline GetDeferredLightingPassDisableCullPipeline() { return m_deferredLightingPassDisableCullingPipeline.GetVkPipeline(); }
 
     uint32_t GetIdxCnt() { return m_idxData.size(); }
 
@@ -69,6 +70,8 @@ public:
     std::vector<float> GetDeferredLightingPushConstantData();
 
     void UpdateCameraAndGpuBuffer();
+
+    bool IsCameraInThisLight(uint32_t lightIdx);
 
 private:
     void InitGeoPassPipeline();
@@ -111,14 +114,19 @@ private:
     // culling and another for none culling...
     // We need to draw point lights one by one and check whether a point light includes the camera. If it includes the
     // camera then we need to disable the face culling of the point light volume.
-    VkPipelineDepthStencilStateCreateInfo CreateGeoLightingPassDepthStencilStateInfo();
-
+    VkPipelineDepthStencilStateCreateInfo CreateGeoPassDepthStencilStateInfo();
+    VkPipelineDepthStencilStateCreateInfo CreateDeferredLightingPassDepthStencilStateInfo();
+    
     SharedLib::PipelineColorBlendInfo CreateGeoPassPipelineColorBlendAttachmentStates();
     SharedLib::PipelineColorBlendInfo CreateDeferredLightingPassPipelineColorBlendAttachmentStates();
+    
+    VkPipelineRasterizationStateCreateInfo CreateDeferredLightingPassDisableCullingRasterizationInfoStateInfo();
 
     void SendCameraDataToBuffer(uint32_t i);
 
     SharedLib::Camera* m_pCamera;
+    std::vector<float> m_lightsPos;
+    std::vector<float> m_lightsRadius;
     
     GpuBuffer m_lightPosStorageBuffer;
     GpuBuffer m_lightRadianceStorageBuffer;
@@ -146,6 +154,7 @@ private:
     VkDescriptorSetLayout m_deferredLightingPassPipelineDesSetLayout;
     VkPipelineLayout      m_deferredLightingPassPipelineLayout;
     SharedLib::Pipeline   m_deferredLightingPassPipeline;
+    SharedLib::Pipeline   m_deferredLightingPassDisableCullingPipeline;
 
     // G-Buffer textures
     std::vector<GpuImg> m_worldPosTextures;

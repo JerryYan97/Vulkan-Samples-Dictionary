@@ -231,16 +231,27 @@ int main()
                            VK_SHADER_STAGE_FRAGMENT_BIT,
                            0, sizeof(float) * pushConstantData.size(), pushConstantData.data());
 
-        // Bind the graphics pipeline
-        vkCmdBindPipeline(currentCmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, app.GetDeferredLightingPassPipeline());
-
         vkCmdSetViewport(currentCmdBuffer, 0, 1, &viewport);
         vkCmdSetScissor(currentCmdBuffer, 0, 1, &scissor);
 
         vkCmdBindVertexBuffers(currentCmdBuffer, 0, 1, &vertBuffer, &vbOffset);
         vkCmdBindIndexBuffer(currentCmdBuffer, idxBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-        vkCmdDrawIndexed(currentCmdBuffer, app.GetIdxCnt(), PtLightsCounts, 0, 0, 0);
+        for (uint32_t i = 0; i < PtLightsCounts; i++)
+        // for (uint32_t i = 9; i < 10; i++)
+        {
+            // Bind the graphics pipeline
+            if (app.IsCameraInThisLight(i))
+            {
+                vkCmdBindPipeline(currentCmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, app.GetDeferredLightingPassDisableCullPipeline());
+            }
+            else
+            {
+                vkCmdBindPipeline(currentCmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, app.GetDeferredLightingPassPipeline());
+            }
+
+            vkCmdDrawIndexed(currentCmdBuffer, app.GetIdxCnt(), 1, 0, 0, i);
+        }
 
         vkCmdEndRendering(currentCmdBuffer);
 

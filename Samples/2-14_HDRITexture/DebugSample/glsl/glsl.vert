@@ -9,12 +9,12 @@ float width = 0.2 * tan(fov / 2.0);
 float height = aspect * width;
 
 vec2 positions[6] = vec2[](
-    vec2(-1.f, -1.f),
-    vec2( 1.f, -1.f),
     vec2(-1.f,  1.f),
     vec2( 1.f, -1.f),
+    vec2(-1.f, -1.f),
+    vec2(-1.f,  1.f),
     vec2( 1.f,  1.f),
-    vec2(-1.f,  1.f)
+    vec2( 1.f, -1.f)
 );
 
 vec2 viewXy[6] = vec2[](

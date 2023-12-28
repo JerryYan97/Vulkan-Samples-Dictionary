@@ -12,6 +12,7 @@
 
 #include "vk_mem_alloc.h"
 
+// TODO: These static variables and functions can be put into a header file so that other projects can reuse them.
 static bool g_isMiddleDown = false;
 static bool g_isWDown = false;
 static bool g_isSDown = false;
@@ -342,7 +343,6 @@ void PBRDeferredApp::InitLightPosRadianceSSBOs()
                 std::array<float, 3> radiance = { r, g, b };
 
                 float radius = PtLightVolumeRadius(radiance);
-                std::cout << "Point light affect radius: " << radius << std::endl;
 
                 lightsVolumeRadius.push_back(radius);
 
@@ -434,6 +434,9 @@ void PBRDeferredApp::InitLightPosRadianceSSBOs()
         lightsVolumeRadiusSSBODescInfo.range = sizeof(float) * lightsVolumeRadius.size();
     }
     m_lightVolumeRadiusStorageBuffer.bufferDescInfo = lightsVolumeRadiusSSBODescInfo;
+
+    m_lightsPos = lightsPos;
+    m_lightsRadius = lightsVolumeRadius;
 }
 
 // ================================================================================================================
@@ -919,7 +922,7 @@ VkPipelineVertexInputStateCreateInfo PBRDeferredApp::CreateDeferredLightingPassP
 }
 
 // ================================================================================================================
-VkPipelineDepthStencilStateCreateInfo PBRDeferredApp::CreateGeoLightingPassDepthStencilStateInfo()
+VkPipelineDepthStencilStateCreateInfo PBRDeferredApp::CreateGeoPassDepthStencilStateInfo()
 {
     VkPipelineDepthStencilStateCreateInfo depthStencilInfo{};
     {
@@ -929,6 +932,22 @@ VkPipelineDepthStencilStateCreateInfo PBRDeferredApp::CreateGeoLightingPassDepth
         depthStencilInfo.depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL; // Reverse depth for higher precision. 
         depthStencilInfo.depthBoundsTestEnable = VK_FALSE;
         depthStencilInfo.stencilTestEnable = VK_FALSE;
+    }
+
+    return depthStencilInfo;
+}
+
+// ================================================================================================================
+VkPipelineDepthStencilStateCreateInfo PBRDeferredApp::CreateDeferredLightingPassDepthStencilStateInfo()
+{
+    VkPipelineDepthStencilStateCreateInfo depthStencilInfo{};
+    {
+        depthStencilInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+        // depthStencilInfo.depthTestEnable = VK_TRUE;
+        // depthStencilInfo.depthWriteEnable = VK_TRUE;
+        // depthStencilInfo.depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL; // Reverse depth for higher precision. 
+        // depthStencilInfo.depthBoundsTestEnable = VK_FALSE;
+        // depthStencilInfo.stencilTestEnable = VK_FALSE;
     }
 
     return depthStencilInfo;
@@ -976,7 +995,7 @@ void PBRDeferredApp::InitGeoPassPipeline()
     VkPipelineVertexInputStateCreateInfo vertInputInfo = CreateGeoPassPipelineVertexInputInfo();
     m_geoPassPipeline.SetVertexInputInfo(&vertInputInfo);
 
-    VkPipelineDepthStencilStateCreateInfo depthStencilInfo = CreateGeoLightingPassDepthStencilStateInfo();
+    VkPipelineDepthStencilStateCreateInfo depthStencilInfo = CreateGeoPassDepthStencilStateInfo();
     m_geoPassPipeline.SetDepthStencilStateInfo(&depthStencilInfo);
 
     SharedLib::PipelineColorBlendInfo colorBlendInfo = CreateGeoPassPipelineColorBlendAttachmentStates();
@@ -1347,6 +1366,24 @@ void PBRDeferredApp::DestroyGBuffer()
 }
 
 // ================================================================================================================
+VkPipelineRasterizationStateCreateInfo PBRDeferredApp::CreateDeferredLightingPassDisableCullingRasterizationInfoStateInfo()
+{
+    VkPipelineRasterizationStateCreateInfo rasterizationStateInfo{};
+    {
+        rasterizationStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+        rasterizationStateInfo.depthClampEnable = VK_FALSE;
+        rasterizationStateInfo.rasterizerDiscardEnable = VK_FALSE;
+        rasterizationStateInfo.polygonMode = VK_POLYGON_MODE_FILL;
+        rasterizationStateInfo.lineWidth = 1.0f;
+        rasterizationStateInfo.cullMode = VK_CULL_MODE_NONE;
+        rasterizationStateInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+        rasterizationStateInfo.depthBiasEnable = VK_FALSE;
+    }
+
+    return rasterizationStateInfo;
+}
+
+// ================================================================================================================
 void PBRDeferredApp::InitDeferredLightingPassPipeline()
 {
     VkPipelineRenderingCreateInfoKHR pipelineRenderCreateInfo{};
@@ -1363,7 +1400,7 @@ void PBRDeferredApp::InitDeferredLightingPassPipeline()
     VkPipelineVertexInputStateCreateInfo vertInputInfo = CreateDeferredLightingPassPipelineVertexInputInfo();
     m_deferredLightingPassPipeline.SetVertexInputInfo(&vertInputInfo);
 
-    VkPipelineDepthStencilStateCreateInfo depthStencilInfo = CreateGeoLightingPassDepthStencilStateInfo();
+    VkPipelineDepthStencilStateCreateInfo depthStencilInfo = CreateDeferredLightingPassDepthStencilStateInfo();
     m_deferredLightingPassPipeline.SetDepthStencilStateInfo(&depthStencilInfo);
 
     SharedLib::PipelineColorBlendInfo colorBlendInfo = CreateDeferredLightingPassPipelineColorBlendAttachmentStates();
@@ -1375,6 +1412,19 @@ void PBRDeferredApp::InitDeferredLightingPassPipeline()
     m_deferredLightingPassPipeline.SetShaderStageInfo(shaderStgsInfo, 2);
 
     m_deferredLightingPassPipeline.CreatePipeline(m_device);
+
+    // When the camera is in the light volume, we need to disable the culling of the pipeline.
+    m_deferredLightingPassDisableCullingPipeline.SetPNext(&pipelineRenderCreateInfo);
+    m_deferredLightingPassDisableCullingPipeline.SetPipelineLayout(m_deferredLightingPassPipelineLayout);
+    m_deferredLightingPassDisableCullingPipeline.SetVertexInputInfo(&vertInputInfo);
+    m_deferredLightingPassDisableCullingPipeline.SetDepthStencilStateInfo(&depthStencilInfo);
+    m_deferredLightingPassDisableCullingPipeline.SetPipelineColorBlendInfo(colorBlendInfo);
+    m_deferredLightingPassDisableCullingPipeline.SetShaderStageInfo(shaderStgsInfo, 2);
+
+    VkPipelineRasterizationStateCreateInfo rasterizationInfo = CreateDeferredLightingPassDisableCullingRasterizationInfoStateInfo();
+    m_deferredLightingPassDisableCullingPipeline.SetRasterizerInfo(&rasterizationInfo);
+
+    m_deferredLightingPassDisableCullingPipeline.CreatePipeline(m_device);
 }
 
 // ================================================================================================================
@@ -1500,6 +1550,29 @@ void PBRDeferredApp::InitDeferredLightingPassPipelineLayout()
     }
 
     VK_CHECK(vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_deferredLightingPassPipelineLayout));
+}
+
+// ================================================================================================================
+bool PBRDeferredApp::IsCameraInThisLight(
+    uint32_t lightIdx)
+{
+    float cameraPos[3] = {};
+    m_pCamera->GetPos(cameraPos);
+
+    float lightX = m_lightsPos[lightIdx * 4];
+    float lightY = m_lightsPos[lightIdx * 4 + 1];
+    float lightZ = m_lightsPos[lightIdx * 4 + 2];
+
+    float offsetX = lightX - cameraPos[0];
+    float offsetY = lightY - cameraPos[1];
+    float offsetZ = lightZ - cameraPos[2];
+
+    float distSquare = offsetX * offsetX + offsetY * offsetY + offsetZ * offsetZ;
+
+    float lightRadiusSquare = m_lightsRadius[lightIdx];
+    lightRadiusSquare *= lightRadiusSquare;
+
+    return (lightRadiusSquare > distSquare);
 }
 
 // ================================================================================================================

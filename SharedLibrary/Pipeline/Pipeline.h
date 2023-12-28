@@ -43,6 +43,8 @@ namespace SharedLib
 
         void SetPipelineColorBlendInfo(PipelineColorBlendInfo& pipelineColorBlendAttachmentStates); // For the MRT.
 
+        void SetRasterizerInfo(VkPipelineRasterizationStateCreateInfo* pRasterizerInfo) { m_pRasterizer = pRasterizerInfo; }
+
     protected:
 
     private:
@@ -61,6 +63,7 @@ namespace SharedLib
         VkPipelineDepthStencilStateCreateInfo*  m_pDepthStencilState;
 
         bool m_isVertexInputInfoDefault;
+        bool m_isRasterizationInputInfoDefault;
 
         void SetDefaultVertexInputInfo();
         void SetDefaultInputAssemblyInfo();
