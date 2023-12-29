@@ -77,6 +77,10 @@ else()
         set(SHARED_LIB_HLSL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/HLSL")
     endif()
 
+    if(NOT DEFINED TOOL_DIR)
+        set(TOOL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../Tools")
+    endif()
+
     # Deal with the building warning.
     set(DUMMY_FILE dummy)
     set_property(SOURCE DUMMY_FILE
@@ -86,9 +90,9 @@ else()
             OUTPUT
                 DUMMY_FILE
             COMMAND python
-                ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${SHARED_LIB_HLSL_DIR}/cubemapFormat_vert.hlsl --dstDir ${SHARED_LIB_HLSL_DIR}
+                ${TOOL_DIR}/GenerateShaderHeader.py ARGS --src ${SHARED_LIB_HLSL_DIR}/cubemapFormat_vert.hlsl --dstDir ${SHARED_LIB_HLSL_DIR}
             COMMAND python
-                ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${SHARED_LIB_HLSL_DIR}/cubemapFormat_frag.hlsl --dstDir ${SHARED_LIB_HLSL_DIR}
+                ${TOOL_DIR}/GenerateShaderHeader.py ARGS --src ${SHARED_LIB_HLSL_DIR}/cubemapFormat_frag.hlsl --dstDir ${SHARED_LIB_HLSL_DIR}
     )
 
     add_custom_target(SHARED_LIB_SHADER_COMPILE

@@ -40,6 +40,7 @@ namespace SharedLib
         void GetVkInfos(VulkanInfos infos) { m_vkInfos = infos; }
 
         VkShaderModule CreateShaderModule(const std::string& spvName);
+        VkShaderModule CreateShaderModuleFromRam(uint32_t* pCode, uint32_t codeSizeInBytes);
         
         virtual void Init() = 0;
         virtual void Destroy() = 0; // All resources should be released in this function instead of the destructor.

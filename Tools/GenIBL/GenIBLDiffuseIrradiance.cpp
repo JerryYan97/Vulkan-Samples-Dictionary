@@ -1,6 +1,8 @@
 #include "GenIBL.h"
 #include "vk_mem_alloc.h"
 #include "../../SharedLibrary/Utils/VulkanDbgUtils.h"
+#include "hlsl/g_diffuseIrradiance_vert.h"
+#include "hlsl/g_diffuseIrradiance_frag.h"
 
 // ================================================================================================================
 void GenIBL::InitDiffuseIrradiancePipeline()
@@ -44,8 +46,13 @@ void GenIBL::InitDiffuseIrradiancePipelineLayout()
 // ================================================================================================================
 void GenIBL::InitDiffuseIrradianceShaderModules()
 {
-    m_diffuseIrradianceVsShaderModule = CreateShaderModule("/hlsl/diffuseIrradiance_vert.spv");
-    m_diffuseIrradiancePsShaderModule = CreateShaderModule("/hlsl/diffuseIrradiance_frag.spv");
+    // m_diffuseIrradianceVsShaderModule = CreateShaderModule("/hlsl/diffuseIrradiance_vert.spv");
+    // m_diffuseIrradiancePsShaderModule = CreateShaderModule("/hlsl/diffuseIrradiance_frag.spv");
+    m_diffuseIrradianceVsShaderModule = CreateShaderModuleFromRam((uint32_t*)SharedLib::diffuseIrradiance_vertScript,
+                                                                  sizeof(SharedLib::diffuseIrradiance_vertScript));
+
+    m_diffuseIrradiancePsShaderModule = CreateShaderModuleFromRam((uint32_t*)SharedLib::diffuseIrradiance_fragScript,
+                                                                  sizeof(SharedLib::diffuseIrradiance_fragScript));
 }
 
 // ================================================================================================================

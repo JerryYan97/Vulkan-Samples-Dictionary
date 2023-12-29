@@ -2,6 +2,8 @@
 #include "vk_mem_alloc.h"
 #include "../../SharedLibrary/Utils/VulkanDbgUtils.h"
 #include "../../SharedLibrary/Utils/CmdBufUtils.h"
+#include "hlsl/g_prefilterEnvMap_vert.h"
+#include "hlsl/g_prefilterEnvMap_frag.h"
 
 // ================================================================================================================
 void GenIBL::DestroyPrefilterEnvMapPipelineResourses()
@@ -38,8 +40,14 @@ void GenIBL::InitPrefilterEnvMapPipelineLayout()
 // ================================================================================================================
 void GenIBL::InitPrefilterEnvMapShaderModules()
 {
-    m_preFilterEnvMapVsShaderModule = CreateShaderModule("/hlsl/prefilterEnvMap_vert.spv");
-    m_preFilterEnvMapPsShaderModule = CreateShaderModule("/hlsl/prefilterEnvMap_frag.spv");
+    // m_preFilterEnvMapVsShaderModule = CreateShaderModule("/hlsl/prefilterEnvMap_vert.spv");
+    // m_preFilterEnvMapPsShaderModule = CreateShaderModule("/hlsl/prefilterEnvMap_frag.spv");
+
+    m_preFilterEnvMapVsShaderModule = CreateShaderModuleFromRam((uint32_t*)SharedLib::prefilterEnvMap_vertScript,
+                                                                sizeof(SharedLib::prefilterEnvMap_vertScript));
+
+    m_preFilterEnvMapPsShaderModule = CreateShaderModuleFromRam((uint32_t*)SharedLib::prefilterEnvMap_fragScript,
+                                                                sizeof(SharedLib::prefilterEnvMap_fragScript));
 }
 
 // ================================================================================================================

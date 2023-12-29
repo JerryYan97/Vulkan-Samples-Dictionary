@@ -1,6 +1,8 @@
 #include "GenIBL.h"
 #include "../../SharedLibrary/Utils/VulkanDbgUtils.h"
 #include "vk_mem_alloc.h"
+#include "hlsl/g_envBrdf_vert.h"
+#include "hlsl/g_envBrdf_frag.h"
 
 // ================================================================================================================
 void GenIBL::InitEnvBrdfPipeline()
@@ -48,8 +50,15 @@ void GenIBL::InitEnvBrdfPipelineLayout()
 // ================================================================================================================
 void GenIBL::InitEnvBrdfShaderModules()
 {
-    m_envBrdfVsShaderModule = CreateShaderModule("/hlsl/envBrdf_vert.spv");
-    m_envBrdfPsShaderModule = CreateShaderModule("/hlsl/envBrdf_frag.spv");
+    // m_envBrdfVsShaderModule = CreateShaderModule("/hlsl/envBrdf_vert.spv");
+    // m_envBrdfPsShaderModule = CreateShaderModule("/hlsl/envBrdf_frag.spv");
+
+    m_envBrdfVsShaderModule = CreateShaderModuleFromRam((uint32_t*)SharedLib::envBrdf_vertScript,
+                                                        sizeof(SharedLib::envBrdf_vertScript));
+
+    m_envBrdfPsShaderModule = CreateShaderModuleFromRam((uint32_t*)SharedLib::envBrdf_fragScript,
+                                                        sizeof(SharedLib::envBrdf_fragScript));
+
 }
 
 // ================================================================================================================

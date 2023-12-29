@@ -2,6 +2,8 @@
 #include "../../SharedLibrary/Utils/VulkanDbgUtils.h"
 #include "../../SharedLibrary/Utils/CmdBufUtils.h"
 #include "../../SharedLibrary/Utils/DiskOpsUtils.h"
+#include "../../SharedLibrary/HLSL/g_cubemapFormat_vert.h"
+#include "../../SharedLibrary/HLSL/g_cubemapFormat_frag.h"
 #include <fstream>
 #include <cassert>
 
@@ -62,6 +64,23 @@ namespace SharedLib
             shaderModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
             shaderModuleCreateInfo.codeSize = inputShaderStr.size();
             shaderModuleCreateInfo.pCode = (uint32_t*)inputShaderStr.data();
+        }
+        VkShaderModule shaderModule;
+        CheckVkResult(vkCreateShaderModule(m_vkInfos.device, &shaderModuleCreateInfo, nullptr, &shaderModule));
+
+        return shaderModule;
+    }
+
+    // ================================================================================================================
+    VkShaderModule AppUtil::CreateShaderModuleFromRam(
+        uint32_t* pCode,
+        uint32_t codeSizeInBytes)
+    {
+        VkShaderModuleCreateInfo shaderModuleCreateInfo{};
+        {
+            shaderModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+            shaderModuleCreateInfo.codeSize = codeSizeInBytes;
+            shaderModuleCreateInfo.pCode = pCode;
         }
         VkShaderModule shaderModule;
         CheckVkResult(vkCreateShaderModule(m_vkInfos.device, &shaderModuleCreateInfo, nullptr, &shaderModule));
@@ -384,8 +403,14 @@ namespace SharedLib
     // ================================================================================================================
     void CubemapFormatTransApp::InitFormatShaderModules()
     {
-        m_vsFormatShaderModule = CreateShaderModule("/hlsl/CubeMapFormat_vert.spv");
-        m_psFormatShaderModule = CreateShaderModule("/hlsl/CubeMapFormat_frag.spv");
+        // m_vsFormatShaderModule = CreateShaderModule("/hlsl/CubeMapFormat_vert.spv");
+        // m_psFormatShaderModule = CreateShaderModule("/hlsl/CubeMapFormat_frag.spv");
+        m_vsFormatShaderModule = CreateShaderModuleFromRam((uint32_t*)SharedLib::cubemapFormat_vertScript,
+                                                           sizeof(SharedLib::cubemapFormat_vertScript));
+
+        m_psFormatShaderModule = CreateShaderModuleFromRam((uint32_t*)SharedLib::cubemapFormat_fragScript,
+                                                           sizeof(SharedLib::cubemapFormat_fragScript));
+
     }
 
     // ================================================================================================================

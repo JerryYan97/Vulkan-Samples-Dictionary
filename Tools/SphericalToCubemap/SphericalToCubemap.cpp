@@ -3,8 +3,8 @@
 #include "../../SharedLibrary/Camera/Camera.h"
 #include "../../SharedLibrary/Utils/MathUtils.h"
 #include "../../SharedLibrary/Utils/DiskOpsUtils.h"
-#include "g_toCubeMap_vert.h"
-#include "g_toCubeMap_frag.h"
+#include "hlsl/g_toCubeMap_vert.h"
+#include "hlsl/g_toCubeMap_frag.h"
 
 #include <cassert>
 

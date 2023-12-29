@@ -28,7 +28,23 @@ target_link_libraries(${MY_APP_NAME} SharedLibrary)
 
 add_dependencies(${MY_APP_NAME} SharedLibrary)
 
-execute_process(COMMAND glslc ./glsl/ToCubeMap.vert -o ToCubeMap_vert.spv
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-execute_process(COMMAND glslc ./glsl/ToCubeMap.frag -o ToCubeMap_frag.spv
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+# Deal with the building warning.
+set(DUMMY_FILE dummy)
+set_property(SOURCE DUMMY_FILE
+             PROPERTY SYMBOLIC True)
+
+set(TOOL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/..")
+
+add_custom_command(
+        OUTPUT
+            DUMMY_FILE
+        COMMAND python
+            ${TOOL_DIR}/GenerateShaderHeader.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/toCubeMap_vert.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
+        COMMAND python
+            ${TOOL_DIR}/GenerateShaderHeader.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/toCubeMap_frag.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
+)
+
+add_custom_target(SHADER_COMPILE
+    DEPENDS DUMMY_FILE)
+
+add_dependencies(${MY_APP_NAME} SHADER_COMPILE)

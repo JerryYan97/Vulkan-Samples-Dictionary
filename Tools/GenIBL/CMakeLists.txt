@@ -42,21 +42,23 @@ set(DUMMY_FILE dummy)
 set_property(SOURCE DUMMY_FILE
              PROPERTY SYMBOLIC True)
 
+set(TOOL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/..")
+
 add_custom_command(
         OUTPUT
             DUMMY_FILE
         COMMAND python
-            ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/prefilterEnvMap_vert.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
+            ${TOOL_DIR}/GenerateShaderHeader.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/prefilterEnvMap_vert.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
         COMMAND python
-            ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/prefilterEnvMap_frag.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
+            ${TOOL_DIR}/GenerateShaderHeader.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/prefilterEnvMap_frag.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
         COMMAND python
-            ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/diffuseIrradiance_vert.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
+            ${TOOL_DIR}/GenerateShaderHeader.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/diffuseIrradiance_vert.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
         COMMAND python
-            ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/diffuseIrradiance_frag.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
+            ${TOOL_DIR}/GenerateShaderHeader.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/diffuseIrradiance_frag.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
         COMMAND python
-            ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/envBrdf_vert.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
+            ${TOOL_DIR}/GenerateShaderHeader.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/envBrdf_vert.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
         COMMAND python
-            ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/envBrdf_frag.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
+            ${TOOL_DIR}/GenerateShaderHeader.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/envBrdf_frag.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
 )
 
 add_custom_target(SHADER_COMPILE
