@@ -320,6 +320,23 @@ namespace SharedLib
     }
 
     // ================================================================================================================
+    VkShaderModule Application::CreateShaderModuleFromRam(
+        uint32_t* pCode,
+        uint32_t codeSizeInBytes)
+    {
+        VkShaderModuleCreateInfo shaderModuleCreateInfo{};
+        {
+            shaderModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+            shaderModuleCreateInfo.codeSize = codeSizeInBytes;
+            shaderModuleCreateInfo.pCode = pCode;
+        }
+        VkShaderModule shaderModule;
+        CheckVkResult(vkCreateShaderModule(m_device, &shaderModuleCreateInfo, nullptr, &shaderModule));
+
+        return shaderModule;
+    }
+
+    // ================================================================================================================
     std::vector<VkDeviceQueueCreateInfo> Application::CreateDeviceQueueInfos(
         const std::set<uint32_t>& uniqueQueueFamilies)
     {

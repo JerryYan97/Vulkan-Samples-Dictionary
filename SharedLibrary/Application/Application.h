@@ -90,6 +90,7 @@ namespace SharedLib
         // CreateXXX(...) functions are more flexible. They are utility functions for children classes.
         // CreateXXX(...) cannot initialize any member objects. They have to return objects.
         VkShaderModule                       CreateShaderModule(const std::string& spvName);
+        VkShaderModule                       CreateShaderModuleFromRam(uint32_t* pCode, uint32_t codeSizeInBytes);
         std::vector<VkDeviceQueueCreateInfo> CreateDeviceQueueInfos(const std::set<uint32_t>& uniqueQueueFamilies);
         
         VkPipelineShaderStageCreateInfo CreateDefaultShaderStgCreateInfo(const VkShaderModule& shaderModule, const VkShaderStageFlagBits stg);

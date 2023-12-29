@@ -3,6 +3,8 @@
 #include "../../SharedLibrary/Camera/Camera.h"
 #include "../../SharedLibrary/Utils/MathUtils.h"
 #include "../../SharedLibrary/Utils/DiskOpsUtils.h"
+#include "g_toCubeMap_vert.h"
+#include "g_toCubeMap_frag.h"
 
 #include <cassert>
 
@@ -273,8 +275,14 @@ void SphericalToCubemap::InitPipelineLayout()
 // ================================================================================================================
 void SphericalToCubemap::InitShaderModules()
 {
-    m_vsShaderModule = CreateShaderModule("/ToCubeMap_vert.spv");
-    m_psShaderModule = CreateShaderModule("/ToCubeMap_frag.spv");
+    // m_vsShaderModule = CreateShaderModule("/ToCubeMap_vert.spv");
+    // m_psShaderModule = CreateShaderModule("/ToCubeMap_frag.spv");
+    m_vsShaderModule = CreateShaderModuleFromRam((uint32_t*)SharedLib::toCubeMap_vertScript,
+                                                 sizeof(SharedLib::toCubeMap_vertScript));
+
+    m_psShaderModule = CreateShaderModuleFromRam((uint32_t*)SharedLib::toCubeMap_fragScript,
+                                                 sizeof(SharedLib::toCubeMap_fragScript));
+
 }
 
 // ================================================================================================================
