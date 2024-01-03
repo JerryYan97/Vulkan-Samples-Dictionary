@@ -44,8 +44,6 @@ float4 main(
     float4 i_pixelWorldNormal : NORMAL0,
 	uint   i_instId 		  : BLENDINDICES0) : SV_TARGET
 {
-    float3 lightColor = i_lightsRadianceStorageData[i_instId];
-
 	float3 sphereRefAlbedo = i_albedoStorageData[i_instId]; // F0
 	float3 sphereDifAlbedo = i_albedoStorageData[i_instId];
 	
@@ -66,6 +64,7 @@ float4 main(
 		float3 lightPos = i_lightsPosStorageData[i];
 		float3 wi       = normalize(lightPos - pixelWorldPos);
 		float3 H	    = normalize(wi + wo);
+		float3 lightColor = i_lightsRadianceStorageData[i];
 
 		float  attenuation = PointLightAttenuation(pixelWorldPos, lightPos, i_lightsVolumeRadiusData[i]);
 		float3 radiance    = lightColor * attenuation; 
