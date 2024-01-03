@@ -111,11 +111,11 @@ float4 main(
     float3 color = Lo;
 	
     // Gamma Correction
-    color = color / (color + float3(1.0, 1.0, 1.0));
-    color = pow(color, float3(1.0/2.2, 1.0/2.2, 1.0/2.2));  
+    // color = color / (color + float3(1.0, 1.0, 1.0));
+    // color = pow(color, float3(1.0/2.2, 1.0/2.2, 1.0/2.2));  
 
 
-	float cameraLightDist = length(i_renderInfo.cameraPosition - i_lightPos.xyz);
+	// float cameraLightDist = length(i_renderInfo.cameraPosition - i_lightPos.xyz);
 
 	/*
 	if(cameraLightDist > 1.0)
