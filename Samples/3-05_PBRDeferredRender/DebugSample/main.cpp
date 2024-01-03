@@ -55,7 +55,8 @@ int main()
         }
         VK_CHECK(vkBeginCommandBuffer(currentCmdBuffer, &beginInfo));
         
-        app.CmdGBufferLayoutTrans(currentCmdBuffer,
+        app.CmdSwapchainColorImgLayoutTrans(
+                                  currentCmdBuffer,
                                   VK_IMAGE_LAYOUT_UNDEFINED,
                                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                                   VK_ACCESS_NONE,
@@ -90,6 +91,17 @@ int main()
         }
 
         vkCmdBeginRendering(currentCmdBuffer, &geoPassRenderInfo);
+
+        void* pPushConstant = nullptr;
+        uint32_t pushConstantBytesCnt = 0;
+        app.GetDeferredLightingPushConstantData(&pPushConstant, pushConstantBytesCnt);
+
+        vkCmdPushConstants(currentCmdBuffer,
+                           app.GetGeoPassPipelineLayout(),
+                           VK_SHADER_STAGE_FRAGMENT_BIT,
+                           0, pushConstantBytesCnt, pPushConstant);
+
+        free(pPushConstant);
 
         // Bind the pipeline descriptor sets
         std::vector<VkWriteDescriptorSet> geoPassWriteDescriptorSet0 = app.GetGeoPassWriteDescriptorSets();
@@ -132,130 +144,6 @@ int main()
         vkCmdDrawIndexed(currentCmdBuffer, app.GetIdxCnt(), SphereCounts, 0, 0, 0);
 
         vkCmdEndRendering(currentCmdBuffer);
-
-        /* ----------------------------------------- */
-
-        app.CmdGBufferLayoutTrans(currentCmdBuffer,
-                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                                  VK_ACCESS_SHADER_READ_BIT,
-                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
-
-
-        app.CmdSwapchainColorImgLayoutTrans(currentCmdBuffer,
-                                            VK_IMAGE_LAYOUT_UNDEFINED,
-                                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                            VK_ACCESS_NONE,
-                                            VK_ACCESS_TRANSFER_WRITE_BIT,
-                                            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                                            VK_PIPELINE_STAGE_TRANSFER_BIT);
-
-        app.CmdSwapchainDepthImgLayoutTrans(currentCmdBuffer,
-                                            VK_IMAGE_LAYOUT_UNDEFINED,
-                                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                                            VK_ACCESS_TRANSFER_WRITE_BIT,
-                                            VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-                                            VK_PIPELINE_STAGE_TRANSFER_BIT);
-
-        // Note: We want to reuse the swapchain depth and color image. Besides, the light volumes are additive, so we
-        //       have to clear the previous draw's results after the gbuffer is ready and then add each light volumes'
-        //       depth together.
-        app.CmdSwapchainColorImgClear(currentCmdBuffer);
-        app.CmdSwapchainDepthImgClear(currentCmdBuffer);
-
-        app.CmdSwapchainColorImgLayoutTrans(currentCmdBuffer,
-                                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                                            VK_ACCESS_TRANSFER_WRITE_BIT,
-                                            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                                            VK_PIPELINE_STAGE_TRANSFER_BIT,
-                                            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
-
-        app.CmdSwapchainDepthImgLayoutTrans(currentCmdBuffer,
-                                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                            VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-                                            VK_ACCESS_TRANSFER_WRITE_BIT,
-                                            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                                            VK_PIPELINE_STAGE_TRANSFER_BIT,
-                                            VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT);
-
-        /* -------- Deferred Lighting Pass (Point light volumes) --------- */
-        VkRenderingAttachmentInfoKHR deferredLightingPassDepthAttachmentInfo{};
-        {
-            deferredLightingPassDepthAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-            deferredLightingPassDepthAttachmentInfo.imageView = app.GetSwapchainDepthImageView(imageIndex);
-            deferredLightingPassDepthAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
-            deferredLightingPassDepthAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            deferredLightingPassDepthAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-            deferredLightingPassDepthAttachmentInfo.clearValue = depthClearVal;
-        }
-
-        VkRenderingAttachmentInfoKHR deferredLightingPassColorAttachmentInfo{};
-        {
-            deferredLightingPassColorAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-            deferredLightingPassColorAttachmentInfo.imageView = app.GetSwapchainColorImageView(imageIndex);
-            deferredLightingPassColorAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
-            deferredLightingPassColorAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-            deferredLightingPassColorAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        }
-
-        VkRenderingInfoKHR deferredLightingPassRenderInfo{};
-        {
-            deferredLightingPassRenderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
-            deferredLightingPassRenderInfo.renderArea.offset = { 0, 0 };
-            deferredLightingPassRenderInfo.renderArea.extent = swapchainImageExtent;
-            deferredLightingPassRenderInfo.layerCount = 1;
-            deferredLightingPassRenderInfo.colorAttachmentCount = 1;
-            deferredLightingPassRenderInfo.pColorAttachments = &deferredLightingPassColorAttachmentInfo;
-            // deferredLightingPassRenderInfo.pDepthAttachment = &deferredLightingPassDepthAttachmentInfo;
-        }
-
-        vkCmdBeginRendering(currentCmdBuffer, &deferredLightingPassRenderInfo);
-
-        // Bind the pipeline descriptor sets
-        std::vector<VkWriteDescriptorSet> deferredLightingPassWriteDescriptorSet0 = app.GetDeferredLightingWriteDescriptorSets();
-        app.m_vkCmdPushDescriptorSetKHR(currentCmdBuffer,
-                                        VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                        app.GetDeferredLightingPassPipelineLayout(),
-                                        0,
-                                        deferredLightingPassWriteDescriptorSet0.size(),
-                                        deferredLightingPassWriteDescriptorSet0.data());
-
-        std::vector<float> pushConstantData = app.GetDeferredLightingPushConstantData();
-
-        vkCmdPushConstants(currentCmdBuffer,
-                           app.GetDeferredLightingPassPipelineLayout(),
-                           VK_SHADER_STAGE_FRAGMENT_BIT,
-                           0, sizeof(float) * pushConstantData.size(), pushConstantData.data());
-
-        vkCmdSetViewport(currentCmdBuffer, 0, 1, &viewport);
-        vkCmdSetScissor(currentCmdBuffer, 0, 1, &scissor);
-
-        vkCmdBindVertexBuffers(currentCmdBuffer, 0, 1, &vertBuffer, &vbOffset);
-        vkCmdBindIndexBuffer(currentCmdBuffer, idxBuffer, 0, VK_INDEX_TYPE_UINT32);
-
-        for (uint32_t i = 0; i < PtLightsCounts; i++)
-        // for (uint32_t i = 9; i < 10; i++)
-        {
-            // Bind the graphics pipeline
-            if (app.IsCameraInThisLight(i))
-            {
-                vkCmdBindPipeline(currentCmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, app.GetDeferredLightingPassDisableCullPipeline());
-            }
-            else
-            {
-                vkCmdBindPipeline(currentCmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, app.GetDeferredLightingPassPipeline());
-            }
-
-            vkCmdDrawIndexed(currentCmdBuffer, app.GetIdxCnt(), 1, 0, 0, i);
-        }
-
-        vkCmdEndRendering(currentCmdBuffer);
-
-        /* ----------------------------------------- */
 
         app.CmdSwapchainColorImgToPresent(currentCmdBuffer);
 

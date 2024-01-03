@@ -83,11 +83,6 @@ PBRDeferredApp::PBRDeferredApp() :
     m_geoPassPipelineDesSetLayout(VK_NULL_HANDLE),
     m_geoPassPipelineLayout(VK_NULL_HANDLE),
     m_geoPassPipeline(),
-    m_deferredLightingPassVsShaderModule(VK_NULL_HANDLE),
-    m_deferredLightingPassPsShaderModule(VK_NULL_HANDLE),
-    m_deferredLightingPassPipelineDesSetLayout(VK_NULL_HANDLE),
-    m_deferredLightingPassPipelineLayout(VK_NULL_HANDLE),
-    m_deferredLightingPassPipeline(),
     m_lightPosStorageBuffer(),
     m_lightRadianceStorageBuffer(),
     m_lightVolumeRadiusStorageBuffer(),
@@ -118,16 +113,12 @@ PBRDeferredApp::~PBRDeferredApp()
     // Destroy shader modules
     vkDestroyShaderModule(m_device, m_geoPassVsShaderModule, nullptr);
     vkDestroyShaderModule(m_device, m_geoPassPsShaderModule, nullptr);
-    vkDestroyShaderModule(m_device, m_deferredLightingPassVsShaderModule, nullptr);
-    vkDestroyShaderModule(m_device, m_deferredLightingPassPsShaderModule, nullptr);
 
     // Destroy the pipeline layout
     vkDestroyPipelineLayout(m_device, m_geoPassPipelineLayout, nullptr);
-    vkDestroyPipelineLayout(m_device, m_deferredLightingPassPipelineLayout, nullptr);
 
     // Destroy the descriptor set layout
     vkDestroyDescriptorSetLayout(m_device, m_geoPassPipelineDesSetLayout, nullptr);
-    vkDestroyDescriptorSetLayout(m_device, m_deferredLightingPassPipelineDesSetLayout, nullptr);
 }
 
 // ================================================================================================================
@@ -574,16 +565,7 @@ std::vector<VkRenderingAttachmentInfoKHR> PBRDeferredApp::GetGBufferAttachments(
         attachmentInfo.clearValue = clearColor;
     }
 
-    attachmentInfo.imageView = m_worldPosTextures[m_currentFrame].imageView;
-    attachmentsInfos.push_back(attachmentInfo);
-
-    attachmentInfo.imageView = m_normalTextures[m_currentFrame].imageView;
-    attachmentsInfos.push_back(attachmentInfo);
-
-    attachmentInfo.imageView = m_albedoTextures[m_currentFrame].imageView;
-    attachmentsInfos.push_back(attachmentInfo);
-
-    attachmentInfo.imageView = m_metallicRoughnessTextures[m_currentFrame].imageView;
+    attachmentInfo.imageView = m_swapchainColorImageViews[m_swapchainNextImgId];
     attachmentsInfos.push_back(attachmentInfo);
 
     return attachmentsInfos;
@@ -633,6 +615,36 @@ std::vector<VkWriteDescriptorSet> PBRDeferredApp::GetGeoPassWriteDescriptorSets(
         writeMetallicRoughnessSSBODesc.pBufferInfo = &m_metallicRoughnessStorageBuffer.bufferDescInfo;
     }
     geoPassWriteDescSet.push_back(writeMetallicRoughnessSSBODesc);
+
+    VkWriteDescriptorSet writeLightsPosSSBODesc{};
+    {
+        writeLightsPosSSBODesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeLightsPosSSBODesc.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        writeLightsPosSSBODesc.descriptorCount = 1;
+        writeLightsPosSSBODesc.dstBinding = 4;
+        writeLightsPosSSBODesc.pBufferInfo = &m_lightPosStorageBuffer.bufferDescInfo;
+    }
+    geoPassWriteDescSet.push_back(writeLightsPosSSBODesc);
+
+    VkWriteDescriptorSet writeLightsVolumeRadiusSSBODesc{};
+    {
+        writeLightsVolumeRadiusSSBODesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeLightsVolumeRadiusSSBODesc.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        writeLightsVolumeRadiusSSBODesc.descriptorCount = 1;
+        writeLightsVolumeRadiusSSBODesc.dstBinding = 5;
+        writeLightsVolumeRadiusSSBODesc.pBufferInfo = &m_lightVolumeRadiusStorageBuffer.bufferDescInfo;
+    }
+    geoPassWriteDescSet.push_back(writeLightsVolumeRadiusSSBODesc);
+
+    VkWriteDescriptorSet writeLightsRadianceSSBODesc{};
+    {
+        writeLightsRadianceSSBODesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeLightsRadianceSSBODesc.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        writeLightsRadianceSSBODesc.descriptorCount = 1;
+        writeLightsRadianceSSBODesc.dstBinding = 6;
+        writeLightsRadianceSSBODesc.pBufferInfo = &m_lightRadianceStorageBuffer.bufferDescInfo;
+    }
+    geoPassWriteDescSet.push_back(writeLightsRadianceSSBODesc);
 
     return geoPassWriteDescSet;
 }
@@ -755,13 +767,21 @@ SharedLib::PipelineColorBlendInfo PBRDeferredApp::CreateDeferredLightingPassPipe
 // ================================================================================================================
 void PBRDeferredApp::InitGeoPassPipelineLayout()
 {
+    VkPushConstantRange pushConstantInfo{};
+    {
+        pushConstantInfo.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        pushConstantInfo.offset = 0;
+        pushConstantInfo.size = sizeof(float) * 4;
+    }
+
     // Create pipeline layout
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     {
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pipelineLayoutInfo.setLayoutCount = 1;
         pipelineLayoutInfo.pSetLayouts = &m_geoPassPipelineDesSetLayout;
-        pipelineLayoutInfo.pushConstantRangeCount = 0;
+        pipelineLayoutInfo.pushConstantRangeCount = 1;
+        pipelineLayoutInfo.pPushConstantRanges = &pushConstantInfo;
     }
     
     VK_CHECK(vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_geoPassPipelineLayout));
@@ -819,6 +839,36 @@ void PBRDeferredApp::InitGeoPassPipelineDescriptorSetLayout()
         metallicRoughnessSSBOBinding.descriptorCount = 1;
     }
     bindings.push_back(metallicRoughnessSSBOBinding);
+
+    // Binding for the point lights' positions
+    VkDescriptorSetLayoutBinding lightPosSSBOBinding{};
+    {
+        lightPosSSBOBinding.binding = 4;
+        lightPosSSBOBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        lightPosSSBOBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        lightPosSSBOBinding.descriptorCount = 1;
+    }
+    bindings.push_back(lightPosSSBOBinding);
+
+    // Binding for the point lights volumes' radius.
+    VkDescriptorSetLayoutBinding lightVolumeRadiusSSBOBinding{};
+    {
+        lightVolumeRadiusSSBOBinding.binding = 5;
+        lightVolumeRadiusSSBOBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        lightVolumeRadiusSSBOBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        lightVolumeRadiusSSBOBinding.descriptorCount = 1;
+    }
+    bindings.push_back(lightVolumeRadiusSSBOBinding);
+
+    // Binding for the point lights radiance.
+    VkDescriptorSetLayoutBinding lightRadianceSSBOBinding{};
+    {
+        lightRadianceSSBOBinding.binding = 6;
+        lightRadianceSSBOBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        lightRadianceSSBOBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        lightRadianceSSBOBinding.descriptorCount = 1;
+    }
+    bindings.push_back(lightRadianceSSBOBinding);
 
     // Create pipeline's descriptors layout
     // The Vulkan spec states: The VkDescriptorSetLayoutBinding::binding members of the elements of the pBindings array 
@@ -984,8 +1034,8 @@ void PBRDeferredApp::InitGeoPassPipeline()
     VkPipelineRenderingCreateInfoKHR pipelineRenderCreateInfo{};
     {
         pipelineRenderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
-        pipelineRenderCreateInfo.colorAttachmentCount = m_gBufferFormats.size();
-        pipelineRenderCreateInfo.pColorAttachmentFormats = m_gBufferFormats.data();
+        pipelineRenderCreateInfo.colorAttachmentCount = 1;
+        pipelineRenderCreateInfo.pColorAttachmentFormats = &m_choisenSurfaceFormat.format;
         pipelineRenderCreateInfo.depthAttachmentFormat = VK_FORMAT_D16_UNORM;
     }
 
@@ -998,8 +1048,8 @@ void PBRDeferredApp::InitGeoPassPipeline()
     VkPipelineDepthStencilStateCreateInfo depthStencilInfo = CreateGeoPassDepthStencilStateInfo();
     m_geoPassPipeline.SetDepthStencilStateInfo(&depthStencilInfo);
 
-    SharedLib::PipelineColorBlendInfo colorBlendInfo = CreateGeoPassPipelineColorBlendAttachmentStates();
-    m_geoPassPipeline.SetPipelineColorBlendInfo(colorBlendInfo);
+    // SharedLib::PipelineColorBlendInfo colorBlendInfo = CreateGeoPassPipelineColorBlendAttachmentStates();
+    // m_geoPassPipeline.SetPipelineColorBlendInfo(colorBlendInfo);
 
     VkPipelineShaderStageCreateInfo shaderStgsInfo[2] = {};
     shaderStgsInfo[0] = CreateDefaultShaderStgCreateInfo(m_geoPassVsShaderModule, VK_SHADER_STAGE_VERTEX_BIT);
@@ -1181,23 +1231,20 @@ void PBRDeferredApp::InitMetallicRoughnessSSBO()
 }
 
 // ================================================================================================================
-std::vector<float> PBRDeferredApp::GetDeferredLightingPushConstantData()
+void PBRDeferredApp::GetDeferredLightingPushConstantData(
+    void** ppPushConstant,
+    uint32_t& byteCnt)
 {
-    std::vector<float> data;
+    byteCnt = 4 * sizeof(float); // 3 floats and 1 int
+    *ppPushConstant = malloc(byteCnt);
 
-    // Camera pos:
     float cameraPos[3];
     m_pCamera->GetPos(cameraPos);
-    
-    data.push_back(cameraPos[0]);
-    data.push_back(cameraPos[1]);
-    data.push_back(cameraPos[2]);
+    memcpy(*ppPushConstant, cameraPos, 3 * sizeof(float));
 
-    VkExtent2D extent = GetSwapchainImageExtent();
-    data.push_back(extent.width);
-    data.push_back(extent.height);
-
-    return data;
+    uint32_t ptLightsCnt = PtLightsCounts;
+    uint32_t* pLightsCntSlot = ((uint32_t*)(*ppPushConstant)) + 3;
+    memcpy((void*)pLightsCntSlot, &ptLightsCnt, sizeof(uint32_t));
 }
 
 // ================================================================================================================
@@ -1384,175 +1431,6 @@ VkPipelineRasterizationStateCreateInfo PBRDeferredApp::CreateDeferredLightingPas
 }
 
 // ================================================================================================================
-void PBRDeferredApp::InitDeferredLightingPassPipeline()
-{
-    VkPipelineRenderingCreateInfoKHR pipelineRenderCreateInfo{};
-    {
-        pipelineRenderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
-        pipelineRenderCreateInfo.colorAttachmentCount = 1;
-        pipelineRenderCreateInfo.pColorAttachmentFormats = &m_choisenSurfaceFormat.format;
-        pipelineRenderCreateInfo.depthAttachmentFormat = VK_FORMAT_D16_UNORM;
-    }
-
-    m_deferredLightingPassPipeline.SetPNext(&pipelineRenderCreateInfo);
-    m_deferredLightingPassPipeline.SetPipelineLayout(m_deferredLightingPassPipelineLayout);
-
-    VkPipelineVertexInputStateCreateInfo vertInputInfo = CreateDeferredLightingPassPipelineVertexInputInfo();
-    m_deferredLightingPassPipeline.SetVertexInputInfo(&vertInputInfo);
-
-    VkPipelineDepthStencilStateCreateInfo depthStencilInfo = CreateDeferredLightingPassDepthStencilStateInfo();
-    m_deferredLightingPassPipeline.SetDepthStencilStateInfo(&depthStencilInfo);
-
-    SharedLib::PipelineColorBlendInfo colorBlendInfo = CreateDeferredLightingPassPipelineColorBlendAttachmentStates();
-    m_deferredLightingPassPipeline.SetPipelineColorBlendInfo(colorBlendInfo);
-
-    VkPipelineShaderStageCreateInfo shaderStgsInfo[2] = {};
-    shaderStgsInfo[0] = CreateDefaultShaderStgCreateInfo(m_deferredLightingPassVsShaderModule, VK_SHADER_STAGE_VERTEX_BIT);
-    shaderStgsInfo[1] = CreateDefaultShaderStgCreateInfo(m_deferredLightingPassPsShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT);
-    m_deferredLightingPassPipeline.SetShaderStageInfo(shaderStgsInfo, 2);
-
-    m_deferredLightingPassPipeline.CreatePipeline(m_device);
-
-    // When the camera is in the light volume, we need to disable the culling of the pipeline.
-    m_deferredLightingPassDisableCullingPipeline.SetPNext(&pipelineRenderCreateInfo);
-    m_deferredLightingPassDisableCullingPipeline.SetPipelineLayout(m_deferredLightingPassPipelineLayout);
-    m_deferredLightingPassDisableCullingPipeline.SetVertexInputInfo(&vertInputInfo);
-    m_deferredLightingPassDisableCullingPipeline.SetDepthStencilStateInfo(&depthStencilInfo);
-    m_deferredLightingPassDisableCullingPipeline.SetPipelineColorBlendInfo(colorBlendInfo);
-    m_deferredLightingPassDisableCullingPipeline.SetShaderStageInfo(shaderStgsInfo, 2);
-
-    VkPipelineRasterizationStateCreateInfo rasterizationInfo = CreateDeferredLightingPassDisableCullingRasterizationInfoStateInfo();
-    m_deferredLightingPassDisableCullingPipeline.SetRasterizerInfo(&rasterizationInfo);
-
-    m_deferredLightingPassDisableCullingPipeline.CreatePipeline(m_device);
-}
-
-// ================================================================================================================
-void PBRDeferredApp::InitDeferredLightingPassPipelineDescriptorSetLayout()
-{
-    std::vector<VkDescriptorSetLayoutBinding> bindings;
-
-    // Create pipeline binding and descriptor objects for the camera parameters
-    VkDescriptorSetLayoutBinding cameraUboBinding{};
-    {
-        cameraUboBinding.binding = 0;
-        cameraUboBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-        cameraUboBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        cameraUboBinding.descriptorCount = 1;
-    }
-    bindings.push_back(cameraUboBinding);
-
-    // Binding for the point lights' positions
-    VkDescriptorSetLayoutBinding lightPosSSBOBinding{};
-    {
-        lightPosSSBOBinding.binding = 1;
-        lightPosSSBOBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-        lightPosSSBOBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        lightPosSSBOBinding.descriptorCount = 1;
-    }
-    bindings.push_back(lightPosSSBOBinding);
-
-    // Binding for the point lights volumes' radius.
-    VkDescriptorSetLayoutBinding lightVolumeRadiusSSBOBinding{};
-    {
-        lightVolumeRadiusSSBOBinding.binding = 2;
-        lightVolumeRadiusSSBOBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-        lightVolumeRadiusSSBOBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        lightVolumeRadiusSSBOBinding.descriptorCount = 1;
-    }
-    bindings.push_back(lightVolumeRadiusSSBOBinding);
-
-    // Binding for the point lights radiance.
-    VkDescriptorSetLayoutBinding lightRadianceSSBOBinding{};
-    {
-        lightRadianceSSBOBinding.binding = 3;
-        lightRadianceSSBOBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-        lightRadianceSSBOBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        lightRadianceSSBOBinding.descriptorCount = 1;
-    }
-    bindings.push_back(lightRadianceSSBOBinding);
-
-    VkDescriptorSetLayoutBinding worldPosTexBinding{};
-    {
-        worldPosTexBinding.binding = 4;
-        worldPosTexBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        worldPosTexBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        worldPosTexBinding.descriptorCount = 1;
-    }
-    bindings.push_back(worldPosTexBinding);
-
-    VkDescriptorSetLayoutBinding worldNormalTexBinding{};
-    {
-        worldNormalTexBinding.binding = 5;
-        worldNormalTexBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        worldNormalTexBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        worldNormalTexBinding.descriptorCount = 1;
-    }
-    bindings.push_back(worldNormalTexBinding);
-
-    VkDescriptorSetLayoutBinding albedoTexBinding{};
-    {
-        albedoTexBinding.binding = 6;
-        albedoTexBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        albedoTexBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        albedoTexBinding.descriptorCount = 1;
-    }
-    bindings.push_back(albedoTexBinding);
-
-    VkDescriptorSetLayoutBinding metallicRoughnessTexBinding{};
-    {
-        metallicRoughnessTexBinding.binding = 7;
-        metallicRoughnessTexBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        metallicRoughnessTexBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        metallicRoughnessTexBinding.descriptorCount = 1;
-    }
-    bindings.push_back(metallicRoughnessTexBinding);
-
-    // Create pipeline's descriptors layout
-    // The Vulkan spec states: The VkDescriptorSetLayoutBinding::binding members of the elements of the pBindings array 
-    // must each have different values 
-    // (https://vulkan.lunarg.com/doc/view/1.3.236.0/windows/1.3-extensions/vkspec.html#VUID-VkDescriptorSetLayoutCreateInfo-binding-00279)
-    VkDescriptorSetLayoutCreateInfo pipelineDesSetLayoutInfo{};
-    {
-        pipelineDesSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        // Setting this flag tells the descriptor set layouts that no actual descriptor sets are allocated but instead pushed at command buffer creation time
-        pipelineDesSetLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
-        pipelineDesSetLayoutInfo.bindingCount = bindings.size();
-        pipelineDesSetLayoutInfo.pBindings = bindings.data();
-    }
-
-    VK_CHECK(vkCreateDescriptorSetLayout(m_device,
-                                         &pipelineDesSetLayoutInfo,
-                                         nullptr,
-                                         &m_deferredLightingPassPipelineDesSetLayout));
-}
-
-// ================================================================================================================
-void PBRDeferredApp::InitDeferredLightingPassPipelineLayout()
-{
-    // Create pipeline layout
-    std::vector<float> pushConstantData = GetDeferredLightingPushConstantData();
-
-    VkPushConstantRange pushConstantInfo{};
-    {
-        pushConstantInfo.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        pushConstantInfo.offset = 0;
-        pushConstantInfo.size = sizeof(float) * pushConstantData.size();
-    }
-
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-    {
-        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pipelineLayoutInfo.setLayoutCount = 1;
-        pipelineLayoutInfo.pSetLayouts = &m_deferredLightingPassPipelineDesSetLayout;
-        pipelineLayoutInfo.pushConstantRangeCount = 1;
-        pipelineLayoutInfo.pPushConstantRanges = &pushConstantInfo;
-    }
-
-    VK_CHECK(vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_deferredLightingPassPipelineLayout));
-}
-
-// ================================================================================================================
 bool PBRDeferredApp::IsCameraInThisLight(
     uint32_t lightIdx)
 {
@@ -1573,14 +1451,6 @@ bool PBRDeferredApp::IsCameraInThisLight(
     lightRadiusSquare *= lightRadiusSquare;
 
     return (lightRadiusSquare > distSquare);
-}
-
-// ================================================================================================================
-void PBRDeferredApp::InitDeferredLightingPassShaderModules()
-{
-    // Create Shader Modules.
-    m_deferredLightingPassVsShaderModule = CreateShaderModule("/hlsl/lighting_vert.spv");
-    m_deferredLightingPassPsShaderModule = CreateShaderModule("/hlsl/lighting_frag.spv");
 }
 
 // ================================================================================================================
@@ -1639,11 +1509,6 @@ void PBRDeferredApp::AppInit()
     InitGeoPassPipelineDescriptorSetLayout();
     InitGeoPassPipelineLayout();
     InitGeoPassPipeline();
-
-    InitDeferredLightingPassShaderModules();
-    InitDeferredLightingPassPipelineDescriptorSetLayout();
-    InitDeferredLightingPassPipelineLayout();
-    InitDeferredLightingPassPipeline();
 
     InitSwapchainSyncObjects();
 }
