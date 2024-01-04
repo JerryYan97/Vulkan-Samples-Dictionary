@@ -1,5 +1,6 @@
 #pragma once
 #include "Application.h"
+#include "../Pipeline/Pipeline.h"
 
 struct GLFWwindow;
 
@@ -57,12 +58,20 @@ namespace SharedLib
         void CmdSwapchainColorImgClear(VkCommandBuffer cmdBuffer);
         void CmdSwapchainDepthImgClear(VkCommandBuffer cmdBuffer);
 
+        // Assume that the swapchain color image is in the color attachment layout.
+        // The user needs to provide the sampler and color image in R32G32B32A32 SFloat format.
+        // The format is assumed to be the shader input layout.
+        void CmdSwapchainColorImgGammaCorrect(VkCommandBuffer cmdBuffer,
+                                              VkImageView     srcImgView,
+                                              VkSampler       srcImgSampler);
+
     protected:
         void InitSwapchain();
         void InitPresentQueueFamilyIdx();
         void InitPresentQueue();
         void InitSwapchainSyncObjects();
         void InitGlfwWindowAndCallbacks();
+        void InitGammaCorrectionPipelineAndRsrc();
 
         HEvent CreateMiddleMouseEvent(bool isDown);
         HEvent CreateKeyboardEvent(bool isDown, std::string eventName);
@@ -89,11 +98,20 @@ namespace SharedLib
         std::vector<VkSemaphore> m_renderFinishedSemaphores;
         std::vector<VkFence>     m_inFlightFences;
 
+        // Deferred rendering requires final gamma correction, which can be put into the glfw application as util.
+        SharedLib::Pipeline   m_gammaCorrectionPipeline;
+        VkShaderModule        m_gammaCorrectionVsShaderModule;
+        VkShaderModule        m_gammaCorrectionPsShaderModule;
+        VkDescriptorSetLayout m_gammaCorrectionPipelineDesSetLayout;
+        VkPipelineLayout      m_gammaCorrectionPipelineLayout;
+
     private:
         void CreateSwapchainImageViews();
         void CreateSwapchainDepthImages(VkExtent3D extent);
         void CleanupSwapchain();
         void RecreateSwapchain();
+        
+        void CleanupGammaCorrectionPipelineAndRsrc();
     };
 
     // Vulkan application draws DearImGui's Guis and uses the glfw backend.

@@ -108,6 +108,7 @@ PBRDeferredApp::~PBRDeferredApp()
     vkDeviceWaitIdle(m_device);
     delete m_pCamera;
 
+    DestroyDeferredLightingPassRadianceTextures();
     DestroySphereVertexIndexBuffers();
 
     DestroyVpUboObjects();
@@ -1390,7 +1391,7 @@ void PBRDeferredApp::InitDeferredLightingPassPipeline()
     {
         pipelineRenderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
         pipelineRenderCreateInfo.colorAttachmentCount = 1;
-        pipelineRenderCreateInfo.pColorAttachmentFormats = &m_choisenSurfaceFormat.format;
+        pipelineRenderCreateInfo.pColorAttachmentFormats = &m_radianceTexturesFormat;
         pipelineRenderCreateInfo.depthAttachmentFormat = VK_FORMAT_D16_UNORM;
     }
 
@@ -1584,6 +1585,99 @@ void PBRDeferredApp::InitDeferredLightingPassShaderModules()
 }
 
 // ================================================================================================================
+void PBRDeferredApp::InitDeferredLightingPassRadianceTextures()
+{
+    m_lightingPassRadianceTextures.resize(m_swapchainImgCnt);
+    
+    VkImageCreateInfo radianceImageInfo{};
+    {
+        radianceImageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        radianceImageInfo.imageType = VK_IMAGE_TYPE_2D;
+        radianceImageInfo.format = m_radianceTexturesFormat;
+        radianceImageInfo.extent.width = m_swapchainImageExtent.width;
+        radianceImageInfo.extent.height = m_swapchainImageExtent.height;
+        radianceImageInfo.extent.depth = 1;
+        radianceImageInfo.mipLevels = 1;
+        radianceImageInfo.arrayLayers = 1;
+        radianceImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+        radianceImageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        radianceImageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        radianceImageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        radianceImageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    }
+
+    VmaAllocationCreateInfo imgAllocInfo{};
+    {
+        imgAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        imgAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+    }
+
+    VkImageSubresourceRange oneMipOneLayerSubRsrcRange{};
+    {
+        oneMipOneLayerSubRsrcRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        oneMipOneLayerSubRsrcRange.baseMipLevel = 0;
+        oneMipOneLayerSubRsrcRange.levelCount = 1;
+        oneMipOneLayerSubRsrcRange.baseArrayLayer = 0;
+        oneMipOneLayerSubRsrcRange.layerCount = 1;
+    }
+
+    VkImageViewCreateInfo imageViewInfo{};
+    {
+        imageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        // imageViewInfo.image = ;
+        imageViewInfo.format = m_radianceTexturesFormat;
+        imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        imageViewInfo.components.r = VK_COMPONENT_SWIZZLE_R;
+        imageViewInfo.components.g = VK_COMPONENT_SWIZZLE_G;
+        imageViewInfo.components.b = VK_COMPONENT_SWIZZLE_B;
+        imageViewInfo.components.a = VK_COMPONENT_SWIZZLE_A;
+        imageViewInfo.subresourceRange = oneMipOneLayerSubRsrcRange;
+    }
+
+    VkSamplerCreateInfo samplerInfo{};
+    {
+        samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        samplerInfo.magFilter = VK_FILTER_NEAREST;
+        samplerInfo.minFilter = VK_FILTER_NEAREST;
+        samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+        samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE; // outside image bounds just use border color
+        samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        samplerInfo.minLod = -1000;
+        samplerInfo.maxLod = 1000;
+        samplerInfo.maxAnisotropy = 1.0f;
+    }
+
+    for (uint32_t i = 0; i < m_swapchainImgCnt; i++)
+    {
+        vmaCreateImage(*m_pAllocator,
+                       &radianceImageInfo,
+                       &imgAllocInfo,
+                       &m_lightingPassRadianceTextures[i].image,
+                       &m_lightingPassRadianceTextures[i].imageAllocation, nullptr);
+
+        imageViewInfo.image = m_lightingPassRadianceTextures[i].image;
+        VK_CHECK(vkCreateImageView(m_device, &imageViewInfo, nullptr, &m_lightingPassRadianceTextures[i].imageView));
+
+        VK_CHECK(vkCreateSampler(m_device, &samplerInfo, nullptr, &m_lightingPassRadianceTextures[i].imageSampler));
+    }
+}
+
+// ================================================================================================================
+void PBRDeferredApp::DestroyDeferredLightingPassRadianceTextures()
+{
+    for (uint32_t i = 0; i < m_swapchainImgCnt; i++)
+    {
+        vkDestroyImageView(m_device, m_lightingPassRadianceTextures[i].imageView, nullptr);
+        vkDestroySampler(m_device, m_lightingPassRadianceTextures[i].imageSampler, nullptr);
+
+        vmaDestroyImage(*m_pAllocator,
+                        m_lightingPassRadianceTextures[i].image,
+                        m_lightingPassRadianceTextures[i].imageAllocation);
+    }
+}
+
+// ================================================================================================================
 void PBRDeferredApp::AppInit()
 {
     glfwInit();
@@ -1644,6 +1738,8 @@ void PBRDeferredApp::AppInit()
     InitDeferredLightingPassPipelineDescriptorSetLayout();
     InitDeferredLightingPassPipelineLayout();
     InitDeferredLightingPassPipeline();
+    InitDeferredLightingPassRadianceTextures();
 
     InitSwapchainSyncObjects();
+    InitGammaCorrectionPipelineAndRsrc();
 }

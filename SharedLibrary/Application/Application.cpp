@@ -401,10 +401,6 @@ namespace SharedLib
     }
 
     // ================================================================================================================
-    void Application::CreateVmaVkImage()
-    {}
-
-    // ================================================================================================================
     void Application::CopyRamDataToGpuBuffer(
         void*         pSrc,
         VkBuffer      dstBuffer,
@@ -415,6 +411,71 @@ namespace SharedLib
         VK_CHECK(vmaMapMemory(*m_pAllocator, dstAllocation, &pBufferDataMap));
         memcpy(pBufferDataMap, pSrc, byteNum);
         vmaUnmapMemory(*m_pAllocator, dstAllocation);
+    }
+
+    // ================================================================================================================
+    void Application::CmdClearImg(
+        VkCommandBuffer cmdBuffer,
+        VkImage         img)
+    {
+        VkClearColorValue clearColor = { 0.0f, 0.0f, 0.0f, 1.0f };
+
+        VkImageSubresourceRange subResRange{};
+        {
+            subResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            subResRange.baseMipLevel = 0;
+            subResRange.levelCount = 1;
+            subResRange.baseArrayLayer = 0;
+            subResRange.layerCount = 1;
+        }
+
+        vkCmdClearColorImage(cmdBuffer,
+                             img,
+                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                             &clearColor,
+                             1, &subResRange);
+    }
+    
+    // ================================================================================================================
+    void Application::CmdImgLayoutTrans(
+        VkCommandBuffer      cmdBuffer,
+        VkImage              img,
+        VkImageLayout        oldLayout,
+        VkImageLayout        newLayout,
+        VkAccessFlags        srcAccessMask,
+        VkAccessFlags        dstAccessMask,
+        VkPipelineStageFlags srcStageMask,
+        VkPipelineStageFlags dstStageMask)
+    {
+        VkImageSubresourceRange subResRange{};
+        {
+            subResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            subResRange.baseMipLevel = 0;
+            subResRange.levelCount = 1;
+            subResRange.baseArrayLayer = 0;
+            subResRange.layerCount = 1;
+        }
+
+        // Transform the layout of the swapchain from undefined to render target.
+        VkImageMemoryBarrier renderTargetTransBarrier{};
+        {
+            renderTargetTransBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            renderTargetTransBarrier.srcAccessMask = srcAccessMask;
+            renderTargetTransBarrier.dstAccessMask = dstAccessMask;
+            renderTargetTransBarrier.oldLayout = oldLayout;
+            renderTargetTransBarrier.newLayout = newLayout;
+            renderTargetTransBarrier.image = img;
+            renderTargetTransBarrier.subresourceRange = subResRange;
+        }
+
+        vkCmdPipelineBarrier(
+            cmdBuffer,
+            srcStageMask,
+            dstStageMask,
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &renderTargetTransBarrier);
     }
 
     // ================================================================================================================

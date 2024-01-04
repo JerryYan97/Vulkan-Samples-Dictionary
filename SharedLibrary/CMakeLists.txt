@@ -93,6 +93,10 @@ else()
                 ${TOOL_DIR}/GenerateShaderHeader.py ARGS --src ${SHARED_LIB_HLSL_DIR}/cubemapFormat_vert.hlsl --dstDir ${SHARED_LIB_HLSL_DIR}
             COMMAND python
                 ${TOOL_DIR}/GenerateShaderHeader.py ARGS --src ${SHARED_LIB_HLSL_DIR}/cubemapFormat_frag.hlsl --dstDir ${SHARED_LIB_HLSL_DIR}
+            COMMAND python
+                ${TOOL_DIR}/GenerateShaderHeader.py ARGS --src ${SHARED_LIB_HLSL_DIR}/gammaCorrection_vert.hlsl --dstDir ${SHARED_LIB_HLSL_DIR}
+            COMMAND python
+                ${TOOL_DIR}/GenerateShaderHeader.py ARGS --src ${SHARED_LIB_HLSL_DIR}/gammaCorrection_frag.hlsl --dstDir ${SHARED_LIB_HLSL_DIR}
     )
 
     add_custom_target(SHARED_LIB_SHADER_COMPILE

@@ -4,6 +4,8 @@
 
 #include "../Event/Event.h"
 #include "../Utils/MathUtils.h"
+#include "../HLSL/g_gammaCorrection_vert.h"
+#include "../HLSL/g_gammaCorrection_frag.h"
 #include "VulkanDbgUtils.h"
 #include <glfw3.h>
 #include <cassert>
@@ -32,12 +34,20 @@ namespace SharedLib
         m_presentQueueFamilyIdx(-1),
         m_choisenSurfaceFormat(),
         m_swapchainImageExtent(),
-        m_presentQueue(VK_NULL_HANDLE)
+        m_presentQueue(VK_NULL_HANDLE),
+        m_swapchainImgCnt(0),
+        m_swapchainNextImgId(0),
+        m_gammaCorrectionPipeline(),
+        m_gammaCorrectionVsShaderModule(VK_NULL_HANDLE),
+        m_gammaCorrectionPsShaderModule(VK_NULL_HANDLE),
+        m_gammaCorrectionPipelineDesSetLayout(VK_NULL_HANDLE),
+        m_gammaCorrectionPipelineLayout(VK_NULL_HANDLE)
     {}
 
     // ================================================================================================================
     GlfwApplication::~GlfwApplication()
     {
+        CleanupGammaCorrectionPipelineAndRsrc();
         CleanupSwapchain();
 
         // Cleanup syn objects
@@ -651,6 +661,188 @@ namespace SharedLib
             0, nullptr,
             0, nullptr,
             1, &swapchainPresentTransBarrier);
+    }
+
+    // ================================================================================================================
+    void GlfwApplication::InitGammaCorrectionPipelineAndRsrc()
+    {
+        // Create shader modules
+        m_gammaCorrectionVsShaderModule = CreateShaderModuleFromRam((uint32_t*)gammaCorrection_vertScript,
+                                                                    sizeof(gammaCorrection_vertScript));
+        m_gammaCorrectionPsShaderModule = CreateShaderModuleFromRam((uint32_t*)gammaCorrection_fragScript,
+                                                                    sizeof(gammaCorrection_fragScript));
+
+        // Create Descriptor Set Layout
+        VkDescriptorSetLayoutBinding inputImgBinding{};
+        {
+            inputImgBinding.binding = 0;
+            inputImgBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+            inputImgBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            inputImgBinding.descriptorCount = 1;
+        }
+
+        // Create pipeline's descriptors layout
+        // The Vulkan spec states: The VkDescriptorSetLayoutBinding::binding members of the elements of the pBindings array 
+        // must each have different values 
+        // (https://vulkan.lunarg.com/doc/view/1.3.236.0/windows/1.3-extensions/vkspec.html#VUID-VkDescriptorSetLayoutCreateInfo-binding-00279)
+        VkDescriptorSetLayoutCreateInfo pipelineDesSetLayoutInfo{};
+        {
+            pipelineDesSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+            // Setting this flag tells the descriptor set layouts that no actual descriptor sets are allocated but instead pushed at command buffer creation time
+            pipelineDesSetLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
+            pipelineDesSetLayoutInfo.bindingCount = 1;
+            pipelineDesSetLayoutInfo.pBindings = &inputImgBinding;
+        }
+
+        VK_CHECK(vkCreateDescriptorSetLayout(m_device,
+                                             &pipelineDesSetLayoutInfo,
+                                             nullptr,
+                                             &m_gammaCorrectionPipelineDesSetLayout));
+
+        // Create Pipeline Layout
+        VkPushConstantRange pushConstantInfo{};
+        {
+            pushConstantInfo.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+            pushConstantInfo.offset = 0;
+            pushConstantInfo.size = sizeof(float) * 2; // Width and height.
+        }
+
+        VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+        {
+            pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+            pipelineLayoutInfo.setLayoutCount = 1;
+            pipelineLayoutInfo.pSetLayouts = &m_gammaCorrectionPipelineDesSetLayout;
+            pipelineLayoutInfo.pushConstantRangeCount = 1;
+            pipelineLayoutInfo.pPushConstantRanges = &pushConstantInfo;
+        }
+
+        VK_CHECK(vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_gammaCorrectionPipelineLayout));
+
+        // Create the pipeline
+        VkPipelineRenderingCreateInfoKHR pipelineRenderCreateInfo{};
+        {
+            pipelineRenderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+            pipelineRenderCreateInfo.colorAttachmentCount = 1;
+            pipelineRenderCreateInfo.pColorAttachmentFormats = &m_choisenSurfaceFormat.format;
+        }
+
+        m_gammaCorrectionPipeline.SetPNext(&pipelineRenderCreateInfo);
+        m_gammaCorrectionPipeline.SetPipelineLayout(m_gammaCorrectionPipelineLayout);
+
+        VkPipelineShaderStageCreateInfo shaderStgsInfo[2] = {};
+        shaderStgsInfo[0] = CreateDefaultShaderStgCreateInfo(m_gammaCorrectionVsShaderModule,
+                                                             VK_SHADER_STAGE_VERTEX_BIT);
+        shaderStgsInfo[1] = CreateDefaultShaderStgCreateInfo(m_gammaCorrectionPsShaderModule,
+                                                             VK_SHADER_STAGE_FRAGMENT_BIT);
+        
+        m_gammaCorrectionPipeline.SetShaderStageInfo(shaderStgsInfo, 2);
+        m_gammaCorrectionPipeline.CreatePipeline(m_device);
+    }
+
+    // ================================================================================================================
+    void GlfwApplication::CleanupGammaCorrectionPipelineAndRsrc()
+    {
+        if (m_gammaCorrectionVsShaderModule != VK_NULL_HANDLE)
+        {
+            vkDestroyShaderModule(m_device, m_gammaCorrectionVsShaderModule, nullptr);
+        }
+        
+        if (m_gammaCorrectionPsShaderModule != VK_NULL_HANDLE)
+        {
+            vkDestroyShaderModule(m_device, m_gammaCorrectionPsShaderModule, nullptr);
+        }
+
+        if (m_gammaCorrectionPipelineDesSetLayout != VK_NULL_HANDLE)
+        {
+            vkDestroyDescriptorSetLayout(m_device, m_gammaCorrectionPipelineDesSetLayout, nullptr);
+        }
+        
+        if (m_gammaCorrectionPipelineLayout != VK_NULL_HANDLE)
+        {
+            vkDestroyPipelineLayout(m_device, m_gammaCorrectionPipelineLayout, nullptr);
+        }
+    }
+
+    // ================================================================================================================
+    void GlfwApplication::CmdSwapchainColorImgGammaCorrect(
+        VkCommandBuffer cmdBuffer,
+        VkImageView     srcImgView,
+        VkSampler       srcImgSampler)
+    {
+        VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
+        VkRenderingAttachmentInfoKHR gammaCorrectionColorAttachmentInfo{};
+        {
+            gammaCorrectionColorAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+            gammaCorrectionColorAttachmentInfo.imageView = m_swapchainColorImageViews[m_swapchainNextImgId];
+            gammaCorrectionColorAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
+            gammaCorrectionColorAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            gammaCorrectionColorAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            gammaCorrectionColorAttachmentInfo.clearValue = clearColor;
+        }
+
+        VkRenderingInfoKHR renderInfo{};
+        {
+            renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+            renderInfo.renderArea.offset = { 0, 0 };
+            renderInfo.renderArea.extent = m_swapchainImageExtent;
+            renderInfo.layerCount = 1;
+            renderInfo.colorAttachmentCount = 1;
+            renderInfo.pColorAttachments = &gammaCorrectionColorAttachmentInfo;
+            // renderInfo.pDepthAttachment = &geoPassDepthAttachmentInfo;
+        }
+
+        vkCmdBeginRendering(cmdBuffer, &renderInfo);
+
+        VkDescriptorImageInfo srcImgDescriptorInfo{};
+        {
+            srcImgDescriptorInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            srcImgDescriptorInfo.imageView = srcImgView;
+            srcImgDescriptorInfo.sampler = srcImgSampler;
+        }
+
+        VkWriteDescriptorSet writeDescriptorSet{};
+        {
+            writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            writeDescriptorSet.descriptorCount = 1;
+            writeDescriptorSet.dstBinding = 0;
+            writeDescriptorSet.pImageInfo = &srcImgDescriptorInfo;
+        }
+        m_vkCmdPushDescriptorSetKHR(cmdBuffer,
+                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    m_gammaCorrectionPipelineLayout,
+                                    0, 1, &writeDescriptorSet);
+
+        float pushConstantData[2] = {m_swapchainImageExtent.width, m_swapchainImageExtent.height};
+
+        vkCmdPushConstants(cmdBuffer,
+            m_gammaCorrectionPipelineLayout,
+            VK_SHADER_STAGE_FRAGMENT_BIT,
+            0, sizeof(pushConstantData), pushConstantData);
+
+        VkViewport viewport{};
+        {
+            viewport.x = 0.f;
+            viewport.y = 0.f;
+            viewport.width = (float)m_swapchainImageExtent.width;
+            viewport.height = (float)m_swapchainImageExtent.height;
+            viewport.minDepth = 0.f;
+            viewport.maxDepth = 1.f;
+        }
+
+        VkRect2D scissor{};
+        {
+            scissor.offset = { 0, 0 };
+            scissor.extent = m_swapchainImageExtent;
+        }
+
+        vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
+        vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
+
+        vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_gammaCorrectionPipeline.GetVkPipeline());
+        vkCmdDraw(cmdBuffer, 6, 1, 0, 0);
+
+        vkCmdEndRendering(cmdBuffer);
     }
 
     // ================================================================================================================

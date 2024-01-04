@@ -25,6 +25,25 @@ typedef VkFlags VmaAllocationCreateFlags;
 // TODO4: A queue/vector to collect all image trans barriers so that we can init their formats easiler.
 namespace SharedLib
 {
+    /* TODO:
+    struct GpuBuffer
+    {
+        VkBuffer               buffer;
+        VmaAllocation          bufferAlloc;
+        VkDescriptorBufferInfo bufferDescInfo;
+    };
+
+    struct GpuImg
+    {
+        VkImage               image;
+        VmaAllocation         imageAllocation;
+        VkDescriptorImageInfo imageDescInfo;
+        VkImageView           imageView;
+        VkSampler             imageSampler;
+    };
+    */
+
+
     // Base Vulkan application without a swapchain -- Basically abstract.
     // It has vmaAllocator and descriptor pool. Besides, it also provides basic vulkan objects creation functions.
     class Application
@@ -46,14 +65,26 @@ namespace SharedLib
                                VkBuffer*                pBuffer,
                                VmaAllocation*           pAllocation);
 
-        void CreateVmaVkImage();
-
         void CopyRamDataToGpuBuffer(void*         pSrc,
                                     VkBuffer      dstBuffer, 
                                     VmaAllocation dstAllocation,
                                     uint32_t      byteNum);
 
+        void CmdImgLayoutTrans(VkCommandBuffer      cmdBuffer,
+                               VkImage              img,
+                               VkImageLayout        oldLayout,
+                               VkImageLayout        newLayout,
+                               VkAccessFlags        srcAccessMask,
+                               VkAccessFlags        dstAccessMask,
+                               VkPipelineStageFlags srcStageMask,
+                               VkPipelineStageFlags dstStageMask);
+
+        void CmdClearImg(VkCommandBuffer cmdBuffer, VkImage img);
+
         void SubmitCmdBufToGfxQueue(VkCommandBuffer cmdBuf, VkFence signalFence);
+
+        // GpuImg CreateSwapchainSizeOneMipOneLayerGpuImg(usage, ...);
+        // void DestroyGpuImg(GpuImg xxx);
 
         VmaAllocator* GetVmaAllocator() { return m_pAllocator; }
         VkCommandBuffer GetGfxCmdBuffer(uint32_t i) { return m_gfxCmdBufs[i]; }

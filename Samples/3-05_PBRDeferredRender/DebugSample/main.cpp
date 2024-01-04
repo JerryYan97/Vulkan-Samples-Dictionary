@@ -135,6 +135,8 @@ int main()
 
         /* ----------------------------------------- */
 
+        GpuImg deferredLightingGpuImg = app.GetDeferredLightingRadianceTexture(imageIndex);
+
         app.CmdGBufferLayoutTrans(currentCmdBuffer,
                                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -143,44 +145,25 @@ int main()
                                   VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                                   VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
+        app.CmdImgLayoutTrans(currentCmdBuffer,
+                              deferredLightingGpuImg.image,
+                              VK_IMAGE_LAYOUT_UNDEFINED,
+                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                              VK_ACCESS_NONE,
+                              VK_ACCESS_TRANSFER_WRITE_BIT,
+                              VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                              VK_PIPELINE_STAGE_TRANSFER_BIT);
 
-        app.CmdSwapchainColorImgLayoutTrans(currentCmdBuffer,
-                                            VK_IMAGE_LAYOUT_UNDEFINED,
-                                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                            VK_ACCESS_NONE,
-                                            VK_ACCESS_TRANSFER_WRITE_BIT,
-                                            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                                            VK_PIPELINE_STAGE_TRANSFER_BIT);
+        app.CmdClearImg(currentCmdBuffer, deferredLightingGpuImg.image);
 
-        app.CmdSwapchainDepthImgLayoutTrans(currentCmdBuffer,
-                                            VK_IMAGE_LAYOUT_UNDEFINED,
-                                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                                            VK_ACCESS_TRANSFER_WRITE_BIT,
-                                            VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-                                            VK_PIPELINE_STAGE_TRANSFER_BIT);
-
-        // Note: We want to reuse the swapchain depth and color image. Besides, the light volumes are additive, so we
-        //       have to clear the previous draw's results after the gbuffer is ready and then add each light volumes'
-        //       depth together.
-        app.CmdSwapchainColorImgClear(currentCmdBuffer);
-        app.CmdSwapchainDepthImgClear(currentCmdBuffer);
-
-        app.CmdSwapchainColorImgLayoutTrans(currentCmdBuffer,
-                                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                                            VK_ACCESS_TRANSFER_WRITE_BIT,
-                                            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                                            VK_PIPELINE_STAGE_TRANSFER_BIT,
-                                            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
-
-        app.CmdSwapchainDepthImgLayoutTrans(currentCmdBuffer,
-                                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                            VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-                                            VK_ACCESS_TRANSFER_WRITE_BIT,
-                                            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                                            VK_PIPELINE_STAGE_TRANSFER_BIT,
-                                            VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT);
+        app.CmdImgLayoutTrans(currentCmdBuffer,
+                              deferredLightingGpuImg.image,
+                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                              VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                              VK_ACCESS_TRANSFER_WRITE_BIT,
+                              VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                              VK_PIPELINE_STAGE_TRANSFER_BIT,
+                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 
         /* -------- Deferred Lighting Pass (Point light volumes) --------- */
         VkRenderingAttachmentInfoKHR deferredLightingPassDepthAttachmentInfo{};
@@ -196,7 +179,7 @@ int main()
         VkRenderingAttachmentInfoKHR deferredLightingPassColorAttachmentInfo{};
         {
             deferredLightingPassColorAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-            deferredLightingPassColorAttachmentInfo.imageView = app.GetSwapchainColorImageView(imageIndex);
+            deferredLightingPassColorAttachmentInfo.imageView = deferredLightingGpuImg.imageView;
             deferredLightingPassColorAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
             deferredLightingPassColorAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
             deferredLightingPassColorAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -238,7 +221,6 @@ int main()
         vkCmdBindIndexBuffer(currentCmdBuffer, idxBuffer, 0, VK_INDEX_TYPE_UINT32);
 
         for (uint32_t i = 0; i < PtLightsCounts; i++)
-        // for (uint32_t i = 9; i < 10; i++)
         {
             // Bind the graphics pipeline
             if (app.IsCameraInThisLight(i))
@@ -256,6 +238,27 @@ int main()
         vkCmdEndRendering(currentCmdBuffer);
 
         /* ----------------------------------------- */
+
+        app.CmdSwapchainColorImgLayoutTrans(currentCmdBuffer,
+                                            VK_IMAGE_LAYOUT_UNDEFINED,
+                                            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                            VK_ACCESS_NONE,
+                                            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+
+        app.CmdImgLayoutTrans(currentCmdBuffer,
+                              deferredLightingGpuImg.image,
+                              VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                              VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                              VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                              VK_ACCESS_SHADER_READ_BIT,
+                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                              VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+
+        // NOTE: The final radiance are additive and gamma correction is non-linear. So we cannot do the gamma in the
+        //       lighting pass.
+        app.CmdSwapchainColorImgGammaCorrect(currentCmdBuffer, deferredLightingGpuImg.imageView, deferredLightingGpuImg.imageSampler);
 
         app.CmdSwapchainColorImgToPresent(currentCmdBuffer);
 

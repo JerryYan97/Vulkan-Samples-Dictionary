@@ -57,6 +57,8 @@ public:
     VkBuffer GetIdxBuffer() { return m_idxBuffer.buffer; }
     VkBuffer GetVertBuffer() { return m_vertBuffer.buffer; }
 
+    GpuImg GetDeferredLightingRadianceTexture(uint32_t i) { return m_lightingPassRadianceTextures[i]; }
+
     void CmdGBufferLayoutTrans(VkCommandBuffer      cmdBuffer,
                                VkImageLayout        oldLayout,
                                VkImageLayout        newLayout,
@@ -104,6 +106,9 @@ private:
     void InitDeferredLightingPassPipelineDescriptorSetLayout();
     void InitDeferredLightingPassPipelineLayout();
     void InitDeferredLightingPassShaderModules();
+    void InitDeferredLightingPassRadianceTextures();
+
+    void DestroyDeferredLightingPassRadianceTextures();
 
     // NOTE: Light volumes are also spheres.
     VkPipelineVertexInputStateCreateInfo CreateGeoPassPipelineVertexInputInfo();
@@ -162,6 +167,10 @@ private:
     std::vector<GpuImg> m_normalTextures;
     std::vector<GpuImg> m_metallicRoughnessTextures;
     std::vector<VkFormat> m_gBufferFormats;
+
+    // Deferred lighting pass radiance textures
+    std::vector<GpuImg> m_lightingPassRadianceTextures;
+    const VkFormat m_radianceTexturesFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
 
     // Geo pass Gpu Rsrc inputs
     // NOTE: SSBO's entry needs to have size of the multiple of 2. HLSL always takes 4 or 2 elements per entry.
