@@ -1,6 +1,6 @@
 #include "vk_mem_alloc.h"
 
-#include "PBRIBLGltfApp.h"
+#include "SkeletonSkinAnim.h"
 #include "../../../SharedLibrary/Utils/VulkanDbgUtils.h"
 #include "../../../SharedLibrary/Utils/CmdBufUtils.h"
 
@@ -12,7 +12,7 @@
 // TODO: We can design a queue to hold all transfer barriers and do them all-together.
 int main()
 {
-    PBRIBLGltfApp app;
+    SkinAnimGltfApp app;
     app.AppInit();
 
     VkImageSubresourceRange swapchainPresentSubResRange{};

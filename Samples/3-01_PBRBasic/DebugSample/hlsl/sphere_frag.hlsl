@@ -51,7 +51,7 @@ float4 main(
 		float3 NFG = NDF * F * G;
 
 		float denominator = 4.0 * viewNormalCosTheta * lightNormalCosTheta  + 0.0001;
-		
+
 		float3 specular = NFG / denominator;
 
 		float3 kD = float3(1.0, 1.0, 1.0) - F; // The amount of light goes into the material.

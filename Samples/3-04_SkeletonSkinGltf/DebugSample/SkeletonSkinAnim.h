@@ -1,7 +1,6 @@
 #pragma once
 #include "../../../SharedLibrary/Application/GlfwApplication.h"
 #include "../../../SharedLibrary/Pipeline/Pipeline.h"
-// #include "../../../SharedLibrary/AnimLogger/AnimLogger.h"
 #include <chrono>
 
 VK_DEFINE_HANDLE(VmaAllocation);
@@ -17,12 +16,6 @@ struct ImgInfo
     uint32_t pixHeight;
     uint32_t componentCnt;
     std::vector<uint8_t> dataVec;
-    float* pData;
-};
-
-struct BinBufferInfo
-{
-    uint32_t byteCnt;
     float* pData;
 };
 
@@ -81,11 +74,11 @@ const float Radius = 1.5f;
 const float RotateRadiensPerSecond = 3.1415926 * 2.f / 10.f; // 10s -- a circle.
 const bool DumpAnim = true;
 
-class PBRIBLGltfApp : public SharedLib::GlfwApplication
+class SkinAnimGltfApp : public SharedLib::GlfwApplication
 {
 public:
-    PBRIBLGltfApp();
-    ~PBRIBLGltfApp();
+    SkinAnimGltfApp();
+    ~SkinAnimGltfApp();
 
     virtual void AppInit() override;
 

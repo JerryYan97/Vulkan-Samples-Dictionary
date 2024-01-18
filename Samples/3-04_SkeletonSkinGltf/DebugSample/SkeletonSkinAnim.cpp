@@ -1,4 +1,4 @@
-#include "PBRIBLGltfApp.h"
+#include "SkeletonSkinAnim.h"
 #include <glfw3.h>
 #include "../../../SharedLibrary/Utils/VulkanDbgUtils.h"
 #include "../../../SharedLibrary/Camera/Camera.h"
@@ -30,7 +30,7 @@ static void MouseButtonCallback(GLFWwindow* window, int button, int action, int 
 }
 
 // ================================================================================================================
-PBRIBLGltfApp::PBRIBLGltfApp() : 
+SkinAnimGltfApp::SkinAnimGltfApp() :
     GlfwApplication(),
     m_hdrCubeMapImage(VK_NULL_HANDLE),
     m_hdrCubeMapView(VK_NULL_HANDLE),
@@ -82,7 +82,7 @@ PBRIBLGltfApp::PBRIBLGltfApp() :
 }
 
 // ================================================================================================================
-PBRIBLGltfApp::~PBRIBLGltfApp()
+SkinAnimGltfApp::~SkinAnimGltfApp()
 {
     vkDeviceWaitIdle(m_device);
     delete m_pCamera;
@@ -98,7 +98,7 @@ PBRIBLGltfApp::~PBRIBLGltfApp()
 }
 
 // ================================================================================================================
-void PBRIBLGltfApp::DestroyHdrRenderObjs()
+void SkinAnimGltfApp::DestroyHdrRenderObjs()
 {
     DestroyModelInfo();
 
@@ -127,7 +127,7 @@ void PBRIBLGltfApp::DestroyHdrRenderObjs()
 }
 
 // ================================================================================================================
-void PBRIBLGltfApp::DestroyCameraUboObjects()
+void SkinAnimGltfApp::DestroyCameraUboObjects()
 {
     for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
     {
@@ -136,13 +136,13 @@ void PBRIBLGltfApp::DestroyCameraUboObjects()
 }
 
 // ================================================================================================================
-VkDeviceSize PBRIBLGltfApp::GetHdrByteNum()
+VkDeviceSize SkinAnimGltfApp::GetHdrByteNum()
 {
     return 3 * sizeof(float) * m_hdrImgCubemap.pixWidth * m_hdrImgCubemap.pixHeight;
 }
 
 // ================================================================================================================
-void PBRIBLGltfApp::SendCameraDataToBuffer(
+void SkinAnimGltfApp::SendCameraDataToBuffer(
     uint32_t i)
 {
     float cameraData[16] = {};
@@ -182,7 +182,7 @@ void PBRIBLGltfApp::SendCameraDataToBuffer(
 }
 
 // ================================================================================================================
-void PBRIBLGltfApp::UpdateCameraAndGpuBuffer()
+void SkinAnimGltfApp::UpdateCameraAndGpuBuffer()
 {
     // TODO: Delete the mouse event.
     SharedLib::HEvent midMouseDownEvent = CreateMiddleMouseEvent(g_isDown);
@@ -224,14 +224,14 @@ void PBRIBLGltfApp::UpdateCameraAndGpuBuffer()
 }
 
 // ================================================================================================================
-void PBRIBLGltfApp::GetCameraPos(
+void SkinAnimGltfApp::GetCameraPos(
     float* pOut)
 {
     m_pCamera->GetPos(pOut);
 }
 
 // ================================================================================================================
-void PBRIBLGltfApp::InitHdrRenderObjects()
+void SkinAnimGltfApp::InitHdrRenderObjects()
 {
     // Load the HDRI image into RAM
     std::string hdriFilePath = SOURCE_PATH;
@@ -559,7 +559,7 @@ void PBRIBLGltfApp::InitHdrRenderObjects()
 }
 
 // ================================================================================================================
-void PBRIBLGltfApp::InitCameraUboObjects()
+void SkinAnimGltfApp::InitCameraUboObjects()
 {
     // The alignment of a vec3 is 4 floats and the element alignment of a struct is the largest element alignment,
     // which is also the 4 float. Therefore, we need 16 floats as the buffer to store the Camera's parameters.
@@ -598,7 +598,7 @@ void PBRIBLGltfApp::InitCameraUboObjects()
 }
 
 // ================================================================================================================
-void PBRIBLGltfApp::InitSkyboxPipelineLayout()
+void SkinAnimGltfApp::InitSkyboxPipelineLayout()
 {
     // Create pipeline layout
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
@@ -613,15 +613,15 @@ void PBRIBLGltfApp::InitSkyboxPipelineLayout()
 }
 
 // ================================================================================================================
-void PBRIBLGltfApp::InitSkyboxShaderModules()
+void SkinAnimGltfApp::InitSkyboxShaderModules()
 {
     // Create Shader Modules.
-    m_vsSkyboxShaderModule = CreateShaderModule("./hlsl/skybox_vert.spv");
-    m_psSkyboxShaderModule = CreateShaderModule("./hlsl/skybox_frag.spv");
+    m_vsSkyboxShaderModule = CreateShaderModule("./hlsl/skinAnim_vert.spv");
+    m_psSkyboxShaderModule = CreateShaderModule("./hlsl/skinAnim_frag.spv");
 }
 
 // ================================================================================================================
-void PBRIBLGltfApp::InitSkyboxPipelineDescriptorSetLayout()
+void SkinAnimGltfApp::InitSkyboxPipelineDescriptorSetLayout()
 {
     // Create pipeline binding and descriptor objects for the camera parameters
     VkDescriptorSetLayoutBinding cameraUboBinding{};
@@ -658,7 +658,7 @@ void PBRIBLGltfApp::InitSkyboxPipelineDescriptorSetLayout()
 }
 
 // ================================================================================================================
-void PBRIBLGltfApp::InitSkyboxPipeline()
+void SkinAnimGltfApp::InitSkyboxPipeline()
 {
     VkPipelineRenderingCreateInfoKHR pipelineRenderCreateInfo{};
     {
@@ -679,7 +679,7 @@ void PBRIBLGltfApp::InitSkyboxPipeline()
 }
 
 // ================================================================================================================
-void PBRIBLGltfApp::DestroySkyboxPipelineRes()
+void SkinAnimGltfApp::DestroySkyboxPipelineRes()
 {
     // Destroy shader modules
     vkDestroyShaderModule(m_device, m_vsSkyboxShaderModule, nullptr);
@@ -693,7 +693,7 @@ void PBRIBLGltfApp::DestroySkyboxPipelineRes()
 }
 
 // ================================================================================================================
-void PBRIBLGltfApp::AppInit()
+void SkinAnimGltfApp::AppInit()
 {
     glfwInit();
     uint32_t glfwExtensionCount = 0;
@@ -769,7 +769,7 @@ void PBRIBLGltfApp::AppInit()
 //       * Texture samplers' type should follow the real data, but here we simply choose the repeat.
 // TODO: A formal gltf model loader should load a model from it's node and apply its attributes recursively.
 // TODO: The gltf model loader should put into the shared library.
-void PBRIBLGltfApp::InitModelInfo()
+void SkinAnimGltfApp::InitModelInfo()
 {
     std::string inputfile = SOURCE_PATH;
     inputfile += "/../data/glTF/FlightHelmet.gltf";
@@ -1302,7 +1302,7 @@ void PBRIBLGltfApp::InitModelInfo()
 }
 
 // ================================================================================================================
-uint32_t PBRIBLGltfApp::GetModelTexCnt()
+uint32_t SkinAnimGltfApp::GetModelTexCnt()
 {
     uint32_t cnt = 0;
     for (const auto& mesh : m_gltfModeMeshes)
@@ -1336,7 +1336,7 @@ uint32_t PBRIBLGltfApp::GetModelTexCnt()
 }
 
 // ================================================================================================================
-void PBRIBLGltfApp::DestroyModelInfo()
+void SkinAnimGltfApp::DestroyModelInfo()
 {
     for (const auto& mesh : m_gltfModeMeshes)
     {
@@ -1381,7 +1381,7 @@ void PBRIBLGltfApp::DestroyModelInfo()
 }
 
 // ================================================================================================================
-void PBRIBLGltfApp::InitIblPipeline()
+void SkinAnimGltfApp::InitIblPipeline()
 {
     VkPipelineRenderingCreateInfoKHR pipelineRenderCreateInfo{};
     {
@@ -1409,7 +1409,7 @@ void PBRIBLGltfApp::InitIblPipeline()
 }
 
 // ================================================================================================================
-void PBRIBLGltfApp::InitIblPipelineDescriptorSetLayout()
+void SkinAnimGltfApp::InitIblPipelineDescriptorSetLayout()
 {
     // Create pipeline's descriptors layout
     // The Vulkan spec states: The VkDescriptorSetLayoutBinding::binding members of the elements of the pBindings array 
@@ -1506,7 +1506,7 @@ void PBRIBLGltfApp::InitIblPipelineDescriptorSetLayout()
 }
 
 // ================================================================================================================
-void PBRIBLGltfApp::InitIblPipelineLayout()
+void SkinAnimGltfApp::InitIblPipelineLayout()
 {
     VkPushConstantRange range = {};
     {
@@ -1531,14 +1531,14 @@ void PBRIBLGltfApp::InitIblPipelineLayout()
 }
 
 // ================================================================================================================
-void PBRIBLGltfApp::InitIblShaderModules()
+void SkinAnimGltfApp::InitIblShaderModules()
 {
     m_vsIblShaderModule = CreateShaderModule("./hlsl/ibl_vert.spv");
     m_psIblShaderModule = CreateShaderModule("./hlsl/ibl_frag.spv");
 }
 
 // ================================================================================================================
-void PBRIBLGltfApp::CmdPushCubemapDescriptors(
+void SkinAnimGltfApp::CmdPushCubemapDescriptors(
     VkCommandBuffer cmdBuffer)
 {
     std::vector<VkWriteDescriptorSet> skyboxDescriptorsInfos;
@@ -1577,7 +1577,7 @@ void PBRIBLGltfApp::CmdPushCubemapDescriptors(
 // be reused accross frames.
 // Actually, there can be three types of descriptor sets: IBL descriptor set, ubo descriptor set and tex descriptor
 // sets.
-void PBRIBLGltfApp::CmdPushIblModelRenderingDescriptors(
+void SkinAnimGltfApp::CmdPushIblModelRenderingDescriptors(
     VkCommandBuffer cmdBuffer,
     const Mesh&     mesh)
 {
@@ -1672,7 +1672,7 @@ void PBRIBLGltfApp::CmdPushIblModelRenderingDescriptors(
 }
 
 // ================================================================================================================
-void PBRIBLGltfApp::DestroyIblPipelineRes()
+void SkinAnimGltfApp::DestroyIblPipelineRes()
 {
     // Destroy shader modules
     vkDestroyShaderModule(m_device, m_vsIblShaderModule, nullptr);
@@ -1686,7 +1686,7 @@ void PBRIBLGltfApp::DestroyIblPipelineRes()
 }
 
 // ================================================================================================================
-void PBRIBLGltfApp::InitVpMatBuffer()
+void SkinAnimGltfApp::InitVpMatBuffer()
 {
     VkBufferCreateInfo bufferInfo{};
     {
@@ -1729,7 +1729,7 @@ void PBRIBLGltfApp::InitVpMatBuffer()
 }
 
 // ================================================================================================================
-void PBRIBLGltfApp::DestroyVpMatBuffer()
+void SkinAnimGltfApp::DestroyVpMatBuffer()
 {
     for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
     {
@@ -1740,7 +1740,7 @@ void PBRIBLGltfApp::DestroyVpMatBuffer()
 // ================================================================================================================
 // Elements notes:
 // Position: float3, normal: float3, tangent: float4, texcoord: float2.
-VkPipelineVertexInputStateCreateInfo PBRIBLGltfApp::CreatePipelineVertexInputInfo()
+VkPipelineVertexInputStateCreateInfo SkinAnimGltfApp::CreatePipelineVertexInputInfo()
 {
     // Specifying all kinds of pipeline states
     // Vertex input state
@@ -1793,7 +1793,7 @@ VkPipelineVertexInputStateCreateInfo PBRIBLGltfApp::CreatePipelineVertexInputInf
 }
 
 // ================================================================================================================
-VkPipelineDepthStencilStateCreateInfo PBRIBLGltfApp::CreateDepthStencilStateInfo()
+VkPipelineDepthStencilStateCreateInfo SkinAnimGltfApp::CreateDepthStencilStateInfo()
 {
     VkPipelineDepthStencilStateCreateInfo depthStencilInfo{};
     {
@@ -1810,7 +1810,7 @@ VkPipelineDepthStencilStateCreateInfo PBRIBLGltfApp::CreateDepthStencilStateInfo
 
 // ================================================================================================================
 // TODO: The model should be at the center of the scene and the camera should rotate the model to make the animation.
-void PBRIBLGltfApp::InitIblMvpMatsBuffer()
+void SkinAnimGltfApp::InitIblMvpMatsBuffer()
 {
     VkBufferCreateInfo bufferInfo{};
     {
@@ -1869,7 +1869,7 @@ void PBRIBLGltfApp::InitIblMvpMatsBuffer()
 }
 
 // ================================================================================================================
-void PBRIBLGltfApp::DestroyIblMvpMatsBuffer()
+void SkinAnimGltfApp::DestroyIblMvpMatsBuffer()
 {
     for (uint32_t i = 0; i < m_iblMvpMatsUboBuffer.size(); i++)
     {
@@ -1878,7 +1878,7 @@ void PBRIBLGltfApp::DestroyIblMvpMatsBuffer()
 }
 
 // ================================================================================================================
-void PBRIBLGltfApp::CmdCopyPresentImgToLogAnim(
+void SkinAnimGltfApp::CmdCopyPresentImgToLogAnim(
     VkCommandBuffer cmdBuffer,
     uint32_t        swapchainImgIdx)
 {
@@ -1890,7 +1890,7 @@ void PBRIBLGltfApp::CmdCopyPresentImgToLogAnim(
 }
 
 // ================================================================================================================
-void PBRIBLGltfApp::DumpRenderedFrame(
+void SkinAnimGltfApp::DumpRenderedFrame(
     VkCommandBuffer cmdBuffer)
 {
     /*
