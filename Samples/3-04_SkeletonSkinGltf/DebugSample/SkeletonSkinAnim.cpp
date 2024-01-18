@@ -1538,46 +1538,7 @@ void SkinAnimGltfApp::InitIblShaderModules()
 }
 
 // ================================================================================================================
-void SkinAnimGltfApp::CmdPushCubemapDescriptors(
-    VkCommandBuffer cmdBuffer)
-{
-    std::vector<VkWriteDescriptorSet> skyboxDescriptorsInfos;
-
-    // Set 0 -- Binding 0: The skybox cubemap
-    VkWriteDescriptorSet writeHdrDesSet{};
-    {
-        writeHdrDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeHdrDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        writeHdrDesSet.dstBinding = 0;
-        writeHdrDesSet.pImageInfo = &m_hdrCubeMapImgDescriptorInfo;
-        writeHdrDesSet.descriptorCount = 1;
-    }
-    skyboxDescriptorsInfos.push_back(writeHdrDesSet);
-
-    // Set 0 -- Binding 1: The cubemap render camera buffer
-    VkWriteDescriptorSet writeCameraBufDesSet{};
-    {
-        writeCameraBufDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeCameraBufDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        writeCameraBufDesSet.dstBinding = 1;
-        writeCameraBufDesSet.descriptorCount = 1;
-        writeCameraBufDesSet.pBufferInfo = &m_cameraParaBuffersDescriptorsInfos[m_currentFrame];
-    }
-    skyboxDescriptorsInfos.push_back(writeCameraBufDesSet);
-
-    m_vkCmdPushDescriptorSetKHR(cmdBuffer,
-                                VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                m_skyboxPipelineLayout,
-                                0, skyboxDescriptorsInfos.size(), skyboxDescriptorsInfos.data());
-}
-
-// ================================================================================================================
-// Two ubo descriptor sets: One for each on-fly frames.
-// The number of descriptor sets of model rendering is equal to the number of meshes in the model since they can
-// be reused accross frames.
-// Actually, there can be three types of descriptor sets: IBL descriptor set, ubo descriptor set and tex descriptor
-// sets.
-void SkinAnimGltfApp::CmdPushIblModelRenderingDescriptors(
+void SkinAnimGltfApp::CmdPushSkeletonSkinRenderingDescriptors(
     VkCommandBuffer cmdBuffer,
     const Mesh&     mesh)
 {
@@ -1875,26 +1836,4 @@ void SkinAnimGltfApp::DestroyIblMvpMatsBuffer()
     {
         vmaDestroyBuffer(*m_pAllocator, m_iblMvpMatsUboBuffer[i], m_iblMvpMatsUboAlloc[i]);
     }
-}
-
-// ================================================================================================================
-void SkinAnimGltfApp::CmdCopyPresentImgToLogAnim(
-    VkCommandBuffer cmdBuffer,
-    uint32_t        swapchainImgIdx)
-{
-    /*
-    m_pAnimLogger->CmdCopyRenderTargetOut(cmdBuffer,
-                                          this->GetSwapchainColorImage(swapchainImgIdx),
-                                          this->GetSwapchainImageExtent());
-    */
-}
-
-// ================================================================================================================
-void SkinAnimGltfApp::DumpRenderedFrame(
-    VkCommandBuffer cmdBuffer)
-{
-    /*
-    // Log anim as needed.
-    m_pAnimLogger->DumpRenderTargetData(m_device, m_graphicsQueue, m_inFlightFences[m_currentFrame], cmdBuffer);
-    */
 }
