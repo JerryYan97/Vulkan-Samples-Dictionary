@@ -67,7 +67,7 @@ SkinAnimGltfApp::~SkinAnimGltfApp()
 
     DestroyHdrRenderObjs();
 
-    DestroyIblPipelineRes();
+    DestroySkinAnimPipelineRes();
 }
 
 // ================================================================================================================
@@ -76,22 +76,28 @@ void SkinAnimGltfApp::DestroyHdrRenderObjs()
     DestroyGltf();
 
     delete m_diffuseIrradianceCubemap.pData[0];
-    vmaDestroyImage(*m_pAllocator, m_diffuseIrradianceCubemap.gpuImg, m_diffuseIrradianceCubemap.gpuImgAlloc);
-    vkDestroyImageView(m_device, m_diffuseIrradianceCubemap.gpuImgView, nullptr);
-    vkDestroySampler(m_device, m_diffuseIrradianceCubemap.gpuImgSampler, nullptr);
+    vmaDestroyImage(*m_pAllocator,
+                    m_diffuseIrradianceCubemap.gpuImg.image,
+                    m_diffuseIrradianceCubemap.gpuImg.imageAllocation);
+
+    vkDestroyImageView(m_device, m_diffuseIrradianceCubemap.gpuImg.imageView, nullptr);
+    vkDestroySampler(m_device, m_diffuseIrradianceCubemap.gpuImg.imageSampler, nullptr);
 
     for (auto itr : m_prefilterEnvCubemap.pData)
     {
         delete itr;
     }
-    vmaDestroyImage(*m_pAllocator, m_prefilterEnvCubemap.gpuImg, m_prefilterEnvCubemap.gpuImgAlloc);
-    vkDestroyImageView(m_device, m_prefilterEnvCubemap.gpuImgView, nullptr);
-    vkDestroySampler(m_device, m_prefilterEnvCubemap.gpuImgSampler, nullptr);
+    vmaDestroyImage(*m_pAllocator,
+                    m_prefilterEnvCubemap.gpuImg.image,
+                    m_prefilterEnvCubemap.gpuImg.imageAllocation);
+
+    vkDestroyImageView(m_device, m_prefilterEnvCubemap.gpuImg.imageView, nullptr);
+    vkDestroySampler(m_device, m_prefilterEnvCubemap.gpuImg.imageSampler, nullptr);
 
     delete m_envBrdfImg.pData[0];
-    vmaDestroyImage(*m_pAllocator, m_envBrdfImg.gpuImg, m_envBrdfImg.gpuImgAlloc);
-    vkDestroyImageView(m_device, m_envBrdfImg.gpuImgView, nullptr);
-    vkDestroySampler(m_device, m_envBrdfImg.gpuImgSampler, nullptr);
+    vmaDestroyImage(*m_pAllocator, m_envBrdfImg.gpuImg.image, m_envBrdfImg.gpuImg.imageAllocation);
+    vkDestroyImageView(m_device, m_envBrdfImg.gpuImg.imageView, nullptr);
+    vkDestroySampler(m_device, m_envBrdfImg.gpuImg.imageSampler, nullptr);
 }
 
 // ================================================================================================================
@@ -231,21 +237,21 @@ void SkinAnimGltfApp::ReadInInitIBL()
         VK_CHECK(vmaCreateImage(*m_pAllocator,
             &cubeMapImgInfo,
             &diffIrrAllocInfo,
-            &m_diffuseIrradianceCubemap.gpuImg,
-            &m_diffuseIrradianceCubemap.gpuImgAlloc,
+            &m_diffuseIrradianceCubemap.gpuImg.image,
+            &m_diffuseIrradianceCubemap.gpuImg.imageAllocation,
             nullptr));
 
         VkImageViewCreateInfo info{};
         {
             info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            info.image = m_diffuseIrradianceCubemap.gpuImg;
+            info.image = m_diffuseIrradianceCubemap.gpuImg.image;
             info.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
             info.format = VK_FORMAT_R32G32B32_SFLOAT;
             info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             info.subresourceRange.levelCount = 1;
             info.subresourceRange.layerCount = 6;
         }
-        VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_diffuseIrradianceCubemap.gpuImgView));
+        VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_diffuseIrradianceCubemap.gpuImg.imageView));
 
         VkSamplerCreateInfo sampler_info{};
         {
@@ -260,11 +266,11 @@ void SkinAnimGltfApp::ReadInInitIBL()
             sampler_info.maxLod = 1000;
             sampler_info.maxAnisotropy = 1.0f;
         }
-        VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_diffuseIrradianceCubemap.gpuImgSampler));
+        VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_diffuseIrradianceCubemap.gpuImg.imageSampler));
 
-        m_diffuseIrradianceCubemap.gpuImgDescriptorInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        m_diffuseIrradianceCubemap.gpuImgDescriptorInfo.imageView = m_diffuseIrradianceCubemap.gpuImgView;
-        m_diffuseIrradianceCubemap.gpuImgDescriptorInfo.sampler = m_diffuseIrradianceCubemap.gpuImgSampler;
+        m_diffuseIrradianceCubemap.gpuImg.imageDescInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        m_diffuseIrradianceCubemap.gpuImg.imageDescInfo.imageView = m_diffuseIrradianceCubemap.gpuImg.imageView;
+        m_diffuseIrradianceCubemap.gpuImg.imageDescInfo.sampler = m_diffuseIrradianceCubemap.gpuImg.imageSampler;
     }
 
     // Read in and init prefilter environment cubemap
@@ -321,21 +327,21 @@ void SkinAnimGltfApp::ReadInInitIBL()
         VK_CHECK(vmaCreateImage(*m_pAllocator,
             &cubeMapImgInfo,
             &prefilterEnvCubemapAllocInfo,
-            &m_prefilterEnvCubemap.gpuImg,
-            &m_prefilterEnvCubemap.gpuImgAlloc,
+            &m_prefilterEnvCubemap.gpuImg.image,
+            &m_prefilterEnvCubemap.gpuImg.imageAllocation,
             nullptr));
 
         VkImageViewCreateInfo info{};
         {
             info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            info.image = m_prefilterEnvCubemap.gpuImg;
+            info.image = m_prefilterEnvCubemap.gpuImg.image;
             info.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
             info.format = VK_FORMAT_R32G32B32_SFLOAT;
             info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             info.subresourceRange.levelCount = mipCnts;
             info.subresourceRange.layerCount = 6;
         }
-        VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_prefilterEnvCubemap.gpuImgView));
+        VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_prefilterEnvCubemap.gpuImg.imageView));
 
         VkSamplerCreateInfo sampler_info{};
         {
@@ -350,11 +356,11 @@ void SkinAnimGltfApp::ReadInInitIBL()
             sampler_info.maxLod = 1000;
             sampler_info.maxAnisotropy = 1.0f;
         }
-        VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_prefilterEnvCubemap.gpuImgSampler));
+        VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_prefilterEnvCubemap.gpuImg.imageSampler));
 
-        m_prefilterEnvCubemap.gpuImgDescriptorInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        m_prefilterEnvCubemap.gpuImgDescriptorInfo.imageView = m_prefilterEnvCubemap.gpuImgView;
-        m_prefilterEnvCubemap.gpuImgDescriptorInfo.sampler = m_prefilterEnvCubemap.gpuImgSampler;
+        m_prefilterEnvCubemap.gpuImg.imageDescInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        m_prefilterEnvCubemap.gpuImg.imageDescInfo.imageView = m_prefilterEnvCubemap.gpuImg.imageView;
+        m_prefilterEnvCubemap.gpuImg.imageDescInfo.sampler = m_prefilterEnvCubemap.gpuImg.imageSampler;
     }
 
     // Read in and init environment brdf map
@@ -395,21 +401,21 @@ void SkinAnimGltfApp::ReadInInitIBL()
         VK_CHECK(vmaCreateImage(*m_pAllocator,
             &envBrdfImgInfo,
             &envBrdfMapAllocInfo,
-            &m_envBrdfImg.gpuImg,
-            &m_envBrdfImg.gpuImgAlloc,
+            &m_envBrdfImg.gpuImg.image,
+            &m_envBrdfImg.gpuImg.imageAllocation,
             nullptr));
 
         VkImageViewCreateInfo info{};
         {
             info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            info.image = m_envBrdfImg.gpuImg;
+            info.image = m_envBrdfImg.gpuImg.image;
             info.viewType = VK_IMAGE_VIEW_TYPE_2D;
             info.format = VK_FORMAT_R32G32B32_SFLOAT;
             info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             info.subresourceRange.levelCount = 1;
             info.subresourceRange.layerCount = 1;
         }
-        VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_envBrdfImg.gpuImgView));
+        VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_envBrdfImg.gpuImg.imageView));
 
         VkSamplerCreateInfo sampler_info{};
         {
@@ -424,11 +430,11 @@ void SkinAnimGltfApp::ReadInInitIBL()
             sampler_info.maxLod = 1000;
             sampler_info.maxAnisotropy = 1.0f;
         }
-        VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_envBrdfImg.gpuImgSampler));
+        VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_envBrdfImg.gpuImg.imageSampler));
 
-        m_envBrdfImg.gpuImgDescriptorInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        m_envBrdfImg.gpuImgDescriptorInfo.imageView = m_envBrdfImg.gpuImgView;
-        m_envBrdfImg.gpuImgDescriptorInfo.sampler = m_envBrdfImg.gpuImgSampler;
+        m_envBrdfImg.gpuImg.imageDescInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        m_envBrdfImg.gpuImg.imageDescInfo.imageView = m_envBrdfImg.gpuImg.imageView;
+        m_envBrdfImg.gpuImg.imageDescInfo.sampler = m_envBrdfImg.gpuImg.imageSampler;
     }
 }
 
@@ -474,10 +480,10 @@ void SkinAnimGltfApp::AppInit()
     ReadInInitGltf();
     ReadInInitIBL();
 
-    InitIblShaderModules();
-    InitIblPipelineDescriptorSetLayout();
-    InitIblPipelineLayout();
-    InitIblPipeline();
+    InitSkinAnimShaderModules();
+    InitSkinAnimPipelineDescriptorSetLayout();
+    InitSkinAnimPipelineLayout();
+    InitSkinAnimPipeline();
     
     InitSwapchainSyncObjects();
 }
@@ -548,20 +554,19 @@ void SkinAnimGltfApp::ReadInInitGltf()
         int uvAccessorByteOffset = uvAccessor.byteOffset;
         int uvAccessorEleCnt = uvAccessor.count;
     }
-    
 
     const auto& idxAccessor = model.accessors[indicesIdx];
     int idxAccessorByteOffset = idxAccessor.byteOffset;
     int idxAccessorEleCnt = idxAccessor.count;
 
-    // NOTE: Buffer views are just division of the buffer for the flight helmet model.
+    /*
+    // NOTE: Buffer views are just division of the buffer for a model.
     // SCALAR is in one buffer view. FLOAT2 in one. FLOAT3 in one. and FLOAT3 in one...
     // Maybe they can be more
     // A buffer view represents a contiguous segment of data in a buffer, defined by a byte offset into the buffer specified 
     // in the byteOffset property and a total byte length specified by the byteLength property of the buffer view.
     const auto& posBufferView = model.bufferViews[posAccessor.bufferView];
     const auto& normalBufferView = model.bufferViews[normalAccessor.bufferView];
-    const auto& tangentBufferView = model.bufferViews[tangentAccessor.bufferView];
     const auto& uvBufferView = model.bufferViews[uvAccessor.bufferView];
     const auto& idxBufferView = model.bufferViews[idxAccessor.bufferView];
 
@@ -793,57 +798,28 @@ void SkinAnimGltfApp::ReadInInitGltf()
         m_gltfModeMeshes[i].baseColorImgDescriptorInfo.imageView = m_gltfModeMeshes[i].baseColorImgView;
         m_gltfModeMeshes[i].baseColorImgDescriptorInfo.sampler = m_gltfModeMeshes[i].baseColorImgSampler;
     }
+    */
 }
 
 // ================================================================================================================
 void SkinAnimGltfApp::DestroyGltf()
 {
+    // Release mesh related resources
+    Mesh& mesh = m_skeletalMesh.mesh;
+    vmaDestroyBuffer(*m_pAllocator, mesh.idxBuffer.buffer, mesh.idxBuffer.bufferAlloc);
+    vmaDestroyBuffer(*m_pAllocator, mesh.vertBuffer.buffer, mesh.vertBuffer.bufferAlloc);
 
+    vmaDestroyImage(*m_pAllocator, mesh.baseColorImg.gpuImg.image, mesh.baseColorImg.gpuImg.imageAllocation);
+    vkDestroyImageView(m_device, mesh.baseColorImg.gpuImg.imageView, nullptr);
+    vkDestroySampler(m_device, mesh.baseColorImg.gpuImg.imageSampler, nullptr);
 
-    for (const auto& mesh : m_gltfModeMeshes)
-    {
-        vmaDestroyBuffer(*m_pAllocator, mesh.modelIdxBuffer, mesh.modelIdxBufferAlloc);
-        vmaDestroyBuffer(*m_pAllocator, mesh.modelVertBuffer, mesh.modelVertBufferAlloc);
-
-        if (mesh.baseColorImg != VK_NULL_HANDLE)
-        {
-            vmaDestroyImage(*m_pAllocator, mesh.baseColorImg, mesh.baseColorImgAlloc);
-            vkDestroyImageView(m_device, mesh.baseColorImgView, nullptr);
-            vkDestroySampler(m_device, mesh.baseColorImgSampler, nullptr);
-        }
-
-        if (mesh.normalImg != VK_NULL_HANDLE)
-        {
-            vmaDestroyImage(*m_pAllocator, mesh.normalImg, mesh.normalImgAlloc);
-            vkDestroyImageView(m_device, mesh.normalImgView, nullptr);
-            vkDestroySampler(m_device, mesh.normalImgSampler, nullptr);
-        }
-
-        if (mesh.metallicRoughnessImg != VK_NULL_HANDLE)
-        {
-            vmaDestroyImage(*m_pAllocator, mesh.metallicRoughnessImg, mesh.metallicRoughnessImgAlloc);
-            vkDestroyImageView(m_device, mesh.metallicRoughnessImgView, nullptr);
-            vkDestroySampler(m_device, mesh.metallicRoughnessImgSampler, nullptr);
-        }
-
-        if (mesh.occlusionImg != VK_NULL_HANDLE)
-        {
-            vmaDestroyImage(*m_pAllocator, mesh.occlusionImg, mesh.occlusionImgAlloc);
-            vkDestroyImageView(m_device, mesh.occlusionImgView, nullptr);
-            vkDestroySampler(m_device, mesh.occlusionImgSampler, nullptr);
-        }
-
-        if (mesh.emissiveImg != VK_NULL_HANDLE)
-        {
-            vmaDestroyImage(*m_pAllocator, mesh.emissiveImg, mesh.emissiveImgAlloc);
-            vkDestroyImageView(m_device, mesh.emissiveImgView, nullptr);
-            vkDestroySampler(m_device, mesh.emissiveImgSampler, nullptr);
-        }
-    }
+    // Release skeleton related resources
+    Skeleton& skeleton = m_skeletalMesh.skeleton;
+    vmaDestroyBuffer(*m_pAllocator, skeleton.jointsMatsBuffer.buffer, skeleton.jointsMatsBuffer.bufferAlloc);
 }
 
 // ================================================================================================================
-void SkinAnimGltfApp::InitIblPipeline()
+void SkinAnimGltfApp::InitSkinAnimPipeline()
 {
     VkPipelineRenderingCreateInfoKHR pipelineRenderCreateInfo{};
     {
@@ -853,25 +829,25 @@ void SkinAnimGltfApp::InitIblPipeline()
         pipelineRenderCreateInfo.depthAttachmentFormat = VK_FORMAT_D16_UNORM;
     }
 
-    m_iblPipeline.SetPNext(&pipelineRenderCreateInfo);
+    m_skinAnimPipeline.SetPNext(&pipelineRenderCreateInfo);
 
     VkPipelineShaderStageCreateInfo shaderStgsInfo[2] = {};
-    shaderStgsInfo[0] = CreateDefaultShaderStgCreateInfo(m_vsIblShaderModule, VK_SHADER_STAGE_VERTEX_BIT);
-    shaderStgsInfo[1] = CreateDefaultShaderStgCreateInfo(m_psIblShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT);
+    shaderStgsInfo[0] = CreateDefaultShaderStgCreateInfo(m_vsSkinAnimShaderModule, VK_SHADER_STAGE_VERTEX_BIT);
+    shaderStgsInfo[1] = CreateDefaultShaderStgCreateInfo(m_psSkinAnimShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT);
 
     VkPipelineVertexInputStateCreateInfo vertInputInfo = CreatePipelineVertexInputInfo();
-    m_iblPipeline.SetVertexInputInfo(&vertInputInfo);
+    m_skinAnimPipeline.SetVertexInputInfo(&vertInputInfo);
 
     VkPipelineDepthStencilStateCreateInfo depthStencilInfo = CreateDepthStencilStateInfo();
-    m_iblPipeline.SetDepthStencilStateInfo(&depthStencilInfo);
+    m_skinAnimPipeline.SetDepthStencilStateInfo(&depthStencilInfo);
 
-    m_iblPipeline.SetShaderStageInfo(shaderStgsInfo, 2);
-    m_iblPipeline.SetPipelineLayout(m_iblPipelineLayout);
-    m_iblPipeline.CreatePipeline(m_device);
+    m_skinAnimPipeline.SetShaderStageInfo(shaderStgsInfo, 2);
+    m_skinAnimPipeline.SetPipelineLayout(m_skinAnimPipelineLayout);
+    m_skinAnimPipeline.CreatePipeline(m_device);
 }
 
 // ================================================================================================================
-void SkinAnimGltfApp::InitIblPipelineDescriptorSetLayout()
+void SkinAnimGltfApp::InitSkinAnimPipelineDescriptorSetLayout()
 {
     // Create pipeline's descriptors layout
     // The Vulkan spec states: The VkDescriptorSetLayoutBinding::binding members of the elements of the pBindings array 
@@ -964,11 +940,11 @@ void SkinAnimGltfApp::InitIblPipelineDescriptorSetLayout()
     VK_CHECK(vkCreateDescriptorSetLayout(m_device,
                                          &iblRenderPipelineDesSetLayoutInfo,
                                          nullptr,
-                                         &m_iblPipelineDesSetLayout));
+                                         &m_skinAnimPipelineDesSetLayout));
 }
 
 // ================================================================================================================
-void SkinAnimGltfApp::InitIblPipelineLayout()
+void SkinAnimGltfApp::InitSkinAnimPipelineLayout()
 {
     VkPushConstantRange range = {};
     {
@@ -984,19 +960,19 @@ void SkinAnimGltfApp::InitIblPipelineLayout()
     {
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pipelineLayoutInfo.setLayoutCount = 1;
-        pipelineLayoutInfo.pSetLayouts = &m_iblPipelineDesSetLayout;
+        pipelineLayoutInfo.pSetLayouts = &m_skinAnimPipelineDesSetLayout;
         pipelineLayoutInfo.pushConstantRangeCount = 1;
         pipelineLayoutInfo.pPushConstantRanges = &range;
     }
 
-    VK_CHECK(vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_iblPipelineLayout));
+    VK_CHECK(vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_skinAnimPipelineLayout));
 }
 
 // ================================================================================================================
-void SkinAnimGltfApp::InitIblShaderModules()
+void SkinAnimGltfApp::InitSkinAnimShaderModules()
 {
-    m_vsIblShaderModule = CreateShaderModule("./hlsl/ibl_vert.spv");
-    m_psIblShaderModule = CreateShaderModule("./hlsl/ibl_frag.spv");
+    m_vsSkinAnimShaderModule = CreateShaderModule("./hlsl/skinAnim_vert.spv");
+    m_psSkinAnimShaderModule = CreateShaderModule("./hlsl/skinAnim_frag.spv");
 }
 
 // ================================================================================================================
@@ -1004,8 +980,9 @@ void SkinAnimGltfApp::CmdPushSkeletonSkinRenderingDescriptors(
     VkCommandBuffer cmdBuffer,
     const Mesh&     mesh)
 {
-    std::vector<VkWriteDescriptorSet> iblRenderDescriptorSet0Infos;
+    std::vector<VkWriteDescriptorSet> skinAnimSet0Infos;
 
+    /*
     // Descriptor set 0 infos.
     VkWriteDescriptorSet writeIblMvpMatUboBufDesSet{};
     {
@@ -1086,26 +1063,27 @@ void SkinAnimGltfApp::CmdPushSkeletonSkinRenderingDescriptors(
         writeOcclusionDesSet.descriptorCount = 1;
     }
     iblRenderDescriptorSet0Infos.push_back(writeOcclusionDesSet);
+    */
 
     // Push decriptors
     m_vkCmdPushDescriptorSetKHR(cmdBuffer,
                                 VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                m_iblPipelineLayout,
-                                0, iblRenderDescriptorSet0Infos.size(), iblRenderDescriptorSet0Infos.data());
+                                m_skinAnimPipelineLayout,
+                                0, skinAnimSet0Infos.size(), skinAnimSet0Infos.data());
 }
 
 // ================================================================================================================
-void SkinAnimGltfApp::DestroyIblPipelineRes()
+void SkinAnimGltfApp::DestroySkinAnimPipelineRes()
 {
     // Destroy shader modules
-    vkDestroyShaderModule(m_device, m_vsIblShaderModule, nullptr);
-    vkDestroyShaderModule(m_device, m_psIblShaderModule, nullptr);
+    vkDestroyShaderModule(m_device, m_vsSkinAnimShaderModule, nullptr);
+    vkDestroyShaderModule(m_device, m_psSkinAnimShaderModule, nullptr);
 
     // Destroy the pipeline layout
-    vkDestroyPipelineLayout(m_device, m_iblPipelineLayout, nullptr);
+    vkDestroyPipelineLayout(m_device, m_skinAnimPipelineLayout, nullptr);
 
     // Destroy the descriptor set layout
-    vkDestroyDescriptorSetLayout(m_device, m_iblPipelineDesSetLayout, nullptr);
+    vkDestroyDescriptorSetLayout(m_device, m_skinAnimPipelineDesSetLayout, nullptr);
 }
 
 // ================================================================================================================
@@ -1311,17 +1289,11 @@ void SkinAnimGltfApp::DestroyIblMvpMatsBuffer()
 // ================================================================================================================
 std::vector<float> SkinAnimGltfApp::GetVertPushConsants()
 {
-
+    return std::vector<float>(0, 0.f);
 }
 
 // ================================================================================================================
 std::vector<float> SkinAnimGltfApp::GetFragPushConstants()
 {
-
-}
-
-// ================================================================================================================
-void SkinAnimGltfApp::ReadInIBL()
-{
-
+    return std::vector<float>(0, 0.f);
 }

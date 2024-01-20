@@ -12,11 +12,7 @@ namespace SharedLib
 
 struct ImgInfo
 {
-    VkImage gpuImg;
-    VmaAllocation gpuImgAlloc;
-    VkImageView gpuImgView;
-    VkSampler gpuImgSampler;
-    VkDescriptorImageInfo gpuImgDescriptorInfo;
+    SharedLib::GpuImg gpuImg;
 
     // It's possible that a gpu image has multiple layers or mipmaps.
     std::vector<uint32_t> pixWidths;
@@ -26,13 +22,6 @@ struct ImgInfo
     std::vector<float*> pData;
 };
 
-struct BufferInfo
-{
-    VkBuffer               gpuBuffer;
-    VmaAllocation          gpuBufferAlloc;
-    VkDescriptorBufferInfo gpuBufferDescriptorInfo;
-};
-
 struct Mesh
 {
     std::vector<float>    vertData;
@@ -40,10 +29,10 @@ struct Mesh
 
     ImgInfo baseColorImg;
 
-    BufferInfo vertBuffer;
-    BufferInfo idxBuffer;
-    BufferInfo jointMatsBuffer;
-    BufferInfo weightBuffer;
+    SharedLib::GpuBuffer vertBuffer;
+    SharedLib::GpuBuffer idxBuffer;
+    SharedLib::GpuBuffer jointMatsBuffer;
+    SharedLib::GpuBuffer weightBuffer;
 };
 
 struct Animation
@@ -67,6 +56,8 @@ struct Joint
 struct Skeleton
 {
     std::vector<Joint> joints; // joints[0] is the root joint.
+
+    SharedLib::GpuBuffer jointsMatsBuffer;
 };
 
 struct SkeletalMesh
@@ -109,6 +100,11 @@ public:
     std::vector<float> GetVertPushConsants();
     std::vector<float> GetFragPushConstants();
 
+    // Update joints/skeleton's local transformation and the joints' matrices.
+    // It's obstructive because I only want to keep one joints matrix gpu buffer. Thus GPU has to finish works after
+    // the buffer updates.
+    void UpdateJointsTransAndMats();
+
 private:
     VkPipelineVertexInputStateCreateInfo CreatePipelineVertexInputInfo();
     VkPipelineDepthStencilStateCreateInfo CreateDepthStencilStateInfo();
@@ -119,12 +115,12 @@ private:
 
     void ReadInInitIBL();
 
-    // IBL spheres pipeline resources init.
-    void InitIblPipeline();
-    void InitIblPipelineDescriptorSetLayout();
-    void InitIblPipelineLayout();
-    void InitIblShaderModules();
-    void DestroyIblPipelineRes();
+    // Skin animation pipeline resources init.
+    void InitSkinAnimPipeline();
+    void InitSkinAnimPipelineDescriptorSetLayout();
+    void InitSkinAnimPipelineLayout();
+    void InitSkinAnimShaderModules();
+    void DestroySkinAnimPipelineRes();
 
     void DestroyHdrRenderObjs();
 

@@ -16,9 +16,9 @@ struct VSInput
     float3 vNormal       : NORMAL;
     float2 vUv           : TEXCOORD;
     float  vBlendWeight0 : BLENDWEIGHT0;
-    float  vBlendWeight1 : BLENDWEIGHT0;
-    float  vBlendWeight2 : BLENDWEIGHT0;
-    float  vBlendWeight3 : BLENDWEIGHT0;
+    float  vBlendWeight1 : BLENDWEIGHT1;
+    float  vBlendWeight2 : BLENDWEIGHT2;
+    float  vBlendWeight3 : BLENDWEIGHT3;
     uint   vBlendIdx0    : BLENDINDICES0;
     uint   vBlendIdx1    : BLENDINDICES1;
     uint   vBlendIdx2    : BLENDINDICES2;
@@ -30,7 +30,7 @@ struct VertPushConstant
     float4x4 vpMat;
 };
 
-[[vk::push_constant]] cbuffer PushConstantCBuffer { VertPushConstant i_vertPushConstant; }
+[[vk::push_constant]] VertPushConstant i_vertPushConstant;
 
 // JointMat = JointGlobalMat * JointInverseBindMat;
 [[vk::binding(0, 0)]] StructuredBuffer<float4x4> i_jointsMats;
@@ -47,7 +47,7 @@ VSOutput main(
                        mul(i_vertInput.vBlendWeight2, i_jointsMats[i_vertInput.vBlendIdx2]) +
                        mul(i_vertInput.vBlendWeight3, i_jointsMats[i_vertInput.vBlendIdx3]);
     
-    float mvpMat = i_vertPushConstant.vpMat * skinMat;
+    float4x4 mvpMat = i_vertPushConstant.vpMat * skinMat;
 
     output.Pos = mul(mvpMat, float4(i_vertInput.vPosition, 1.0));
     output.WorldPos = mul(skinMat, float4(i_vertInput.vPosition, 1.0));

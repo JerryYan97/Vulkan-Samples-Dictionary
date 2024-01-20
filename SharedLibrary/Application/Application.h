@@ -25,7 +25,6 @@ typedef VkFlags VmaAllocationCreateFlags;
 // TODO4: A queue/vector to collect all image trans barriers so that we can init their formats easiler.
 namespace SharedLib
 {
-    /* TODO:
     struct GpuBuffer
     {
         VkBuffer               buffer;
@@ -41,8 +40,20 @@ namespace SharedLib
         VkImageView           imageView;
         VkSampler             imageSampler;
     };
-    */
 
+    // Used as a temporary command buffer in a function.
+    class RAIICommandBuffer
+    {
+    public:
+        RAIICommandBuffer(VkCommandPool cmdPool, VkDevice device);
+        ~RAIICommandBuffer();
+
+        VkCommandBuffer m_cmdBuffer;
+
+    private:
+        VkDevice m_device;
+        VkCommandPool m_cmdPool;
+    };
 
     // Base Vulkan application without a swapchain -- Basically abstract.
     // It has vmaAllocator and descriptor pool. Besides, it also provides basic vulkan objects creation functions.

@@ -37,6 +37,7 @@ int main()
         swapchainDepthSubResRange.layerCount = 1;
     }
 
+    /*
     // RenderDoc debug starts
     RENDERDOC_API_1_6_0* rdoc_api = NULL;
     {
@@ -48,11 +49,12 @@ int main()
         }
     }
 
-    // Send image and buffer data to GPU:
+    // Send image and buffer data to GPU: -- TODO: They will be put into the application class.
     // - Copy background cubemap to vulkan image;
     // - Copy Camera parameters to the GPU buffer;
     // - Copy IBL images to vulkan images;
     // - Copy model textures to vulkan images;
+    
     const std::vector<Mesh>& gltfMeshes = app.GetModelMeshes();
     {
         // Shared resources
@@ -491,10 +493,11 @@ int main()
             app.SendCameraDataToBuffer(i);
         }
     }
-
+    */
     // Main Loop
     // Two draws. First draw draws triangle into an image with window 1 window size.
     // Second draw draws GUI. GUI would use the image drawn from the first draw.
+    /*
     while (!app.WindowShouldClose())
     {
         VkDevice device = app.GetVkDevice();
@@ -765,4 +768,5 @@ int main()
         std::cout << "Frame capture ends." << std::endl;
         rdoc_api->EndFrameCapture(NULL, NULL);
     }
+    */
 }

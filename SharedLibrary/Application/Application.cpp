@@ -498,4 +498,27 @@ namespace SharedLib
         vkWaitForFences(m_device, 1, &signalFence, VK_TRUE, UINT64_MAX);
         vkResetCommandBuffer(cmdBuf, 0);
     }
+
+    // ================================================================================================================
+    RAIICommandBuffer::RAIICommandBuffer(
+        VkCommandPool cmdPool,
+        VkDevice      device) :
+        m_device(device),
+        m_cmdPool(cmdPool)
+    {
+        VkCommandBufferAllocateInfo commandBufferAllocInfo{};
+        {
+            commandBufferAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            commandBufferAllocInfo.commandPool = cmdPool;
+            commandBufferAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            commandBufferAllocInfo.commandBufferCount = 1;
+        }
+        VK_CHECK(vkAllocateCommandBuffers(device, &commandBufferAllocInfo, &m_cmdBuffer));
+    }
+
+    // ================================================================================================================
+    RAIICommandBuffer::~RAIICommandBuffer()
+    {
+        vkFreeCommandBuffers(m_device, m_cmdPool, 1, &m_cmdBuffer);
+    }
 }

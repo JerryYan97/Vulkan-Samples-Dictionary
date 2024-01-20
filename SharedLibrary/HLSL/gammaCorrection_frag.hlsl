@@ -16,7 +16,7 @@ float4 main(
 	float y = i_fragCoord[1] / i_renderInfo.height;
 	float2 uv = float2(x, y);
 
-    float3 radiance = i_finalRadianceTexture.Sample(i_finalRadianceSamplerState, uv);
+    float3 radiance = i_finalRadianceTexture.Sample(i_finalRadianceSamplerState, uv).xyz;
 
     float3 color = radiance / (radiance + float3(1.0, 1.0, 1.0));
     color = pow(color, float3(1.0/2.2, 1.0/2.2, 1.0/2.2));  
