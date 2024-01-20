@@ -9,10 +9,14 @@
 #include <Windows.h>
 #include <cassert>
 
-// TODO: We can design a queue to hold all transfer barriers and do them all-together.
 int main()
 {
-    SkinAnimGltfApp app;
+    // Path initialization.
+    std::string sourcePath = SOURCE_PATH;
+    std::string iblPath = sourcePath + "/../data/ibl";
+    std::string gltfPath = sourcePath + "/../data/SimpleSkin/SimpleSkin.gltf";
+
+    SkinAnimGltfApp app(iblPath, gltfPath);
     app.AppInit();
 
     VkImageSubresourceRange swapchainPresentSubResRange{};

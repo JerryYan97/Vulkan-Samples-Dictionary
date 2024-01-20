@@ -19,8 +19,8 @@ struct ImgInfo
     VkDescriptorImageInfo gpuImgDescriptorInfo;
 
     // It's possible that a gpu image has multiple layers or mipmaps.
-    std::vector<uint32_t> pixWidth;
-    std::vector<uint32_t> pixHeight;
+    std::vector<uint32_t> pixWidths;
+    std::vector<uint32_t> pixHeights;
     uint32_t componentCnt;
     std::vector<std::vector<uint8_t>> dataVec;
     std::vector<float*> pData;
@@ -35,16 +35,50 @@ struct BufferInfo
 
 struct Mesh
 {
-    float worldPos[4];
     std::vector<float>    vertData;
     std::vector<uint16_t> idxData;
 
     ImgInfo baseColorImg;
 
-    VkBuffer      modelVertBuffer;
-    VmaAllocation modelVertBufferAlloc;
-    VkBuffer      modelIdxBuffer;
-    VmaAllocation modelIdxBufferAlloc;
+    BufferInfo vertBuffer;
+    BufferInfo idxBuffer;
+    BufferInfo jointMatsBuffer;
+    BufferInfo weightBuffer;
+};
+
+struct Animation
+{
+
+};
+
+struct Joint
+{
+    float localTranslation[3];
+    float localRotatoin[4];
+    float localScale[3];
+
+    std::vector<Joint*> children;
+};
+
+// Skeleton and mesh are both in the model space.
+// The concatnation of a joint's transformation and its parents transformation transforms this joint to the model
+// space.
+// After that, the global transformation in the `SkeletalMesh` transforms the mesh/joint to the world space.
+struct Skeleton
+{
+    std::vector<Joint> joints; // joints[0] is the root joint.
+};
+
+struct SkeletalMesh
+{
+    Mesh mesh;
+    Skeleton skeleton;
+    Animation animSeqence;
+
+    // Global transformation
+    float translation[3];
+    float rotation[4];
+    float scale[3];
 };
 
 const uint32_t VpMatBytesCnt = 4 * 4 * sizeof(float);
@@ -56,7 +90,7 @@ const float RotateRadiensPerSecond = 3.1415926 * 2.f / 10.f; // 10s -- a circle.
 class SkinAnimGltfApp : public SharedLib::GlfwApplication
 {
 public:
-    SkinAnimGltfApp();
+    SkinAnimGltfApp(const std::string& iblPath, const std::string& gltfPathName);
     ~SkinAnimGltfApp();
 
     virtual void AppInit() override;
@@ -67,32 +101,23 @@ public:
 
     void GetCameraPos(float* pOut);
 
-    void ReadInIBL();
-
     VkFence GetFence(uint32_t i) { return m_inFlightFences[i]; }
 
     VkPipeline GetSkinAimPipeline() { return m_skinAnimPipeline.GetVkPipeline(); }
-    VkPipelineLayout GetIblPipelineLayout() { return m_skinAnimPipelineLayout; }
+    VkPipelineLayout GetSkinAimPipelineLayout() { return m_skinAnimPipelineLayout; }
     
-    const std::vector<Mesh>& GetModelMeshes() { return m_gltfModeMeshes; }
-    uint32_t GetModelTexCnt();
-
-    void SendCameraDataToBuffer(uint32_t i);
+    std::vector<float> GetVertPushConsants();
+    std::vector<float> GetFragPushConstants();
 
 private:
     VkPipelineVertexInputStateCreateInfo CreatePipelineVertexInputInfo();
     VkPipelineDepthStencilStateCreateInfo CreateDepthStencilStateInfo();
 
-    // Init mesh data
-    void InitModelInfo();
-    void DestroyModelInfo();
+    // Init scene info: Mesh, skeleton, animation.
+    void ReadInInitGltf();
+    void DestroyGltf();
 
-    // Skybox pipeline resources init.
-    void InitSkyboxPipeline();
-    void InitSkyboxPipelineDescriptorSetLayout();
-    void InitSkyboxPipelineLayout();
-    void InitSkyboxShaderModules();
-    void DestroySkyboxPipelineRes();
+    void ReadInInitIBL();
 
     // IBL spheres pipeline resources init.
     void InitIblPipeline();
@@ -101,22 +126,10 @@ private:
     void InitIblShaderModules();
     void DestroyIblPipelineRes();
 
-    void InitVpMatBuffer();
-    void DestroyVpMatBuffer();
-
-    void InitIblMvpMatsBuffer();
-    void DestroyIblMvpMatsBuffer();
-
-    // Shared resources init and destroy.
-    void InitHdrRenderObjects();
-    void InitCameraUboObjects();
-
     void DestroyHdrRenderObjs();
-    void DestroyCameraUboObjects();
 
     SharedLib::Camera*    m_pCamera;
 
-    // Sphere rendering
     VkShaderModule        m_vsSkinAnimShaderModule;
     VkShaderModule        m_psSkinAnimShaderModule;
     VkDescriptorSetLayout m_skinAnimPipelineDesSetLayout; // For a pipeline, it can only have one descriptor set layout.
@@ -127,9 +140,13 @@ private:
     ImgInfo m_prefilterEnvCubemap;
     ImgInfo m_envBrdfImg;
 
-    std::vector<Mesh> m_gltfModeMeshes;
+    SkeletalMesh m_skeletalMesh;
+    float        m_currentAnimTime;
 
     float m_currentRadians;
     std::chrono::steady_clock::time_point m_lastTime;
     bool m_isFirstTimeRecord;
+
+    std::string m_iblDir;
+    std::string m_gltfPathName;
 };
