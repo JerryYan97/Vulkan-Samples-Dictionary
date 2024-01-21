@@ -15,6 +15,7 @@ int main()
     std::string sourcePath = SOURCE_PATH;
     std::string iblPath = sourcePath + "/../data/ibl";
     std::string gltfPath = sourcePath + "/../data/SimpleSkin/SimpleSkin.gltf";
+    // std::string gltfPath = sourcePath + "/../data/CesiumMan/CesiumMan.gltf";
 
     SkinAnimGltfApp app(iblPath, gltfPath);
     app.AppInit();

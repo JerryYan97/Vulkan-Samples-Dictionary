@@ -494,6 +494,9 @@ void SkinAnimGltfApp::AppInit()
 // * Texture samplers' type should follow the real data, but here we simply choose the repeat.
 // * https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#accessor-data-types
 // * TinyGltf has custom gltf type macros: https://github.com/syoyo/tinygltf/blob/release/tiny_gltf.h#L144-L152
+// * A buffer view represents a contiguous segment of data in a buffer, defined by a byte offset into the buffer
+//   specified in the byteOffset property and a total byte length specified by the byteLength property of the buffer
+//   view.
 void SkinAnimGltfApp::ReadInInitGltf()
 {
     tinygltf::Model model;
@@ -527,6 +530,7 @@ void SkinAnimGltfApp::ReadInInitGltf()
     // Load mesh and relevant info    
     const auto& mesh = model.meshes[0];
 
+
     // Load pos
     std::vector<float> vertPos;
     int posIdx = mesh.primitives[0].attributes.at("POSITION");
@@ -544,15 +548,23 @@ void SkinAnimGltfApp::ReadInInitGltf()
     vertPos.resize(3 * posAccessor.count);
     memcpy(vertPos.data(), &pBufferData[posBufferOffset], posBufferByteCnt);
 
+
     // Load indices
     std::vector<uint16_t> vertIdx;
     int indicesIdx = mesh.primitives[0].indices;
     const auto& idxAccessor = model.accessors[indicesIdx];
+
+    assert(idxAccessor.componentType == TINYGLTF_PARAMETER_TYPE_UNSIGNED_SHORT, "The idx accessor data type should be uint16.");
+    assert(idxAccessor.type == TINYGLTF_TYPE_SCALAR, "The idx accessor type should be scalar.");
+
     int idxAccessorByteOffset = idxAccessor.byteOffset;
     int idxAccessorEleCnt = idxAccessor.count;
+    const auto& idxBufferView = model.bufferViews[idxAccessor.bufferView];
 
-
-
+    int idxBufferOffset = idxAccessorByteOffset + idxBufferView.byteOffset;
+    int idxBufferByteCnt = sizeof(uint16_t) * idxAccessorEleCnt;
+    vertIdx.resize(idxAccessorEleCnt);
+    memcpy(vertIdx.data(), &pBufferData[idxBufferOffset], idxBufferByteCnt);
 
 
     // Load normal
@@ -562,128 +574,132 @@ void SkinAnimGltfApp::ReadInInitGltf()
     {
         normalIdx = mesh.primitives[0].attributes.at("NORMAL");
         const auto& normalAccessor = model.accessors[normalIdx];
+
+        assert(normalAccessor.componentType == TINYGLTF_PARAMETER_TYPE_FLOAT, "The normal accessor data type should be float.");
+        assert(normalAccessor.type == TINYGLTF_TYPE_VEC3, "The normal accessor type should be vec3.");
+
         int normalAccessorByteOffset = normalAccessor.byteOffset;
         int normalAccessorEleCnt = normalAccessor.count;
+        const auto& normalBufferView = model.bufferViews[normalAccessor.bufferView];
+
+        int normalBufferOffset = normalAccessorByteOffset + normalBufferView.byteOffset;
+        int normalBufferByteCnt = sizeof(float) * 3 * normalAccessorEleCnt;
+        
+        vertNormal.resize(3 * normalAccessorEleCnt);
+        memcpy(vertNormal.data(), &pBufferData[normalBufferOffset], normalBufferByteCnt);
     }
     else
     {
         // If we don't have any normal geo data, then we will just apply the first triangle's normal to all the other
         // triangles/vertices.
+        uint16_t idx0 = vertIdx[0];
+        float vertPos0[3] = {vertPos[3 * idx0], vertPos[3 * idx0 + 1], vertPos[3 * idx0 + 2]};
+
+        uint16_t idx1 = vertIdx[1];
+        float vertPos1[3] = {vertPos[3 * idx1], vertPos[3 * idx1 + 1], vertPos[3 * idx1 + 2]};
+
+        uint16_t idx2 = vertIdx[2];
+        float vertPos2[3] = {vertPos[3 * idx2], vertPos[3 * idx2 + 1], vertPos[3 * idx2 + 2]};
+
+        float v1[3] = {vertPos1[0] - vertPos0[0], vertPos1[1] - vertPos0[1], vertPos1[2] - vertPos0[2]};
+        float v2[3] = {vertPos2[0] - vertPos0[0], vertPos2[1] - vertPos0[1], vertPos2[2] - vertPos0[2]};
+        
+        float autoGenNormal[3] = {0.f};
+        SharedLib::CrossProductVec3(v1, v2, autoGenNormal);
+        SharedLib::NormalizeVec(autoGenNormal, 3);
+
+        vertNormal.resize(3 * posAccessorEleCnt);
+        for (uint32_t i = 0; i < posAccessorEleCnt; i++)
+        {
+            uint32_t normalStartingIdx = i * 3;
+            vertNormal[normalStartingIdx]     = autoGenNormal[0];
+            vertNormal[normalStartingIdx + 1] = autoGenNormal[1];
+            vertNormal[normalStartingIdx + 2] = autoGenNormal[2];
+        }
     }
 
+    std::vector<float> vertUv;
     int uvIdx = -1;
     if (mesh.primitives[0].attributes.count("TEXCOORD_0") > 0)
     {
         uvIdx = mesh.primitives[0].attributes.at("TEXCOORD_0");
-    }
-
-    int weightIdx = mesh.primitives[0].attributes.at("JOINTS_0");
-
-    int jointsIdx = mesh.primitives[0].attributes.at("WEIGHTS_0");
-
-    
-    int materialIdx = mesh.primitives[0].material;
-
-    // Elements notes:
-    // Position: float3, normal: float3, texcoord: float2, weights: float4, joints: int4. -- If the gltf model doesn't have normal or uvs, we will just create dummy normal and uv.
-
-    // Setup the vertex buffer and the index buffer
-    
-    std::vector<float> vertUv;
-    if (uvIdx != -1)
-    {
         const auto& uvAccessor = model.accessors[uvIdx];
+
+        assert(uvAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT, "The uv accessor data type should be float.");
+        assert(uvAccessor.type == TINYGLTF_TYPE_VEC2, "The uv accessor type should be vec2.");
+
         int uvAccessorByteOffset = uvAccessor.byteOffset;
         int uvAccessorEleCnt = uvAccessor.count;
+        const auto& uvBufferView = model.bufferViews[uvAccessor.bufferView];
+
+        int uvBufferOffset = uvAccessorByteOffset + uvBufferView.byteOffset;
+        int uvBufferByteCnt = sizeof(float) * 2 * uvAccessor.count;
+        vertUv.resize(2 * uvAccessor.count);
+
+        memcpy(vertUv.data(), &pBufferData[uvBufferOffset], uvBufferByteCnt);
     }
-
-    std::vector<float> vertWeights;
-
-
-    std::vector<int> vertJoints;
-
-    // Load skin/skeleton related info
-
-
-    // Load animation related info
-
-    /*
-    // NOTE: Buffer views are just division of the buffer for a model.
-    // SCALAR is in one buffer view. FLOAT2 in one. FLOAT3 in one. and FLOAT3 in one...
-    // Maybe they can be more
-    // A buffer view represents a contiguous segment of data in a buffer, defined by a byte offset into the buffer specified 
-    // in the byteOffset property and a total byte length specified by the byteLength property of the buffer view.
-    const auto& posBufferView = model.bufferViews[posAccessor.bufferView];
-    const auto& normalBufferView = model.bufferViews[normalAccessor.bufferView];
-    const auto& uvBufferView = model.bufferViews[uvAccessor.bufferView];
-    const auto& idxBufferView = model.bufferViews[idxAccessor.bufferView];
-
-    // We assume that the idx, position, normal, uv and tangent are not interleaved.
-    // TODO: Even though they are interleaved, we can use a function to read out the data by making use of the stride bytes count.
-
-    // Assmue the data and element type of the index is uint16_t.
-    int idxBufferOffset = idxAccessorByteOffset + idxBufferView.byteOffset;
-    int idxBufferByteCnt = sizeof(uint16_t) * idxAccessor.count;
-    m_skeletalMesh.mesh[i].idxData.resize(idxAccessor.count);
-    memcpy(m_gltfModeMeshes[i].idxData.data(), &pBufferData[idxBufferOffset], idxBufferByteCnt);
-
-    // Assmue the data and element type of the position is float3
-    int posBufferOffset = posAccessorByteOffset + posBufferView.byteOffset;
-    int posBufferByteCnt = sizeof(float) * 3 * posAccessor.count;
-    float* pPosData = new float[3 * posAccessor.count];
-    memcpy(pPosData, &pBufferData[posBufferOffset], posBufferByteCnt);
-
-    // Assmue the data and element type of the normal is float3.
-    int normalBufferOffset = normalAccessorByteOffset + normalBufferView.byteOffset;
-    int normalBufferByteCnt = sizeof(float) * 3 * normalAccessor.count;
-    float* pNomralData = new float[3 * normalAccessor.count];
-    memcpy(pNomralData, &pBufferData[normalBufferOffset], normalBufferByteCnt);
-
-    // Assmue the data and element type of the tangent is float4.
-    int tangentBufferOffset = tangentAccessorByteOffset + tangentBufferView.byteOffset;
-    int tangentBufferByteCnt = sizeof(float) * 4 * tangentAccessor.count;
-    float* pTangentData = new float[4 * tangentAccessor.count];
-    memcpy(pTangentData, &pBufferData[tangentBufferOffset], tangentBufferByteCnt);
-
-    // Assume the data and element type of the texcoord is float2.
-    int uvBufferOffset = uvAccessorByteOffset + uvBufferView.byteOffset;
-    int uvBufferByteCnt = sizeof(float) * 2 * uvAccessor.count;
-    float* pUvData = new float[2 * uvAccessor.count];
-    memcpy(pUvData, &pBufferData[uvBufferOffset], uvBufferByteCnt);
-
-    // Assemble the vert buffer, fill the mesh information and send vert buffer and idx buffer to VkBuffer.
-
-    // Fill the vert buffer
-    int vertBufferByteCnt = posBufferByteCnt + normalBufferByteCnt + tangentBufferByteCnt + uvBufferByteCnt;
-    int vertBufferDwordCnt = vertBufferByteCnt / sizeof(float);
-
-    m_gltfModeMeshes[i].vertData.resize(vertBufferDwordCnt);
-
-    // The count of [pos, normal, tangent, uv] is equal to posAccessor/normalAccessor/tangentAccessor/uvAccessor.count.
-    // [3 floats, 3 floats, 4 floats, 2 floats] --> 12 floats.
-    for (uint32_t vertIdx = 0; vertIdx < posAccessor.count; vertIdx++)
+    else
     {
-        // pos -- 3 floats
-        m_gltfModeMeshes[i].vertData[12 * vertIdx] = pPosData[3 * vertIdx];
-        m_gltfModeMeshes[i].vertData[12 * vertIdx + 1] = pPosData[3 * vertIdx + 1];
-        m_gltfModeMeshes[i].vertData[12 * vertIdx + 2] = pPosData[3 * vertIdx + 2];
-
-        // normal -- 3 floats
-        m_gltfModeMeshes[i].vertData[12 * vertIdx + 3] = pNomralData[3 * vertIdx];
-        m_gltfModeMeshes[i].vertData[12 * vertIdx + 4] = pNomralData[3 * vertIdx + 1];
-        m_gltfModeMeshes[i].vertData[12 * vertIdx + 5] = pNomralData[3 * vertIdx + 2];
-
-        // tangent -- 4 floats
-        m_gltfModeMeshes[i].vertData[12 * vertIdx + 6] = pTangentData[4 * vertIdx];
-        m_gltfModeMeshes[i].vertData[12 * vertIdx + 7] = pTangentData[4 * vertIdx + 1];
-        m_gltfModeMeshes[i].vertData[12 * vertIdx + 8] = pTangentData[4 * vertIdx + 2];
-        m_gltfModeMeshes[i].vertData[12 * vertIdx + 9] = pTangentData[4 * vertIdx + 3];
-
-        // uv -- 2 floats
-        m_gltfModeMeshes[i].vertData[12 * vertIdx + 10] = pUvData[2 * vertIdx];
-        m_gltfModeMeshes[i].vertData[12 * vertIdx + 11] = pUvData[2 * vertIdx + 1];
+        vertUv = std::vector<float>(posAccessorEleCnt * 2, 0.f);
     }
 
+
+    // Load weights -- The loaded gltf must have this.
+    std::vector<float> vertWeights;
+    int weightIdx = mesh.primitives[0].attributes.at("WEIGHTS_0");
+    const auto& weightsAccessor = model.accessors[weightIdx];
+
+    assert(weightsAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT, "The weights accessor data type should be float.");
+    assert(weightsAccessor.type == TINYGLTF_TYPE_VEC4, "The weights accessor type should be vec4.");
+
+    int weightsAccessorByteOffset = weightsAccessor.byteOffset;
+    int weightsAccessorEleCnt = weightsAccessor.count;
+    const auto& weightsBufferView = model.bufferViews[weightsAccessor.bufferView];
+
+    int weightsBufferOffset = weightsAccessorByteOffset + weightsBufferView.byteOffset;
+    int weightsBufferByteCnt = sizeof(float) * 4 * weightsAccessorEleCnt;
+    vertWeights.resize(4 * weightsAccessorEleCnt);
+
+    memcpy(vertWeights.data(), &pBufferData[weightsBufferOffset], weightsBufferByteCnt);
+
+    // Load joints that affect this vert -- The loaded gltf must have this.
+    std::vector<uint16_t> vertJoints;
+    int jointsIdx = mesh.primitives[0].attributes.at("JOINTS_0");
+    const auto& jointsAccessor = model.accessors[jointsIdx];
+
+    assert(jointsAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT, "The joints accessor data type shuold be uint16.");
+    assert(jointsAccessor.type == TINYGLTF_TYPE_VEC4, "The joints accessor type should be vec4.");
+    
+    int jointsAccessorByteOffset = jointsAccessor.byteOffset;
+    int jointsAccessorEleCnt = jointsAccessor.count;
+    const auto& jointsBufferView = model.bufferViews[jointsAccessor.bufferView];
+
+    int jointsBufferOffset = jointsAccessorByteOffset + jointsBufferView.byteOffset;
+    int jointsBufferByteCnt = sizeof(uint16_t) * 4 * jointsAccessorEleCnt;
+    vertJoints.resize(4 * jointsAccessorEleCnt);
+
+
+    // Assemble the vertex buffer data.
+    // The count of [pos, normal, uv, weights, jointsIdx] is equal to posAccessor/normalAccessor/uvAccessor/weightsAccessor/jointsAccessor.count.
+    // [3 floats, 3 floats, 2 floats, 4 floats, 4 uints] --> 16 * sizeof(float).
+    float* pVertBufferData = new float[16 * posAccessorEleCnt];
+    uint32_t vertBufferByteCnt = 16 * posAccessorEleCnt * sizeof(float);
+
+    for (int i = 0; i < posAccessorEleCnt; i++)
+    {
+        int vertDataStartingIdx = i * 16;
+
+        memcpy(pVertBufferData + vertDataStartingIdx, &vertPos[i * 3], 3 * sizeof(float));
+        memcpy(pVertBufferData + vertDataStartingIdx + 3, &vertNormal[i * 3], 3 * sizeof(float));
+        memcpy(pVertBufferData + vertDataStartingIdx + 6, &vertUv[i * 2], 2 * sizeof(float));
+        memcpy(pVertBufferData + vertDataStartingIdx + 8, &vertWeights[i * 4], 4 * sizeof(float));
+
+        // The original joints idx are uint16, but the hlsl only takes the uint32. Thus, we have to convert the uint16 to uint32.
+        uint32_t jointsIdx[4] = { vertJoints[i * 4], vertJoints[i * 4 + 1], vertJoints[i * 4 +2], vertJoints[i * 4 + 3] };
+        memcpy(pVertBufferData + vertDataStartingIdx + 12, jointsIdx, sizeof(jointsIdx));
+    }
+
+    // Create the vertex gpu buffer and the index gpu buffer. Send their data to the vertex gpu buffer and index gpu buffer.
     // Create the VkBuffer for the idx buffer.
     {
         VkBufferCreateInfo idxBufferInfo{};
@@ -704,8 +720,8 @@ void SkinAnimGltfApp::ReadInInitGltf()
         vmaCreateBuffer(*m_pAllocator,
             &idxBufferInfo,
             &idxBufferAllocInfo,
-            &m_gltfModeMeshes[i].modelIdxBuffer,
-            &m_gltfModeMeshes[i].modelIdxBufferAlloc,
+            &m_skeletalMesh.mesh.idxBuffer.buffer,
+            &m_skeletalMesh.mesh.idxBuffer.bufferAlloc,
             nullptr);
     }
 
@@ -729,57 +745,40 @@ void SkinAnimGltfApp::ReadInInitGltf()
         vmaCreateBuffer(*m_pAllocator,
             &vertBufferInfo,
             &vertBufferAllocInfo,
-            &m_gltfModeMeshes[i].modelVertBuffer,
-            &m_gltfModeMeshes[i].modelVertBufferAlloc,
+            &m_skeletalMesh.mesh.vertBuffer.buffer,
+            &m_skeletalMesh.mesh.vertBuffer.bufferAlloc,
             nullptr);
     }
 
     // Send idx data and vert data to their VkBuffers.
-    CopyRamDataToGpuBuffer(m_gltfModeMeshes[i].vertData.data(),
-        m_gltfModeMeshes[i].modelVertBuffer,
-        m_gltfModeMeshes[i].modelVertBufferAlloc,
+    CopyRamDataToGpuBuffer(
+        pVertBufferData,
+        m_skeletalMesh.mesh.vertBuffer.buffer,
+        m_skeletalMesh.mesh.vertBuffer.bufferAlloc,
         vertBufferByteCnt);
 
-    CopyRamDataToGpuBuffer(m_gltfModeMeshes[i].idxData.data(),
-        m_gltfModeMeshes[i].modelIdxBuffer,
-        m_gltfModeMeshes[i].modelIdxBufferAlloc,
+    CopyRamDataToGpuBuffer(
+        vertIdx.data(),
+        m_skeletalMesh.mesh.idxBuffer.buffer,
+        m_skeletalMesh.mesh.idxBuffer.bufferAlloc,
         idxBufferByteCnt);
 
-    // Send image info to GPU and set relevant data
-    const auto& material = model.materials[materialIdx];
+    delete[] pVertBufferData;
 
-    // A texture binding is defined by an index of a texture object and an optional index of texture coordinates.
-    // Its green channel contains roughness values and its blue channel contains metalness values.
-    int baseColorTexIdx = material.pbrMetallicRoughness.baseColorTexture.index;
-    int metallicRoughnessTexIdx = material.pbrMetallicRoughness.metallicRoughnessTexture.index;
-    int occlusionTexIdx = material.occlusionTexture.index;
-    int normalTexIdx = material.normalTexture.index;
-    // material.emissiveTexture -- Let forget emissive. The renderer doesn't support emissive textures.
 
-    // A texture is defined by an image index, denoted by the source property and a sampler index (sampler).
-    // Assmue that all textures are 8 bits per channel. They are all xxx / 255. They all have 4 components.
-    const auto& baseColorTex = model.textures[baseColorTexIdx];
-    const auto& metallicRoughnessTex = model.textures[metallicRoughnessTexIdx];
-    const auto& occlusionTex = model.textures[occlusionTexIdx];
-    const auto& normalTex = model.textures[normalTexIdx];
-
-    int baseColorTexImgIdx = baseColorTex.source;
-    int metallicRoughnessTexImgIdx = metallicRoughnessTex.source;
-    int occlusionTexImgIdx = occlusionTex.source;
-    int normalTexImgIdx = normalTex.source;
-
-    const auto& baseColorImg = model.images[baseColorTexImgIdx];
-    const auto& metalllicRoughnessImg = model.images[metallicRoughnessTexImgIdx];
-    const auto& occlusionImg = model.images[occlusionTexImgIdx];
-    const auto& normalImg = model.images[normalTexImgIdx];
-
-    // Base Color Img
+    // Load the base color texture or create a default pure color texture.
+    int materialIdx = mesh.primitives[0].material;
+   
+    if (materialIdx != -1)
     {
-        m_gltfModeMeshes[i].baseColorTex.pixWidth = baseColorImg.width;
-        m_gltfModeMeshes[i].baseColorTex.pixHeight = baseColorImg.height;
-        m_gltfModeMeshes[i].baseColorTex.componentCnt = 4;
-        m_gltfModeMeshes[i].baseColorTex.dataVec.resize(baseColorImg.width * baseColorImg.height * 4);
-        m_gltfModeMeshes[i].baseColorTex.dataVec = baseColorImg.image;
+        const auto& material = model.materials[materialIdx];
+        int baseColorTexIdx = material.pbrMetallicRoughness.baseColorTexture.index;
+
+        // A texture is defined by an image index, denoted by the source property and a sampler index (sampler).
+        // Assmue that all textures are 8 bits per channel. They are all xxx / 255. They all have 4 components.
+        const auto& baseColorTex = model.textures[baseColorTexIdx];
+        int baseColorTexImgIdx = baseColorTex.source;
+        const auto& baseColorImg = model.images[baseColorTexImgIdx];
 
         VmaAllocationCreateInfo baseColorAllocInfo{};
         {
@@ -811,21 +810,21 @@ void SkinAnimGltfApp::ReadInInitGltf()
         vmaCreateImage(*m_pAllocator,
             &baseColorImgInfo,
             &baseColorAllocInfo,
-            &m_gltfModeMeshes[i].baseColorImg,
-            &m_gltfModeMeshes[i].baseColorImgAlloc,
+            &m_skeletalMesh.mesh.baseColorImg.gpuImg.image,
+            &m_skeletalMesh.mesh.baseColorImg.gpuImg.imageAllocation,
             nullptr);
 
         VkImageViewCreateInfo info{};
         {
             info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            info.image = m_gltfModeMeshes[i].baseColorImg;
+            info.image = m_skeletalMesh.mesh.baseColorImg.gpuImg.image;
             info.viewType = VK_IMAGE_VIEW_TYPE_2D;
             info.format = VK_FORMAT_R8G8B8A8_SRGB;
             info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             info.subresourceRange.levelCount = 1;
             info.subresourceRange.layerCount = 1;
         }
-        VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_gltfModeMeshes[i].baseColorImgView));
+        VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_skeletalMesh.mesh.baseColorImg.gpuImg.imageView));
 
         VkSamplerCreateInfo sampler_info{};
         {
@@ -840,13 +839,16 @@ void SkinAnimGltfApp::ReadInInitGltf()
             sampler_info.maxLod = 1000;
             sampler_info.maxAnisotropy = 1.0f;
         }
-        VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_gltfModeMeshes[i].baseColorImgSampler));
+        VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_skeletalMesh.mesh.baseColorImg.gpuImg.imageSampler));
 
-        m_gltfModeMeshes[i].baseColorImgDescriptorInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        m_gltfModeMeshes[i].baseColorImgDescriptorInfo.imageView = m_gltfModeMeshes[i].baseColorImgView;
-        m_gltfModeMeshes[i].baseColorImgDescriptorInfo.sampler = m_gltfModeMeshes[i].baseColorImgSampler;
+        m_skeletalMesh.mesh.baseColorImg.gpuImg.imageDescInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        m_skeletalMesh.mesh.baseColorImg.gpuImg.imageDescInfo.imageView = m_skeletalMesh.mesh.baseColorImg.gpuImg.imageView;
+        m_skeletalMesh.mesh.baseColorImg.gpuImg.imageDescInfo.sampler = m_skeletalMesh.mesh.baseColorImg.gpuImg.imageSampler;
     }
-    */
+    else
+    {
+
+    }
 }
 
 // ================================================================================================================

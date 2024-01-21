@@ -129,6 +129,8 @@ namespace SharedLib
         void InitGfxCommandPool();
         void InitGfxCommandBuffers(const uint32_t cmdBufCnt);
 
+        GpuImg CreateDummyPureColorImg(float* pColor);
+
         // CreateXXX(...) functions are more flexible. They are utility functions for children classes.
         // CreateXXX(...) cannot initialize any member objects. They have to return objects.
         VkShaderModule                       CreateShaderModule(const std::string& spvName);

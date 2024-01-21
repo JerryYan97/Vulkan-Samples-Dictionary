@@ -500,6 +500,13 @@ namespace SharedLib
     }
 
     // ================================================================================================================
+    GpuImg Application::CreateDummyPureColorImg(
+        float* pColor)
+    {
+
+    }
+
+    // ================================================================================================================
     RAIICommandBuffer::RAIICommandBuffer(
         VkCommandPool cmdPool,
         VkDevice      device) :
