@@ -2,6 +2,7 @@
 #include "../../../SharedLibrary/Application/GlfwApplication.h"
 #include "../../../SharedLibrary/Pipeline/Pipeline.h"
 #include <chrono>
+#include <array>
 
 VK_DEFINE_HANDLE(VmaAllocation);
 
@@ -46,6 +47,7 @@ struct Joint
     float localRotatoin[4];
     float localScale[3];
 
+    std::array<float, 16> inverseBindMatrix; // Transform a vert in the model space to this joint's local space.
     std::vector<Joint*> children;
 };
 

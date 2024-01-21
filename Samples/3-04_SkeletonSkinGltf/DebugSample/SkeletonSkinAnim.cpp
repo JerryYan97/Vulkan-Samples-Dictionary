@@ -492,6 +492,8 @@ void SkinAnimGltfApp::AppInit()
 // * Animation, skeleton, 1 mesh.
 // * We only support triangle.
 // * Texture samplers' type should follow the real data, but here we simply choose the repeat.
+// * https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#accessor-data-types
+// * TinyGltf has custom gltf type macros: https://github.com/syoyo/tinygltf/blob/release/tiny_gltf.h#L144-L152
 void SkinAnimGltfApp::ReadInInitGltf()
 {
     tinygltf::Model model;
@@ -518,46 +520,92 @@ void SkinAnimGltfApp::ReadInInitGltf()
     const auto& binaryBuffer = model.buffers[0].data;
     const unsigned char* pBufferData = binaryBuffer.data();
 
+    // This example only supports gltf that only has one mesh and one skin.
     assert(model.meshes.size() == 1, "This example only supports one mesh.");
+    assert(model.skins.size() == 1, "This example only supports one skin.");
 
-    uint32_t meshCnt = model.meshes.size();
-    bool autoGenNormal = false;
-    bool autoGenUv = false;
-    
+    // Load mesh and relevant info    
     const auto& mesh = model.meshes[0];
+
+    // Load pos
+    std::vector<float> vertPos;
     int posIdx = mesh.primitives[0].attributes.at("POSITION");
-    int normalIdx = mesh.primitives[0].attributes.at("NORMAL");
-
-    int uvIdx = mesh.primitives[0].attributes.at("TEXCOORD_0");
-
-    int indicesIdx = mesh.primitives[0].indices;
-    int materialIdx = mesh.primitives[0].material;
-
-    // Elements notes:
-    // Position: float3, normal: float3, texcoord: float2, joints: int4, weights float4. -- If the gltf model doesn't have normal or uvs, we will just create dummy normal and uv.
-
-    // Setup the vertex buffer and the index buffer
     const auto& posAccessor = model.accessors[posIdx];
+
+    assert(posAccessor.componentType == TINYGLTF_PARAMETER_TYPE_FLOAT, "The pos accessor data type should be float.");
+    assert(posAccessor.type == TINYGLTF_TYPE_VEC3, "The pos accessor type should be vec3.");
+
     int posAccessorByteOffset = posAccessor.byteOffset;
     int posAccessorEleCnt = posAccessor.count; // Assume a position element is a float3.
+    const auto& posBufferView = model.bufferViews[posAccessor.bufferView];
+    // Assmue the data and element type of the position is float3
+    int posBufferOffset = posAccessorByteOffset + posBufferView.byteOffset;
+    int posBufferByteCnt = sizeof(float) * 3 * posAccessor.count;
+    vertPos.resize(3 * posAccessor.count);
+    memcpy(vertPos.data(), &pBufferData[posBufferOffset], posBufferByteCnt);
 
-    if (autoGenNormal == false)
+    // Load indices
+    std::vector<uint16_t> vertIdx;
+    int indicesIdx = mesh.primitives[0].indices;
+    const auto& idxAccessor = model.accessors[indicesIdx];
+    int idxAccessorByteOffset = idxAccessor.byteOffset;
+    int idxAccessorEleCnt = idxAccessor.count;
+
+
+
+
+
+    // Load normal
+    int normalIdx = -1;
+    std::vector<float> vertNormal;
+    if (mesh.primitives[0].attributes.count("NORMAL") > 0)
     {
+        normalIdx = mesh.primitives[0].attributes.at("NORMAL");
         const auto& normalAccessor = model.accessors[normalIdx];
         int normalAccessorByteOffset = normalAccessor.byteOffset;
         int normalAccessorEleCnt = normalAccessor.count;
     }
+    else
+    {
+        // If we don't have any normal geo data, then we will just apply the first triangle's normal to all the other
+        // triangles/vertices.
+    }
+
+    int uvIdx = -1;
+    if (mesh.primitives[0].attributes.count("TEXCOORD_0") > 0)
+    {
+        uvIdx = mesh.primitives[0].attributes.at("TEXCOORD_0");
+    }
+
+    int weightIdx = mesh.primitives[0].attributes.at("JOINTS_0");
+
+    int jointsIdx = mesh.primitives[0].attributes.at("WEIGHTS_0");
+
     
-    if (autoGenUv == false)
+    int materialIdx = mesh.primitives[0].material;
+
+    // Elements notes:
+    // Position: float3, normal: float3, texcoord: float2, weights: float4, joints: int4. -- If the gltf model doesn't have normal or uvs, we will just create dummy normal and uv.
+
+    // Setup the vertex buffer and the index buffer
+    
+    std::vector<float> vertUv;
+    if (uvIdx != -1)
     {
         const auto& uvAccessor = model.accessors[uvIdx];
         int uvAccessorByteOffset = uvAccessor.byteOffset;
         int uvAccessorEleCnt = uvAccessor.count;
     }
 
-    const auto& idxAccessor = model.accessors[indicesIdx];
-    int idxAccessorByteOffset = idxAccessor.byteOffset;
-    int idxAccessorEleCnt = idxAccessor.count;
+    std::vector<float> vertWeights;
+
+
+    std::vector<int> vertJoints;
+
+    // Load skin/skeleton related info
+
+
+    // Load animation related info
 
     /*
     // NOTE: Buffer views are just division of the buffer for a model.
