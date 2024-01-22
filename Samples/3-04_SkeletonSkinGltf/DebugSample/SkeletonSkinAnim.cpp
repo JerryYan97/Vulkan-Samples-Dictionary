@@ -5,6 +5,7 @@
 #include "../../../SharedLibrary/Event/Event.h"
 #include "../../../SharedLibrary/Utils/StrPathUtils.h"
 #include "../../../SharedLibrary/Utils/DiskOpsUtils.h"
+#include "../../../SharedLibrary/Utils/CmdBufUtils.h"
 
 #define TINYGLTF_IMPLEMENTATION
 // #define STB_IMAGE_IMPLEMENTATION
@@ -192,6 +193,8 @@ void SkinAnimGltfApp::GetCameraPos(
 // ================================================================================================================
 void SkinAnimGltfApp::ReadInInitIBL()
 {
+    SharedLib::RAIICommandBuffer raiiCmdBuffer(m_gfxCmdPool, m_device);
+
     // Load the IBL images into RAM and create gpu objects for them.
     std::string hdriFilePath = SOURCE_PATH;
     hdriFilePath += "/../data/";
@@ -205,6 +208,7 @@ void SkinAnimGltfApp::ReadInInitIBL()
 
         m_diffuseIrradianceCubemap.pixWidths.push_back(width);
         m_diffuseIrradianceCubemap.pixHeights.push_back(height);
+        m_diffuseIrradianceCubemap.componentCnt = nrComponents;
 
         VmaAllocationCreateInfo diffIrrAllocInfo{};
         {
@@ -271,6 +275,50 @@ void SkinAnimGltfApp::ReadInInitIBL()
         m_diffuseIrradianceCubemap.gpuImg.imageDescInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         m_diffuseIrradianceCubemap.gpuImg.imageDescInfo.imageView = m_diffuseIrradianceCubemap.gpuImg.imageView;
         m_diffuseIrradianceCubemap.gpuImg.imageDescInfo.sampler = m_diffuseIrradianceCubemap.gpuImg.imageSampler;
+
+        // Send data to gpu diffuse irradiance cubemap
+        VkBufferImageCopy diffIrrBufToImgCopy{};
+        {
+            VkExtent3D extent{};
+            {
+                extent.width = m_diffuseIrradianceCubemap.pixWidths[0];
+                extent.height = m_diffuseIrradianceCubemap.pixWidths[0];
+                extent.depth = 1;
+            }
+
+            diffIrrBufToImgCopy.bufferRowLength = extent.width;
+            diffIrrBufToImgCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            diffIrrBufToImgCopy.imageSubresource.mipLevel = 0;
+            diffIrrBufToImgCopy.imageSubresource.baseArrayLayer = 0;
+            diffIrrBufToImgCopy.imageSubresource.layerCount = 6;
+            diffIrrBufToImgCopy.imageExtent = extent;
+        }
+
+        const uint32_t diffIrrDwords = m_diffuseIrradianceCubemap.pixWidths[0] * 
+                                       m_diffuseIrradianceCubemap.pixHeights[0] * 3;
+
+        // Cubemap's 6 layers SubresourceRange
+        VkImageSubresourceRange cubemap1MipSubResRange{};
+        {
+            cubemap1MipSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            cubemap1MipSubResRange.baseMipLevel = 0;
+            cubemap1MipSubResRange.levelCount = 1;
+            cubemap1MipSubResRange.baseArrayLayer = 0;
+            cubemap1MipSubResRange.layerCount = 6;
+        }
+
+        SharedLib::SendImgDataToGpu(
+            raiiCmdBuffer.m_cmdBuffer,
+            m_device,
+            m_graphicsQueue,
+            m_diffuseIrradianceCubemap.pData[0],
+            diffIrrDwords * sizeof(float),
+            m_diffuseIrradianceCubemap.gpuImg.image,
+            cubemap1MipSubResRange,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            diffIrrBufToImgCopy,
+            *m_pAllocator
+        );
     }
 
     // Read in and init prefilter environment cubemap
@@ -361,6 +409,48 @@ void SkinAnimGltfApp::ReadInInitIBL()
         m_prefilterEnvCubemap.gpuImg.imageDescInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         m_prefilterEnvCubemap.gpuImg.imageDescInfo.imageView = m_prefilterEnvCubemap.gpuImg.imageView;
         m_prefilterEnvCubemap.gpuImg.imageDescInfo.sampler = m_prefilterEnvCubemap.gpuImg.imageSampler;
+
+        // Send data to gpu prefilter environment map
+        for (uint32_t i = 0; i < mipCnts; i++)
+        {
+            uint32_t mipDwordsCnt = 3 * m_prefilterEnvCubemap.pixWidths[i] * m_prefilterEnvCubemap.pixHeights[i];
+            VkImageSubresourceRange prefilterEnvMipISubResRange{};
+            {
+                prefilterEnvMipISubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                prefilterEnvMipISubResRange.baseMipLevel = i;
+                prefilterEnvMipISubResRange.levelCount = 1;
+                prefilterEnvMipISubResRange.baseArrayLayer = 0;
+                prefilterEnvMipISubResRange.layerCount = 6;
+            }
+
+            VkBufferImageCopy prefilterEnvMipIBufToImgCopy{};
+            {
+                VkExtent3D extent{};
+                {
+                    extent.width = m_prefilterEnvCubemap.pixWidths[i];
+                    extent.height = m_prefilterEnvCubemap.pixWidths[i];
+                    extent.depth = 1;
+                }
+
+                prefilterEnvMipIBufToImgCopy.bufferRowLength = m_prefilterEnvCubemap.pixWidths[i];
+                prefilterEnvMipIBufToImgCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                prefilterEnvMipIBufToImgCopy.imageSubresource.mipLevel = i;
+                prefilterEnvMipIBufToImgCopy.imageSubresource.baseArrayLayer = 0;
+                prefilterEnvMipIBufToImgCopy.imageSubresource.layerCount = 6;
+                prefilterEnvMipIBufToImgCopy.imageExtent = extent;
+            }
+
+            SharedLib::SendImgDataToGpu(raiiCmdBuffer.m_cmdBuffer,
+                                        m_device,
+                                        m_graphicsQueue,
+                                        m_prefilterEnvCubemap.pData[i],
+                                        mipDwordsCnt * sizeof(float),
+                                        m_prefilterEnvCubemap.gpuImg.image,
+                                        prefilterEnvMipISubResRange,
+                                        VK_IMAGE_LAYOUT_UNDEFINED,
+                                        prefilterEnvMipIBufToImgCopy,
+                                        *m_pAllocator);
+        }
     }
 
     // Read in and init environment brdf map
@@ -435,6 +525,46 @@ void SkinAnimGltfApp::ReadInInitIBL()
         m_envBrdfImg.gpuImg.imageDescInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         m_envBrdfImg.gpuImg.imageDescInfo.imageView = m_envBrdfImg.gpuImg.imageView;
         m_envBrdfImg.gpuImg.imageDescInfo.sampler = m_envBrdfImg.gpuImg.imageSampler;
+
+        const uint32_t envBrdfDwordsCnt = 3 * m_envBrdfImg.pixHeights[0] * m_envBrdfImg.pixWidths[0];
+
+        // The envBrdf 2D texture SubresourceRange
+        VkImageSubresourceRange tex2dSubResRange{};
+        {
+            tex2dSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            tex2dSubResRange.baseMipLevel = 0;
+            tex2dSubResRange.levelCount = 1;
+            tex2dSubResRange.baseArrayLayer = 0;
+            tex2dSubResRange.layerCount = 1;
+        }
+
+        VkBufferImageCopy envBrdfBufToImgCopy{};
+        {
+            VkExtent3D extent{};
+            {
+                extent.width = m_envBrdfImg.pixWidths[0];
+                extent.height = m_envBrdfImg.pixWidths[0];
+                extent.depth = 1;
+            }
+
+            envBrdfBufToImgCopy.bufferRowLength = extent.width;
+            envBrdfBufToImgCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            envBrdfBufToImgCopy.imageSubresource.mipLevel = 0;
+            envBrdfBufToImgCopy.imageSubresource.baseArrayLayer = 0;
+            envBrdfBufToImgCopy.imageSubresource.layerCount = 1;
+            envBrdfBufToImgCopy.imageExtent = extent;
+        }
+
+        SharedLib::SendImgDataToGpu(raiiCmdBuffer.m_cmdBuffer,
+            m_device,
+            m_graphicsQueue,
+            m_envBrdfImg.pData[0],
+            envBrdfDwordsCnt * sizeof(float),
+            m_envBrdfImg.gpuImg.image,
+            tex2dSubResRange,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            envBrdfBufToImgCopy,
+            *m_pAllocator);
     }
 }
 
@@ -779,75 +909,79 @@ void SkinAnimGltfApp::ReadInInitGltf()
         const auto& baseColorTex = model.textures[baseColorTexIdx];
         int baseColorTexImgIdx = baseColorTex.source;
         const auto& baseColorImg = model.images[baseColorTexImgIdx];
-
-        VmaAllocationCreateInfo baseColorAllocInfo{};
+        
+        VkImageSubresourceRange tex2dSubResRange{};
         {
-            baseColorAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-            baseColorAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+            tex2dSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            tex2dSubResRange.baseMipLevel = 0;
+            tex2dSubResRange.levelCount = 1;
+            tex2dSubResRange.baseArrayLayer = 0;
+            tex2dSubResRange.layerCount = 1;
         }
 
-        VkExtent3D extent{};
+        VkSamplerCreateInfo samplerInfo{};
         {
-            extent.width = baseColorImg.width;
-            extent.height = baseColorImg.height;
-            extent.depth = 1;
+            samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+            samplerInfo.magFilter = VK_FILTER_LINEAR;
+            samplerInfo.minFilter = VK_FILTER_LINEAR;
+            samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+            samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            samplerInfo.minLod = -1000;
+            samplerInfo.maxLod = 1000;
+            samplerInfo.maxAnisotropy = 1.0f;
         }
 
-        VkImageCreateInfo baseColorImgInfo{};
+        SharedLib::GpuImgCreateInfo gpuImgCreateInfo{};
         {
-            baseColorImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-            baseColorImgInfo.imageType = VK_IMAGE_TYPE_2D;
-            baseColorImgInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
-            baseColorImgInfo.extent = extent;
-            baseColorImgInfo.mipLevels = 1;
-            baseColorImgInfo.arrayLayers = 1;
-            baseColorImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-            baseColorImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
-            baseColorImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-            baseColorImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            gpuImgCreateInfo.allocFlags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+            gpuImgCreateInfo.hasSampler = true;
+            gpuImgCreateInfo.imgSubresRange = tex2dSubResRange;
+            gpuImgCreateInfo.imgUsageFlags = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+            gpuImgCreateInfo.imgViewType = VK_IMAGE_VIEW_TYPE_2D;
+            gpuImgCreateInfo.samplerInfo = samplerInfo;
+            gpuImgCreateInfo.imgExtent = VkExtent3D{ (uint32_t)baseColorImg.width, (uint32_t)baseColorImg.height, 1 };
+            gpuImgCreateInfo.imgFormat = VK_FORMAT_R8G8B8A8_SRGB;
         }
 
-        vmaCreateImage(*m_pAllocator,
-            &baseColorImgInfo,
-            &baseColorAllocInfo,
-            &m_skeletalMesh.mesh.baseColorImg.gpuImg.image,
-            &m_skeletalMesh.mesh.baseColorImg.gpuImg.imageAllocation,
-            nullptr);
+        m_skeletalMesh.mesh.baseColorImg.gpuImg = CreateGpuImage(gpuImgCreateInfo);
 
-        VkImageViewCreateInfo info{};
+        VkBufferImageCopy baseColorBufToImgCopy{};
         {
-            info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            info.image = m_skeletalMesh.mesh.baseColorImg.gpuImg.image;
-            info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-            info.format = VK_FORMAT_R8G8B8A8_SRGB;
-            info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            info.subresourceRange.levelCount = 1;
-            info.subresourceRange.layerCount = 1;
-        }
-        VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_skeletalMesh.mesh.baseColorImg.gpuImg.imageView));
+            VkExtent3D extent{};
+            {
+                extent.width = baseColorImg.width;
+                extent.height = baseColorImg.height;
+                extent.depth = 1;
+            }
 
-        VkSamplerCreateInfo sampler_info{};
-        {
-            sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-            sampler_info.magFilter = VK_FILTER_LINEAR;
-            sampler_info.minFilter = VK_FILTER_LINEAR;
-            sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-            sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-            sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-            sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-            sampler_info.minLod = -1000;
-            sampler_info.maxLod = 1000;
-            sampler_info.maxAnisotropy = 1.0f;
+            baseColorBufToImgCopy.bufferRowLength = extent.width;
+            baseColorBufToImgCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            baseColorBufToImgCopy.imageSubresource.mipLevel = 0;
+            baseColorBufToImgCopy.imageSubresource.baseArrayLayer = 0;
+            baseColorBufToImgCopy.imageSubresource.layerCount = 1;
+            baseColorBufToImgCopy.imageExtent = extent;
         }
-        VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_skeletalMesh.mesh.baseColorImg.gpuImg.imageSampler));
 
-        m_skeletalMesh.mesh.baseColorImg.gpuImg.imageDescInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        m_skeletalMesh.mesh.baseColorImg.gpuImg.imageDescInfo.imageView = m_skeletalMesh.mesh.baseColorImg.gpuImg.imageView;
-        m_skeletalMesh.mesh.baseColorImg.gpuImg.imageDescInfo.sampler = m_skeletalMesh.mesh.baseColorImg.gpuImg.imageSampler;
+
+        SharedLib::RAIICommandBuffer raiiCmdBuffer(m_gfxCmdPool, m_device);
+
+        SharedLib::SendImgDataToGpu(raiiCmdBuffer.m_cmdBuffer,
+                                    m_device,
+                                    m_graphicsQueue,
+                                    (void*)baseColorImg.image.data(),
+                                    baseColorImg.image.size() * sizeof(unsigned char),
+                                    m_skeletalMesh.mesh.baseColorImg.gpuImg.image,
+                                    tex2dSubResRange,
+                                    VK_IMAGE_LAYOUT_UNDEFINED,
+                                    baseColorBufToImgCopy,
+                                    *m_pAllocator);
     }
     else
     {
-
+        float white[3] = { 1.f, 1.f, 1.f };
+        m_skeletalMesh.mesh.baseColorImg.gpuImg = CreateDummyPureColorImg(white);
     }
 }
 
