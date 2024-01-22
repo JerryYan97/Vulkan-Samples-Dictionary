@@ -18,11 +18,9 @@ typedef VkFlags VmaAllocationCreateFlags;
 // - All CmdBuffer operations need to stay in the main.cpp.
 // - In principle, all member variables should be init in InitXXX(...) and destroied in the destructor. Or, the variable
 //   shouldn't be in the class, but can be created by the public interface.
-// - Sync, CmdBuffer operations should be explicit in the main.cpp.
-// TODO1: I may need a standalone pipeline class.
+// - Sync, CmdBuffer operations should be explicit in the main.cpp. -- No... The code reuse maybe really bad if we do this.
 // TODO2: Dictionary Vma/VkBuffer/VkImage Management -- Need explicit create/destroy; return internal ids; element: id - {alloc, vkBuffer}.
 // TODO3: GPU image format should have more information like currnet GPU image format.
-// TODO4: A queue/vector to collect all image trans barriers so that we can init their formats easiler.
 namespace SharedLib
 {
     struct GpuBuffer
@@ -39,6 +37,21 @@ namespace SharedLib
         VkDescriptorImageInfo imageDescInfo;
         VkImageView           imageView;
         VkSampler             imageSampler;
+    };
+
+    struct GpuImgCreateInfo
+    {
+        // VkImageCreateInfo        imgInfo;
+        VmaAllocationCreateFlags allocFlags;
+        VkImageSubresourceRange  imgSubresRange;
+        VkImageViewType          imgViewType;
+        VkFormat                 imgFormat;
+        VkExtent3D               imgExtent;
+        VkImageUsageFlags        imgUsageFlags;
+        VkImageCreateFlags       imgCreateFlags; // For the cubemap image.
+
+        bool                hasSampler;
+        VkSamplerCreateInfo samplerInfo;
     };
 
     // Used as a temporary command buffer in a function.
@@ -94,6 +107,15 @@ namespace SharedLib
 
         void SubmitCmdBufToGfxQueue(VkCommandBuffer cmdBuf, VkFence signalFence);
 
+        GpuImg CreateGpuImage(GpuImgCreateInfo createInfo);
+        GpuImg CreateDummyPureColorImg(float* pColor);
+        void TransImageLayout(GpuImg* pTargetImg,
+            VkImageLayout targetLayout,
+            VkAccessFlags srcAccess,
+            VkAccessFlags dstAccess,
+            VkPipelineStageFlags srcPipelineStg,
+            VkPipelineStageFlags dstPipelineStg) {}
+
         // GpuImg CreateSwapchainSizeOneMipOneLayerGpuImg(usage, ...);
         // void DestroyGpuImg(GpuImg xxx);
 
@@ -128,8 +150,6 @@ namespace SharedLib
         void InitVmaAllocator();
         void InitGfxCommandPool();
         void InitGfxCommandBuffers(const uint32_t cmdBufCnt);
-
-        GpuImg CreateDummyPureColorImg(float* pColor);
 
         // CreateXXX(...) functions are more flexible. They are utility functions for children classes.
         // CreateXXX(...) cannot initialize any member objects. They have to return objects.

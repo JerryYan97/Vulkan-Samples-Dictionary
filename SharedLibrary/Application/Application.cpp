@@ -1,6 +1,7 @@
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
 
+#include "CmdBufUtils.h"
 #include "Application.h"
 #include "VulkanDbgUtils.h"
 #include "AppUtils.h"
@@ -500,10 +501,148 @@ namespace SharedLib
     }
 
     // ================================================================================================================
+    GpuImg Application::CreateGpuImage(
+        GpuImgCreateInfo createInfo)
+    {
+        VmaAllocationCreateInfo imgAllocInfo = {};
+        {
+            imgAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+            imgAllocInfo.flags = createInfo.allocFlags;
+        }
+
+        // Create VkImage
+        GpuImg gpuImgRes;
+
+        VkImageCreateInfo imgInfo{};
+        {
+            imgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+            imgInfo.imageType = VK_IMAGE_TYPE_2D;
+            imgInfo.format = createInfo.imgFormat;
+            imgInfo.extent = createInfo.imgExtent;
+            imgInfo.mipLevels = createInfo.imgSubresRange.levelCount;
+            imgInfo.arrayLayers = createInfo.imgSubresRange.layerCount;
+            imgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+            imgInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+            imgInfo.usage = createInfo.imgUsageFlags;
+            imgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            imgInfo.flags = createInfo.imgCreateFlags;
+        }
+
+        VK_CHECK(vmaCreateImage(*m_pAllocator,
+            &imgInfo,
+            &imgAllocInfo,
+            &(gpuImgRes.image),
+            &(gpuImgRes.imageAllocation),
+            nullptr));
+
+        // Create VkImageView -- Currently, we only assume a 2D image. We may need a cubemap or a 3D image.
+        VkImageViewCreateInfo imgViewInfo{};
+        {
+            imgViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            imgViewInfo.image = gpuImgRes.image;
+            imgViewInfo.viewType = createInfo.imgViewType;
+            imgViewInfo.format = createInfo.imgFormat;
+            imgViewInfo.subresourceRange = createInfo.imgSubresRange;
+        }
+
+        VK_CHECK(vkCreateImageView(
+            m_device,
+            &imgViewInfo,
+            nullptr,
+            &(gpuImgRes.imageView)));
+
+        if (createInfo.hasSampler)
+        {
+            VK_CHECK(vkCreateSampler(m_device, &createInfo.samplerInfo, nullptr, &(gpuImgRes.imageSampler)));
+        }
+
+        gpuImgRes.imageDescInfo.sampler = gpuImgRes.imageSampler;
+        gpuImgRes.imageDescInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        gpuImgRes.imageDescInfo.imageView = gpuImgRes.imageView;
+
+        return gpuImgRes;
+    }
+
+    // ================================================================================================================
     GpuImg Application::CreateDummyPureColorImg(
         float* pColor)
     {
+        GpuImg gpuImgRes;
 
+        VmaAllocationCreateInfo imgAllocInfo = {};
+        {
+            imgAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+            imgAllocInfo.flags = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        }
+
+        VkImageSubresourceRange imgSubRsrcRange{};
+        {
+            imgSubRsrcRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            imgSubRsrcRange.baseArrayLayer = 0;
+            imgSubRsrcRange.layerCount = 1;
+            imgSubRsrcRange.baseMipLevel = 0;
+            imgSubRsrcRange.levelCount = 1;
+        }
+
+        VkSamplerCreateInfo samplerInfo{};
+        {
+            samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+            samplerInfo.magFilter = VK_FILTER_LINEAR;
+            samplerInfo.minFilter = VK_FILTER_LINEAR;
+            samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+            samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            samplerInfo.minLod = -1000;
+            samplerInfo.maxLod = 1000;
+            samplerInfo.maxAnisotropy = 1.0f;
+        }
+
+        GpuImgCreateInfo gpuImgCreateInfo{};
+        {
+            gpuImgCreateInfo.allocFlags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+            gpuImgCreateInfo.hasSampler = true;
+            gpuImgCreateInfo.imgSubresRange = imgSubRsrcRange;
+            gpuImgCreateInfo.imgUsageFlags = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+            gpuImgCreateInfo.imgViewType = VK_IMAGE_VIEW_TYPE_2D;
+            gpuImgCreateInfo.samplerInfo = samplerInfo;
+            gpuImgCreateInfo.imgExtent = VkExtent3D{ 1, 1, 1 };
+            gpuImgCreateInfo.imgFormat = VK_FORMAT_R8G8B8A8_UNORM;
+        }
+
+        gpuImgRes = CreateGpuImage(gpuImgCreateInfo);
+
+        // TODO: We may want to put it as a static/const member of the class so that we can reuse it.
+        VkBufferImageCopy bufToImgCopyTemplate{};
+        {
+            VkExtent3D extent{};
+            {
+                extent.width = 1;
+                extent.height = 1;
+                extent.depth = 1;
+            }
+
+            bufToImgCopyTemplate.bufferRowLength = 1;
+            bufToImgCopyTemplate.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            bufToImgCopyTemplate.imageSubresource.mipLevel = 0;
+            bufToImgCopyTemplate.imageSubresource.baseArrayLayer = 0;
+            bufToImgCopyTemplate.imageSubresource.layerCount = 1;
+            bufToImgCopyTemplate.imageExtent = extent;
+        }
+
+        RAIICommandBuffer raiiCmdBuffer(m_gfxCmdPool, m_device);
+
+        uint8_t colorData[4] = {pColor[0] * 255, pColor[1] * 255, pColor[2] * 255, 255};
+        SendImgDataToGpu(raiiCmdBuffer.m_cmdBuffer,
+                         m_device,
+                         m_graphicsQueue,
+                         colorData, sizeof(colorData),
+                         gpuImgRes.image,
+                         imgSubRsrcRange,
+                         VK_IMAGE_LAYOUT_UNDEFINED,
+                         bufToImgCopyTemplate, *m_pAllocator);
+
+        return gpuImgRes;
     }
 
     // ================================================================================================================

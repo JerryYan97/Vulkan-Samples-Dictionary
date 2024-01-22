@@ -5,7 +5,8 @@ namespace SharedLib
 {
     // ================================================================================================================
     // The staging buffer has to be freed after the copy finishes, so this func has to control a fence.
-    // Transfer the dstImg to VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL.
+    // Transfer the dstImg to VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL -- Change it to the shader read optimal.
+    // TODO: I need to cleanup code that transfer it from dst optimal to shader read optimal barriers.
     void SendImgDataToGpu(
         VkCommandBuffer         cmdBuffer,
         VkDevice                device,
@@ -87,6 +88,22 @@ namespace SharedLib
             dstImg,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             1, &bufToImgCopyInfo);
+
+        // Transform the layout of the image to shader read optimal
+        VkImageMemoryBarrier cpDstToRdOpt = undefToDstBarrier;
+        {
+            cpDstToRdOpt.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            cpDstToRdOpt.newLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL;
+        }
+
+        vkCmdPipelineBarrier(
+            cmdBuffer,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &cpDstToRdOpt);
 
         // End the command buffer and submit the packets
         vkEndCommandBuffer(cmdBuffer);

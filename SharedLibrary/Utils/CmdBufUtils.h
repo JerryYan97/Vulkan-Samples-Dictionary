@@ -4,6 +4,8 @@
 
 namespace SharedLib
 {
+    struct GpuImg;
+
     // Function names should start with 'Cmd' so their names should be 'CmdXxxx'.
     // Maybe we should only change the layouts at the beginning of CmdXxxx functions.
     void SendImgDataToGpu(VkCommandBuffer cmdBuffer,
