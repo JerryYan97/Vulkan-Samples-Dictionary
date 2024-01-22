@@ -753,6 +753,31 @@ namespace SharedLib
     }
 
     // ================================================================================================================
+    // Append the last element as 1.f.
+    void Img3EleTo4Ele(
+        float* pSrc,
+        float* pDst,
+        uint32_t pixCnt)
+    {
+        for (uint32_t i = 0; i < pixCnt; i++)
+        {
+            uint32_t ele4Idx0 = i * 4;
+            uint32_t ele4Idx1 = i * 4 + 1;
+            uint32_t ele4Idx2 = i * 4 + 2;
+            uint32_t ele4Idx3 = i * 4 + 3;
+
+            uint32_t ele3Idx0 = i * 3;
+            uint32_t ele3Idx1 = i * 3 + 1;
+            uint32_t ele3Idx2 = i * 3 + 2;
+
+            pDst[ele4Idx0] = pSrc[ele3Idx0];
+            pDst[ele4Idx1] = pSrc[ele3Idx1];
+            pDst[ele4Idx2] = pSrc[ele3Idx2];
+            pDst[ele4Idx3] = 1.f;
+        }
+    }
+
+    // ================================================================================================================
     void PrintDeviceImageCapbility(
         VkPhysicalDevice phyDevice)
     {

@@ -6,6 +6,7 @@
 #include "../../../SharedLibrary/Utils/StrPathUtils.h"
 #include "../../../SharedLibrary/Utils/DiskOpsUtils.h"
 #include "../../../SharedLibrary/Utils/CmdBufUtils.h"
+#include "../../../SharedLibrary/Utils/AppUtils.h"
 
 #define TINYGLTF_IMPLEMENTATION
 // #define STB_IMAGE_IMPLEMENTATION
@@ -210,71 +211,53 @@ void SkinAnimGltfApp::ReadInInitIBL()
         m_diffuseIrradianceCubemap.pixHeights.push_back(height);
         m_diffuseIrradianceCubemap.componentCnt = nrComponents;
 
-        VmaAllocationCreateInfo diffIrrAllocInfo{};
+        if (nrComponents == 3)
         {
-            diffIrrAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-            diffIrrAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+            float* pNewData = new float[4 * width * height];
+            SharedLib::Img3EleTo4Ele(m_diffuseIrradianceCubemap.pData[0], pNewData, width * height);
+            delete[] m_diffuseIrradianceCubemap.pData[0];
+            m_diffuseIrradianceCubemap.pData[0] = pNewData;
+            m_diffuseIrradianceCubemap.componentCnt = 4;
         }
 
-        VkExtent3D extent{};
+        VkImageSubresourceRange cubemapMip1SubResRange{};
         {
-            extent.width = m_diffuseIrradianceCubemap.pixWidths[0];
-            extent.height = m_diffuseIrradianceCubemap.pixWidths[0];
-            extent.depth = 1;
+            cubemapMip1SubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            cubemapMip1SubResRange.baseMipLevel = 0;
+            cubemapMip1SubResRange.levelCount = 1;
+            cubemapMip1SubResRange.baseArrayLayer = 0;
+            cubemapMip1SubResRange.layerCount = 6;
         }
 
-        VkImageCreateInfo cubeMapImgInfo{};
+        VkSamplerCreateInfo samplerInfo{};
         {
-            cubeMapImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-            cubeMapImgInfo.imageType = VK_IMAGE_TYPE_2D;
-            cubeMapImgInfo.format = VK_FORMAT_R32G32B32_SFLOAT;
-            cubeMapImgInfo.extent = extent;
-            cubeMapImgInfo.mipLevels = 1;
-            cubeMapImgInfo.arrayLayers = 6;
-            cubeMapImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-            cubeMapImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
-            cubeMapImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-            cubeMapImgInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-            cubeMapImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+            samplerInfo.magFilter = VK_FILTER_LINEAR;
+            samplerInfo.minFilter = VK_FILTER_LINEAR;
+            samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+            samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            samplerInfo.minLod = -1000;
+            samplerInfo.maxLod = 1000;
+            samplerInfo.maxAnisotropy = 1.0f;
         }
 
-        VK_CHECK(vmaCreateImage(*m_pAllocator,
-            &cubeMapImgInfo,
-            &diffIrrAllocInfo,
-            &m_diffuseIrradianceCubemap.gpuImg.image,
-            &m_diffuseIrradianceCubemap.gpuImg.imageAllocation,
-            nullptr));
-
-        VkImageViewCreateInfo info{};
+        SharedLib::GpuImgCreateInfo gpuImgCreateInfo{};
         {
-            info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            info.image = m_diffuseIrradianceCubemap.gpuImg.image;
-            info.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
-            info.format = VK_FORMAT_R32G32B32_SFLOAT;
-            info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            info.subresourceRange.levelCount = 1;
-            info.subresourceRange.layerCount = 6;
+            gpuImgCreateInfo.allocFlags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+            gpuImgCreateInfo.hasSampler = true;
+            gpuImgCreateInfo.imgSubresRange = cubemapMip1SubResRange;
+            gpuImgCreateInfo.imgUsageFlags = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+            gpuImgCreateInfo.imgViewType = VK_IMAGE_VIEW_TYPE_CUBE;
+            gpuImgCreateInfo.samplerInfo = samplerInfo;
+            gpuImgCreateInfo.imgExtent = VkExtent3D{ m_diffuseIrradianceCubemap.pixWidths[0],
+                                                     m_diffuseIrradianceCubemap.pixWidths[0], 1 };
+            gpuImgCreateInfo.imgFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+            gpuImgCreateInfo.imgCreateFlags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
         }
-        VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_diffuseIrradianceCubemap.gpuImg.imageView));
 
-        VkSamplerCreateInfo sampler_info{};
-        {
-            sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-            sampler_info.magFilter = VK_FILTER_LINEAR;
-            sampler_info.minFilter = VK_FILTER_LINEAR;
-            sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-            sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            sampler_info.minLod = -1000;
-            sampler_info.maxLod = 1000;
-            sampler_info.maxAnisotropy = 1.0f;
-        }
-        VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_diffuseIrradianceCubemap.gpuImg.imageSampler));
-
-        m_diffuseIrradianceCubemap.gpuImg.imageDescInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        m_diffuseIrradianceCubemap.gpuImg.imageDescInfo.imageView = m_diffuseIrradianceCubemap.gpuImg.imageView;
-        m_diffuseIrradianceCubemap.gpuImg.imageDescInfo.sampler = m_diffuseIrradianceCubemap.gpuImg.imageSampler;
+        m_diffuseIrradianceCubemap.gpuImg = CreateGpuImage(gpuImgCreateInfo);
 
         // Send data to gpu diffuse irradiance cubemap
         VkBufferImageCopy diffIrrBufToImgCopy{};
@@ -295,17 +278,7 @@ void SkinAnimGltfApp::ReadInInitIBL()
         }
 
         const uint32_t diffIrrDwords = m_diffuseIrradianceCubemap.pixWidths[0] * 
-                                       m_diffuseIrradianceCubemap.pixHeights[0] * 3;
-
-        // Cubemap's 6 layers SubresourceRange
-        VkImageSubresourceRange cubemap1MipSubResRange{};
-        {
-            cubemap1MipSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            cubemap1MipSubResRange.baseMipLevel = 0;
-            cubemap1MipSubResRange.levelCount = 1;
-            cubemap1MipSubResRange.baseArrayLayer = 0;
-            cubemap1MipSubResRange.layerCount = 6;
-        }
+                                       m_diffuseIrradianceCubemap.pixHeights[0] * 4;
 
         SharedLib::SendImgDataToGpu(
             raiiCmdBuffer.m_cmdBuffer,
@@ -314,7 +287,7 @@ void SkinAnimGltfApp::ReadInInitIBL()
             m_diffuseIrradianceCubemap.pData[0],
             diffIrrDwords * sizeof(float),
             m_diffuseIrradianceCubemap.gpuImg.image,
-            cubemap1MipSubResRange,
+            cubemapMip1SubResRange,
             VK_IMAGE_LAYOUT_UNDEFINED,
             diffIrrBufToImgCopy,
             *m_pAllocator
@@ -329,10 +302,6 @@ void SkinAnimGltfApp::ReadInInitIBL()
 
         const uint32_t mipCnts = mipImgNames.size();
 
-        m_prefilterEnvCubemap.pData.resize(mipCnts);
-        m_prefilterEnvCubemap.pixWidths.resize(mipCnts);
-        m_prefilterEnvCubemap.pixHeights.resize(mipCnts);
-
         for (uint32_t i = 0; i < mipCnts; i++)
         {
             int width, height, nrComponents;
@@ -342,78 +311,60 @@ void SkinAnimGltfApp::ReadInInitIBL()
                                                              &width, &height, &nrComponents, 0));
             m_prefilterEnvCubemap.pixWidths.push_back(width);
             m_prefilterEnvCubemap.pixHeights.push_back(height);
+
+            if (nrComponents == 3)
+            {
+                float* pNewData = new float[4 * width * height];
+                SharedLib::Img3EleTo4Ele(m_prefilterEnvCubemap.pData[i], pNewData, width * height);
+                delete[] m_prefilterEnvCubemap.pData[i];
+                m_prefilterEnvCubemap.pData[i] = pNewData;
+            }
+            m_prefilterEnvCubemap.componentCnt = 4;
         }
 
-        VmaAllocationCreateInfo prefilterEnvCubemapAllocInfo{};
+        VkImageSubresourceRange cubemapMipCntSubResRange{};
         {
-            prefilterEnvCubemapAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-            prefilterEnvCubemapAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+            cubemapMipCntSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            cubemapMipCntSubResRange.baseMipLevel = 0;
+            cubemapMipCntSubResRange.levelCount = mipCnts;
+            cubemapMipCntSubResRange.baseArrayLayer = 0;
+            cubemapMipCntSubResRange.layerCount = 6;
         }
 
-        VkExtent3D extent{};
+        VkSamplerCreateInfo samplerInfo{};
         {
-            extent.width = m_prefilterEnvCubemap.pixWidths[0];
-            extent.height = m_prefilterEnvCubemap.pixHeights[0];
-            extent.depth = 1;
+            samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+            samplerInfo.magFilter = VK_FILTER_LINEAR;
+            samplerInfo.minFilter = VK_FILTER_LINEAR;
+            samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+            samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            samplerInfo.minLod = -1000;
+            samplerInfo.maxLod = 1000;
+            samplerInfo.maxAnisotropy = 1.0f;
         }
 
-        VkImageCreateInfo cubeMapImgInfo{};
+        SharedLib::GpuImgCreateInfo gpuImgCreateInfo{};
         {
-            cubeMapImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-            cubeMapImgInfo.imageType = VK_IMAGE_TYPE_2D;
-            cubeMapImgInfo.format = VK_FORMAT_R32G32B32_SFLOAT;
-            cubeMapImgInfo.extent = extent;
-            cubeMapImgInfo.mipLevels = mipCnts;
-            cubeMapImgInfo.arrayLayers = 6;
-            cubeMapImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-            cubeMapImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
-            cubeMapImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-            cubeMapImgInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-            cubeMapImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            gpuImgCreateInfo.allocFlags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+            gpuImgCreateInfo.hasSampler = true;
+            gpuImgCreateInfo.imgSubresRange = cubemapMipCntSubResRange;
+            gpuImgCreateInfo.imgUsageFlags = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+            gpuImgCreateInfo.imgViewType = VK_IMAGE_VIEW_TYPE_CUBE;
+            gpuImgCreateInfo.samplerInfo = samplerInfo;
+            gpuImgCreateInfo.imgExtent = VkExtent3D{ m_prefilterEnvCubemap.pixWidths[0],
+                                                     m_prefilterEnvCubemap.pixWidths[0], 1 };
+            gpuImgCreateInfo.imgFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+            gpuImgCreateInfo.imgCreateFlags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
         }
 
-        VK_CHECK(vmaCreateImage(*m_pAllocator,
-            &cubeMapImgInfo,
-            &prefilterEnvCubemapAllocInfo,
-            &m_prefilterEnvCubemap.gpuImg.image,
-            &m_prefilterEnvCubemap.gpuImg.imageAllocation,
-            nullptr));
-
-        VkImageViewCreateInfo info{};
-        {
-            info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            info.image = m_prefilterEnvCubemap.gpuImg.image;
-            info.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
-            info.format = VK_FORMAT_R32G32B32_SFLOAT;
-            info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            info.subresourceRange.levelCount = mipCnts;
-            info.subresourceRange.layerCount = 6;
-        }
-        VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_prefilterEnvCubemap.gpuImg.imageView));
-
-        VkSamplerCreateInfo sampler_info{};
-        {
-            sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-            sampler_info.magFilter = VK_FILTER_LINEAR;
-            sampler_info.minFilter = VK_FILTER_LINEAR;
-            sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-            sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            sampler_info.minLod = -1000;
-            sampler_info.maxLod = 1000;
-            sampler_info.maxAnisotropy = 1.0f;
-        }
-        VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_prefilterEnvCubemap.gpuImg.imageSampler));
-
-        m_prefilterEnvCubemap.gpuImg.imageDescInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        m_prefilterEnvCubemap.gpuImg.imageDescInfo.imageView = m_prefilterEnvCubemap.gpuImg.imageView;
-        m_prefilterEnvCubemap.gpuImg.imageDescInfo.sampler = m_prefilterEnvCubemap.gpuImg.imageSampler;
+        m_prefilterEnvCubemap.gpuImg = CreateGpuImage(gpuImgCreateInfo);
 
         // Send data to gpu prefilter environment map
         for (uint32_t i = 0; i < mipCnts; i++)
         {
-            uint32_t mipDwordsCnt = 3 * m_prefilterEnvCubemap.pixWidths[i] * m_prefilterEnvCubemap.pixHeights[i];
+            uint32_t mipDwordsCnt = 4 * m_prefilterEnvCubemap.pixWidths[i] * m_prefilterEnvCubemap.pixHeights[i];
             VkImageSubresourceRange prefilterEnvMipISubResRange{};
             {
                 prefilterEnvMipISubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -461,72 +412,14 @@ void SkinAnimGltfApp::ReadInInitIBL()
         m_envBrdfImg.pixWidths.push_back(width);
         m_envBrdfImg.pixHeights.push_back(height);
 
-        VmaAllocationCreateInfo envBrdfMapAllocInfo{};
+        if (nrComponents == 3)
         {
-            envBrdfMapAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-            envBrdfMapAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+            float* pNewData = new float[4 * width * height];
+            SharedLib::Img3EleTo4Ele(m_envBrdfImg.pData[0], pNewData, width * height);
+            delete[] m_envBrdfImg.pData[0];
+            m_envBrdfImg.pData[0] = pNewData;
         }
-
-        VkExtent3D extent{};
-        {
-            extent.width = width;
-            extent.height = height;
-            extent.depth = 1;
-        }
-
-        VkImageCreateInfo envBrdfImgInfo{};
-        {
-            envBrdfImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-            envBrdfImgInfo.imageType = VK_IMAGE_TYPE_2D;
-            envBrdfImgInfo.format = VK_FORMAT_R32G32B32_SFLOAT;
-            envBrdfImgInfo.extent = extent;
-            envBrdfImgInfo.mipLevels = 1;
-            envBrdfImgInfo.arrayLayers = 1;
-            envBrdfImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-            envBrdfImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
-            envBrdfImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-            envBrdfImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        }
-
-        VK_CHECK(vmaCreateImage(*m_pAllocator,
-            &envBrdfImgInfo,
-            &envBrdfMapAllocInfo,
-            &m_envBrdfImg.gpuImg.image,
-            &m_envBrdfImg.gpuImg.imageAllocation,
-            nullptr));
-
-        VkImageViewCreateInfo info{};
-        {
-            info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            info.image = m_envBrdfImg.gpuImg.image;
-            info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-            info.format = VK_FORMAT_R32G32B32_SFLOAT;
-            info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            info.subresourceRange.levelCount = 1;
-            info.subresourceRange.layerCount = 1;
-        }
-        VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_envBrdfImg.gpuImg.imageView));
-
-        VkSamplerCreateInfo sampler_info{};
-        {
-            sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-            sampler_info.magFilter = VK_FILTER_LINEAR;
-            sampler_info.minFilter = VK_FILTER_LINEAR;
-            sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-            sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            sampler_info.minLod = -1000;
-            sampler_info.maxLod = 1000;
-            sampler_info.maxAnisotropy = 1.0f;
-        }
-        VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_envBrdfImg.gpuImg.imageSampler));
-
-        m_envBrdfImg.gpuImg.imageDescInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        m_envBrdfImg.gpuImg.imageDescInfo.imageView = m_envBrdfImg.gpuImg.imageView;
-        m_envBrdfImg.gpuImg.imageDescInfo.sampler = m_envBrdfImg.gpuImg.imageSampler;
-
-        const uint32_t envBrdfDwordsCnt = 3 * m_envBrdfImg.pixHeights[0] * m_envBrdfImg.pixWidths[0];
+        m_envBrdfImg.componentCnt = 4;
 
         // The envBrdf 2D texture SubresourceRange
         VkImageSubresourceRange tex2dSubResRange{};
@@ -537,6 +430,36 @@ void SkinAnimGltfApp::ReadInInitIBL()
             tex2dSubResRange.baseArrayLayer = 0;
             tex2dSubResRange.layerCount = 1;
         }
+
+        VkSamplerCreateInfo samplerInfo{};
+        {
+            samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+            samplerInfo.magFilter = VK_FILTER_LINEAR;
+            samplerInfo.minFilter = VK_FILTER_LINEAR;
+            samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+            samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            samplerInfo.minLod = -1000;
+            samplerInfo.maxLod = 1000;
+            samplerInfo.maxAnisotropy = 1.0f;
+        }
+
+        SharedLib::GpuImgCreateInfo gpuImgCreateInfo{};
+        {
+            gpuImgCreateInfo.allocFlags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+            gpuImgCreateInfo.hasSampler = true;
+            gpuImgCreateInfo.imgSubresRange = tex2dSubResRange;
+            gpuImgCreateInfo.imgUsageFlags = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+            gpuImgCreateInfo.imgViewType = VK_IMAGE_VIEW_TYPE_2D;
+            gpuImgCreateInfo.samplerInfo = samplerInfo;
+            gpuImgCreateInfo.imgExtent = VkExtent3D{ (uint32_t)width, (uint32_t)height, 1 };
+            gpuImgCreateInfo.imgFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+        }
+
+        m_envBrdfImg.gpuImg = CreateGpuImage(gpuImgCreateInfo);
+
+        const uint32_t envBrdfDwordsCnt = 4 * m_envBrdfImg.pixHeights[0] * m_envBrdfImg.pixWidths[0];
 
         VkBufferImageCopy envBrdfBufToImgCopy{};
         {

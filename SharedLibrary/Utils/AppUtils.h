@@ -20,6 +20,7 @@ namespace SharedLib
                       void*                    pDst);
 
     void Img4EleTo3Ele(float* pSrc, float* pDst, uint32_t pixCnt);
+    void Img3EleTo4Ele(float* pSrc, float* pDst, uint32_t pixCnt);
 
     void PrintDeviceImageCapbility(VkPhysicalDevice phyDevice);
 
