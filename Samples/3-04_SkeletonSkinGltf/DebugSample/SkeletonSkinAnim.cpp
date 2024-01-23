@@ -906,6 +906,63 @@ void SkinAnimGltfApp::ReadInInitGltf()
         float white[3] = { 1.f, 1.f, 1.f };
         m_skeletalMesh.mesh.baseColorImg.gpuImg = CreateDummyPureColorImg(white);
     }
+
+
+    // Read in the skin data
+    const auto& skin = model.skins[0];
+
+    std::vector<float> invBindMatricesData;
+    int invBindMatricesIdx = skin.inverseBindMatrices;
+    const auto& invBindMatAccessor = model.accessors[invBindMatricesIdx];
+
+    assert(invBindMatAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT, "The inverse bind matrices accessor data type should be float.");
+    assert(invBindMatAccessor.type == TINYGLTF_TYPE_MAT4, "The inverse bind matrices accessor type should be mat4.");
+
+    int invBindMatAccessorByteOffset = invBindMatAccessor.byteOffset;
+    int invBindMatAccessorEleCnt = invBindMatAccessor.count;
+    const auto& invBindMatBufferView = model.bufferViews[invBindMatAccessor.bufferView];
+
+    int invBindMatBufferOffset = invBindMatAccessorByteOffset + invBindMatBufferView.byteOffset;
+    int invBindMatBufferByteCnt = sizeof(float) * 16 * invBindMatAccessorEleCnt;
+    invBindMatricesData.resize(16 * invBindMatAccessorEleCnt);
+
+    memcpy(invBindMatricesData.data(), &pBufferData[invBindMatBufferOffset], invBindMatBufferByteCnt);
+
+
+    // Construct the skeleton in RAM
+    m_skeletalMesh.skeleton.joints.resize(skin.joints.size());
+    for (uint32_t i = 0; i < skin.joints.size(); i++)
+    {
+        const auto& jointI = model.nodes[skin.joints[i]];
+
+        // Set joint translation from the gltf
+        m_skeletalMesh.skeleton.joints[i].localTranslation[0] = jointI.translation[0];
+        m_skeletalMesh.skeleton.joints[i].localTranslation[1] = jointI.translation[1];
+        m_skeletalMesh.skeleton.joints[i].localTranslation[2] = jointI.translation[2];
+
+        // Set joint rotation from the gltf -- quternion
+        m_skeletalMesh.skeleton.joints[i].localRotatoin[0] = jointI.rotation[0];
+        m_skeletalMesh.skeleton.joints[i].localRotatoin[1] = jointI.rotation[1];
+        m_skeletalMesh.skeleton.joints[i].localRotatoin[2] = jointI.rotation[2];
+        m_skeletalMesh.skeleton.joints[i].localRotatoin[3] = jointI.rotation[3];
+
+        // Set joint scaling from the gltf
+        m_skeletalMesh.skeleton.joints[i].localScale[0] = jointI.scale[0];
+        m_skeletalMesh.skeleton.joints[i].localScale[1] = jointI.scale[1];
+        m_skeletalMesh.skeleton.joints[i].localScale[2] = jointI.scale[2];
+
+        // Set joint inverse bind matrix data
+        memcpy(m_skeletalMesh.skeleton.joints[i].inverseBindMatrix.data(),
+               &invBindMatricesData[i * 16],
+               16 * sizeof(float));
+
+        // Set children
+        for (uint32_t childIdx = 0; childIdx < jointI.children.size(); childIdx++)
+        {
+            uint32_t childJointIdx = jointI.children[childIdx] - 1; // Assume that the first node is always the mesh+skeleton.
+            m_skeletalMesh.skeleton.joints[i].children.push_back(&m_skeletalMesh.skeleton.joints[childJointIdx]);
+        }
+    }
 }
 
 // ================================================================================================================
