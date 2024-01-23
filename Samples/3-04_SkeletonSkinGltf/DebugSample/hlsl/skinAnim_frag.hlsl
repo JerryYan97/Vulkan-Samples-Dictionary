@@ -28,7 +28,6 @@ struct SceneInfoPushConstant
 float4 main(
     float4 i_pixelWorldPos     : POSITION0,
     float4 i_pixelWorldNormal  : NORMAL0,
-    float4 i_pixelWorldTangent : TANGENT0,
     float2 i_pixelWorldUv      : TEXCOORD0) : SV_Target
 {
     float3 V = normalize(i_sceneInfo.cameraPos - i_pixelWorldPos.xyz);

@@ -99,8 +99,7 @@ public:
     VkPipeline GetSkinAimPipeline() { return m_skinAnimPipeline.GetVkPipeline(); }
     VkPipelineLayout GetSkinAimPipelineLayout() { return m_skinAnimPipelineLayout; }
     
-    std::vector<float> GetVertPushConsants();
-    std::vector<float> GetFragPushConstants();
+    std::vector<float> GetSkinAnimPushConsant();
 
     // Update joints/skeleton's local transformation and the joints' matrices.
     // It's obstructive because I only want to keep one joints matrix gpu buffer. Thus GPU has to finish works after

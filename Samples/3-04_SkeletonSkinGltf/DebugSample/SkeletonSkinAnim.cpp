@@ -962,16 +962,16 @@ void SkinAnimGltfApp::InitSkinAnimPipelineDescriptorSetLayout()
     // (https://vulkan.lunarg.com/doc/view/1.3.236.0/windows/1.3-extensions/vkspec.html#VUID-VkDescriptorSetLayoutCreateInfo-binding-00279)
 
     // Create pipeline binding and descriptor objects for the camera parameters
-    std::vector<VkDescriptorSetLayoutBinding> iblModelRenderBindings;
+    std::vector<VkDescriptorSetLayoutBinding> skinAnimRenderBindings;
 
-    VkDescriptorSetLayoutBinding vpMatUboBinding{};
+    VkDescriptorSetLayoutBinding jointMatBinding{};
     {
-        vpMatUboBinding.binding = 0;
-        vpMatUboBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-        vpMatUboBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        vpMatUboBinding.descriptorCount = 1;
+        jointMatBinding.binding = 0;
+        jointMatBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        jointMatBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        jointMatBinding.descriptorCount = 1;
     }
-    iblModelRenderBindings.push_back(vpMatUboBinding);
+    skinAnimRenderBindings.push_back(jointMatBinding);
 
     VkDescriptorSetLayoutBinding diffuseIrradianceBinding{};
     {
@@ -980,7 +980,7 @@ void SkinAnimGltfApp::InitSkinAnimPipelineDescriptorSetLayout()
         diffuseIrradianceBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         diffuseIrradianceBinding.descriptorCount = 1;
     }
-    iblModelRenderBindings.push_back(diffuseIrradianceBinding);
+    skinAnimRenderBindings.push_back(diffuseIrradianceBinding);
 
     VkDescriptorSetLayoutBinding prefilterEnvBinding{};
     {
@@ -989,7 +989,7 @@ void SkinAnimGltfApp::InitSkinAnimPipelineDescriptorSetLayout()
         prefilterEnvBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         prefilterEnvBinding.descriptorCount = 1;
     }
-    iblModelRenderBindings.push_back(prefilterEnvBinding);
+    skinAnimRenderBindings.push_back(prefilterEnvBinding);
 
     VkDescriptorSetLayoutBinding envBrdfBinding{};
     {
@@ -998,7 +998,7 @@ void SkinAnimGltfApp::InitSkinAnimPipelineDescriptorSetLayout()
         envBrdfBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         envBrdfBinding.descriptorCount = 1;
     }
-    iblModelRenderBindings.push_back(envBrdfBinding);
+    skinAnimRenderBindings.push_back(envBrdfBinding);
 
     VkDescriptorSetLayoutBinding baseColorBinding{};
     {
@@ -1007,45 +1007,18 @@ void SkinAnimGltfApp::InitSkinAnimPipelineDescriptorSetLayout()
         baseColorBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         baseColorBinding.descriptorCount = 1;
     }
-    iblModelRenderBindings.push_back(baseColorBinding);
+    skinAnimRenderBindings.push_back(baseColorBinding);
 
-    VkDescriptorSetLayoutBinding normalBinding{};
+    VkDescriptorSetLayoutCreateInfo skinAnimRenderPipelineDesSetLayoutInfo{};
     {
-        normalBinding.binding = 5;
-        normalBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        normalBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        normalBinding.descriptorCount = 1;
-    }
-    iblModelRenderBindings.push_back(normalBinding);
-
-    VkDescriptorSetLayoutBinding metallicRoughnessBinding{};
-    {
-        metallicRoughnessBinding.binding = 6;
-        metallicRoughnessBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        metallicRoughnessBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        metallicRoughnessBinding.descriptorCount = 1;
-    }
-    iblModelRenderBindings.push_back(metallicRoughnessBinding);
-
-    VkDescriptorSetLayoutBinding occlusionBinding{};
-    {
-        occlusionBinding.binding = 7;
-        occlusionBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        occlusionBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        occlusionBinding.descriptorCount = 1;
-    }
-    iblModelRenderBindings.push_back(occlusionBinding);
-
-    VkDescriptorSetLayoutCreateInfo iblRenderPipelineDesSetLayoutInfo{};
-    {
-        iblRenderPipelineDesSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        iblRenderPipelineDesSetLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
-        iblRenderPipelineDesSetLayoutInfo.bindingCount = iblModelRenderBindings.size();
-        iblRenderPipelineDesSetLayoutInfo.pBindings = iblModelRenderBindings.data();
+        skinAnimRenderPipelineDesSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        skinAnimRenderPipelineDesSetLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
+        skinAnimRenderPipelineDesSetLayoutInfo.bindingCount = skinAnimRenderBindings.size();
+        skinAnimRenderPipelineDesSetLayoutInfo.pBindings = skinAnimRenderBindings.data();
     }
 
     VK_CHECK(vkCreateDescriptorSetLayout(m_device,
-                                         &iblRenderPipelineDesSetLayoutInfo,
+                                         &skinAnimRenderPipelineDesSetLayoutInfo,
                                          nullptr,
                                          &m_skinAnimPipelineDesSetLayout));
 }
@@ -1053,11 +1026,18 @@ void SkinAnimGltfApp::InitSkinAnimPipelineDescriptorSetLayout()
 // ================================================================================================================
 void SkinAnimGltfApp::InitSkinAnimPipelineLayout()
 {
-    VkPushConstantRange range = {};
+    std::vector<VkPushConstantRange> skinAnimPushConstantRanges(2);
+
     {
-        range.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        range.offset = 0;
-        range.size = 4 * sizeof(float); // Camera pos, Max IBL mipmap.
+        skinAnimPushConstantRanges[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        skinAnimPushConstantRanges[0].offset = 0;
+        skinAnimPushConstantRanges[0].size = 16 * sizeof(float);
+    }
+
+    {
+        skinAnimPushConstantRanges[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        skinAnimPushConstantRanges[1].offset = 0;
+        skinAnimPushConstantRanges[1].size = 4 * sizeof(float); // Camera pos, Max IBL mipmap.
     }
 
     // Create pipeline layout
@@ -1068,8 +1048,8 @@ void SkinAnimGltfApp::InitSkinAnimPipelineLayout()
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pipelineLayoutInfo.setLayoutCount = 1;
         pipelineLayoutInfo.pSetLayouts = &m_skinAnimPipelineDesSetLayout;
-        pipelineLayoutInfo.pushConstantRangeCount = 1;
-        pipelineLayoutInfo.pPushConstantRanges = &range;
+        pipelineLayoutInfo.pushConstantRangeCount = 2;
+        pipelineLayoutInfo.pPushConstantRanges = skinAnimPushConstantRanges.data();
     }
 
     VK_CHECK(vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_skinAnimPipelineLayout));
@@ -1251,7 +1231,8 @@ void SkinAnimGltfApp::DestroyVpMatBuffer()
 
 // ================================================================================================================
 // Elements notes:
-// Position: float3, normal: float3, tangent: float4, texcoord: float2.
+// [pos, normal, uv, weights, jointsIdx].
+// [3 floats, 3 floats, 2 floats, 4 floats, 4 uints] --> 16 * sizeof(float).
 VkPipelineVertexInputStateCreateInfo SkinAnimGltfApp::CreatePipelineVertexInputInfo()
 {
     // Specifying all kinds of pipeline states
@@ -1260,13 +1241,13 @@ VkPipelineVertexInputStateCreateInfo SkinAnimGltfApp::CreatePipelineVertexInputI
     memset(pVertBindingDesc, 0, sizeof(VkVertexInputBindingDescription));
     {
         pVertBindingDesc->binding = 0;
-        pVertBindingDesc->stride = 12 * sizeof(float);
+        pVertBindingDesc->stride = 16 * sizeof(float);
         pVertBindingDesc->inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
     }
     m_heapMemPtrVec.push_back(pVertBindingDesc);
 
-    VkVertexInputAttributeDescription* pVertAttrDescs = new VkVertexInputAttributeDescription[4];
-    memset(pVertAttrDescs, 0, sizeof(VkVertexInputAttributeDescription) * 4);
+    VkVertexInputAttributeDescription* pVertAttrDescs = new VkVertexInputAttributeDescription[5];
+    memset(pVertAttrDescs, 0, sizeof(VkVertexInputAttributeDescription) * 5);
     {
         // Position
         pVertAttrDescs[0].location = 0;
@@ -1278,16 +1259,21 @@ VkPipelineVertexInputStateCreateInfo SkinAnimGltfApp::CreatePipelineVertexInputI
         pVertAttrDescs[1].binding = 0;
         pVertAttrDescs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
         pVertAttrDescs[1].offset = 3 * sizeof(float);
-        // Tangent
+        // Texcoord
         pVertAttrDescs[2].location = 2;
         pVertAttrDescs[2].binding = 0;
-        pVertAttrDescs[2].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        pVertAttrDescs[2].format = VK_FORMAT_R32G32_SFLOAT;
         pVertAttrDescs[2].offset = 6 * sizeof(float);
-        // Texcoord
+        // Weights
         pVertAttrDescs[3].location = 3;
         pVertAttrDescs[3].binding = 0;
-        pVertAttrDescs[3].format = VK_FORMAT_R32G32_SFLOAT;
-        pVertAttrDescs[3].offset = 10 * sizeof(float);
+        pVertAttrDescs[3].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        pVertAttrDescs[3].offset = 8 * sizeof(float);
+        // Joints indices
+        pVertAttrDescs[4].location = 4;
+        pVertAttrDescs[4].binding = 0;
+        pVertAttrDescs[4].format = VK_FORMAT_R32G32B32A32_UINT;
+        pVertAttrDescs[4].offset = 12 * sizeof(uint32_t);
     }
     m_heapArrayMemPtrVec.push_back(pVertAttrDescs);
 
@@ -1297,7 +1283,7 @@ VkPipelineVertexInputStateCreateInfo SkinAnimGltfApp::CreatePipelineVertexInputI
         vertInputInfo.pNext = nullptr;
         vertInputInfo.vertexBindingDescriptionCount = 1;
         vertInputInfo.pVertexBindingDescriptions = pVertBindingDesc;
-        vertInputInfo.vertexAttributeDescriptionCount = 4;
+        vertInputInfo.vertexAttributeDescriptionCount = 5;
         vertInputInfo.pVertexAttributeDescriptions = pVertAttrDescs;
     }
 
@@ -1394,13 +1380,7 @@ void SkinAnimGltfApp::DestroyIblMvpMatsBuffer()
 */
 
 // ================================================================================================================
-std::vector<float> SkinAnimGltfApp::GetVertPushConsants()
-{
-    return std::vector<float>(0, 0.f);
-}
-
-// ================================================================================================================
-std::vector<float> SkinAnimGltfApp::GetFragPushConstants()
+std::vector<float> SkinAnimGltfApp::GetSkinAnimPushConsant()
 {
     return std::vector<float>(0, 0.f);
 }
