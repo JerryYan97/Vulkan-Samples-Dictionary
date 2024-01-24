@@ -14,5 +14,8 @@ Rotations with quaterninos:
 https://juliageometry.github.io/Quaternions.jl/v0.7/examples/rotations/
 http://www.lighthouse3d.com/tutorials/glsl-tutorial/the-normal-matrix/
 
+Buffer, buffer view, accessor:
+https://github.com/KhronosGroup/glTF-Tutorials/blob/master/gltfTutorial/gltfTutorial_005_BuffersBufferViewsAccessors.md
+
 TODO:
 I may need the ImGui to toggle the skeleton draw v.s. the mesh draw.

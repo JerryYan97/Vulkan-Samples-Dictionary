@@ -550,6 +550,7 @@ void SkinAnimGltfApp::AppInit()
 // * A buffer view represents a contiguous segment of data in a buffer, defined by a byte offset into the buffer
 //   specified in the byteOffset property and a total byte length specified by the byteLength property of the buffer
 //   view.
+// * TODO: The accessor data load can be abstracted to a function.
 void SkinAnimGltfApp::ReadInInitGltf()
 {
     tinygltf::Model model;
@@ -572,9 +573,10 @@ void SkinAnimGltfApp::ReadInInitGltf()
         exit(1);
     }
 
-    // NOTE: TinyGltf loader has already loaded the binary buffer data and the images data.
-    const auto& binaryBuffer = model.buffers[0].data;
-    const unsigned char* pBufferData = binaryBuffer.data();
+    // NOTE: (1): TinyGltf loader has already loaded the binary buffer data and the images data.
+    //       (2): The gltf may has multiple buffers. The buffer idx should come from the buffer view.
+    // const auto& binaryBuffer = model.buffers[0].data;
+    // const unsigned char* pBufferData = binaryBuffer.data();
 
     // This example only supports gltf that only has one mesh and one skin.
     assert(model.meshes.size() == 1, "This example only supports one mesh.");
@@ -599,7 +601,9 @@ void SkinAnimGltfApp::ReadInInitGltf()
     int posBufferOffset = posAccessorByteOffset + posBufferView.byteOffset;
     int posBufferByteCnt = sizeof(float) * 3 * posAccessor.count;
     vertPos.resize(3 * posAccessor.count);
-    memcpy(vertPos.data(), &pBufferData[posBufferOffset], posBufferByteCnt);
+
+    const unsigned char* pPosBufferData = model.buffers[posBufferView.buffer].data.data();
+    memcpy(vertPos.data(), &pPosBufferData[posBufferOffset], posBufferByteCnt);
 
 
     // Load indices
@@ -617,7 +621,9 @@ void SkinAnimGltfApp::ReadInInitGltf()
     int idxBufferOffset = idxAccessorByteOffset + idxBufferView.byteOffset;
     int idxBufferByteCnt = sizeof(uint16_t) * idxAccessorEleCnt;
     vertIdx.resize(idxAccessorEleCnt);
-    memcpy(vertIdx.data(), &pBufferData[idxBufferOffset], idxBufferByteCnt);
+
+    const unsigned char* pIdxBufferData = model.buffers[idxBufferView.buffer].data.data();
+    memcpy(vertIdx.data(), &pIdxBufferData[idxBufferOffset], idxBufferByteCnt);
 
 
     // Load normal
@@ -639,7 +645,9 @@ void SkinAnimGltfApp::ReadInInitGltf()
         int normalBufferByteCnt = sizeof(float) * 3 * normalAccessorEleCnt;
         
         vertNormal.resize(3 * normalAccessorEleCnt);
-        memcpy(vertNormal.data(), &pBufferData[normalBufferOffset], normalBufferByteCnt);
+
+        const unsigned char* pNormalBufferData = model.buffers[normalBufferView.buffer].data.data();
+        memcpy(vertNormal.data(), &pNormalBufferData[normalBufferOffset], normalBufferByteCnt);
     }
     else
     {
@@ -689,7 +697,8 @@ void SkinAnimGltfApp::ReadInInitGltf()
         int uvBufferByteCnt = sizeof(float) * 2 * uvAccessor.count;
         vertUv.resize(2 * uvAccessor.count);
 
-        memcpy(vertUv.data(), &pBufferData[uvBufferOffset], uvBufferByteCnt);
+        const unsigned char* pUvBufferData = model.buffers[uvBufferView.buffer].data.data();
+        memcpy(vertUv.data(), &pUvBufferData[uvBufferOffset], uvBufferByteCnt);
     }
     else
     {
@@ -713,7 +722,8 @@ void SkinAnimGltfApp::ReadInInitGltf()
     int weightsBufferByteCnt = sizeof(float) * 4 * weightsAccessorEleCnt;
     vertWeights.resize(4 * weightsAccessorEleCnt);
 
-    memcpy(vertWeights.data(), &pBufferData[weightsBufferOffset], weightsBufferByteCnt);
+    const unsigned char* pWeightBufferData = model.buffers[weightsBufferView.buffer].data.data();
+    memcpy(vertWeights.data(), &pWeightBufferData[weightsBufferOffset], weightsBufferByteCnt);
 
     // Load joints that affect this vert -- The loaded gltf must have this.
     std::vector<uint16_t> vertJoints;
@@ -731,6 +741,8 @@ void SkinAnimGltfApp::ReadInInitGltf()
     int jointsBufferByteCnt = sizeof(uint16_t) * 4 * jointsAccessorEleCnt;
     vertJoints.resize(4 * jointsAccessorEleCnt);
 
+    const unsigned char* pJointsBufferData = model.buffers[jointsBufferView.buffer].data.data();
+    memcpy(vertJoints.data(), &pJointsBufferData[jointsBufferOffset], jointsBufferByteCnt);
 
     // Assemble the vertex buffer data.
     // The count of [pos, normal, uv, weights, jointsIdx] is equal to posAccessor/normalAccessor/uvAccessor/weightsAccessor/jointsAccessor.count.
@@ -926,7 +938,8 @@ void SkinAnimGltfApp::ReadInInitGltf()
     int invBindMatBufferByteCnt = sizeof(float) * 16 * invBindMatAccessorEleCnt;
     invBindMatricesData.resize(16 * invBindMatAccessorEleCnt);
 
-    memcpy(invBindMatricesData.data(), &pBufferData[invBindMatBufferOffset], invBindMatBufferByteCnt);
+    const unsigned char* pInvBindMatBufferData = model.buffers[invBindMatBufferView.buffer].data.data();
+    memcpy(invBindMatricesData.data(), &pInvBindMatBufferData[invBindMatBufferOffset], invBindMatBufferByteCnt);
 
 
     // Construct the skeleton in RAM
@@ -936,20 +949,48 @@ void SkinAnimGltfApp::ReadInInitGltf()
         const auto& jointI = model.nodes[skin.joints[i]];
 
         // Set joint translation from the gltf
-        m_skeletalMesh.skeleton.joints[i].localTranslation[0] = jointI.translation[0];
-        m_skeletalMesh.skeleton.joints[i].localTranslation[1] = jointI.translation[1];
-        m_skeletalMesh.skeleton.joints[i].localTranslation[2] = jointI.translation[2];
+        if (jointI.translation.size() != 0)
+        {
+            m_skeletalMesh.skeleton.joints[i].localTranslation[0] = jointI.translation[0];
+            m_skeletalMesh.skeleton.joints[i].localTranslation[1] = jointI.translation[1];
+            m_skeletalMesh.skeleton.joints[i].localTranslation[2] = jointI.translation[2];
+        }
+        else
+        {
+            m_skeletalMesh.skeleton.joints[i].localTranslation[0] = 0.f;
+            m_skeletalMesh.skeleton.joints[i].localTranslation[1] = 0.f;
+            m_skeletalMesh.skeleton.joints[i].localTranslation[2] = 0.f;
+        }
 
         // Set joint rotation from the gltf -- quternion
-        m_skeletalMesh.skeleton.joints[i].localRotatoin[0] = jointI.rotation[0];
-        m_skeletalMesh.skeleton.joints[i].localRotatoin[1] = jointI.rotation[1];
-        m_skeletalMesh.skeleton.joints[i].localRotatoin[2] = jointI.rotation[2];
-        m_skeletalMesh.skeleton.joints[i].localRotatoin[3] = jointI.rotation[3];
+        if (jointI.rotation.size() != 0)
+        {
+            m_skeletalMesh.skeleton.joints[i].localRotatoin[0] = jointI.rotation[0];
+            m_skeletalMesh.skeleton.joints[i].localRotatoin[1] = jointI.rotation[1];
+            m_skeletalMesh.skeleton.joints[i].localRotatoin[2] = jointI.rotation[2];
+            m_skeletalMesh.skeleton.joints[i].localRotatoin[3] = jointI.rotation[3];
+        }
+        else
+        {
+            m_skeletalMesh.skeleton.joints[i].localRotatoin[0] = 0.f;
+            m_skeletalMesh.skeleton.joints[i].localRotatoin[1] = 0.f;
+            m_skeletalMesh.skeleton.joints[i].localRotatoin[2] = 0.f;
+            m_skeletalMesh.skeleton.joints[i].localRotatoin[3] = 1.f;
+        }
 
         // Set joint scaling from the gltf
-        m_skeletalMesh.skeleton.joints[i].localScale[0] = jointI.scale[0];
-        m_skeletalMesh.skeleton.joints[i].localScale[1] = jointI.scale[1];
-        m_skeletalMesh.skeleton.joints[i].localScale[2] = jointI.scale[2];
+        if (jointI.scale.size() != 0)
+        {
+            m_skeletalMesh.skeleton.joints[i].localScale[0] = jointI.scale[0];
+            m_skeletalMesh.skeleton.joints[i].localScale[1] = jointI.scale[1];
+            m_skeletalMesh.skeleton.joints[i].localScale[2] = jointI.scale[2];
+        }
+        else
+        {
+            m_skeletalMesh.skeleton.joints[i].localScale[0] = 1.f;
+            m_skeletalMesh.skeleton.joints[i].localScale[1] = 1.f;
+            m_skeletalMesh.skeleton.joints[i].localScale[2] = 1.f;
+        }
 
         // Set joint inverse bind matrix data
         memcpy(m_skeletalMesh.skeleton.joints[i].inverseBindMatrix.data(),
@@ -963,6 +1004,92 @@ void SkinAnimGltfApp::ReadInInitGltf()
             m_skeletalMesh.skeleton.joints[i].children.push_back(&m_skeletalMesh.skeleton.joints[childJointIdx]);
         }
     }
+
+
+    // Read in animation
+    const auto& animation = model.animations[0];
+    for (const auto& channel : animation.channels)
+    {
+        const auto& sampler = animation.samplers[channel.sampler];
+        const auto& target = channel.target_path;
+
+        // We always assume that the first node is a skeletonal mesh node and the subsequent nodes are joints nodes.
+        uint32_t jointId = channel.target_node - 1; 
+
+        const auto& timeAccessor = model.accessors[sampler.input];
+        
+        assert(timeAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT, "The time accessor component type should be float.");
+        assert(timeAccessor.type == TINYGLTF_TYPE_SCALAR, "The time accessor type should be SCALAR.");
+
+        int timeAccessorByteOffset = timeAccessor.byteOffset;
+        int timeAccessorEleCnt = timeAccessor.count;
+        const auto& timeBufferView = model.bufferViews[timeAccessor.bufferView];
+
+        int timeBufferOffset = timeAccessorByteOffset + timeBufferView.byteOffset;
+        int timeBufferByteCnt = sizeof(float) * timeAccessorEleCnt;
+
+        const unsigned char* pTimeBufferData = model.buffers[timeBufferView.buffer].data.data();
+
+        if (target.compare("translation") == 0)
+        {
+            m_skeletalMesh.skeleton.joints[jointId].translationAnimation.keyframeTimes.resize(timeAccessorEleCnt);
+
+            memcpy(m_skeletalMesh.skeleton.joints[jointId].translationAnimation.keyframeTimes.data(),
+                   &pTimeBufferData[timeBufferOffset],
+                   timeBufferByteCnt);
+
+            const auto& translationAccessor = model.accessors[sampler.output];
+
+            assert(translationAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT, "The translation accessor component type should be float.");
+            assert(translationAccessor.type == TINYGLTF_TYPE_VEC3, "The translation accessor type should be VEC3.");
+
+            int translationAccessorByteOffset = translationAccessor.byteOffset;
+            int translationAccessorEleCnt = translationAccessor.count;
+            const auto& translationBufferView = model.bufferViews[translationAccessor.bufferView];
+
+            int translationBufferOffset = translationAccessorByteOffset + translationBufferView.byteOffset;
+            int translationBufferByteCnt = sizeof(float) * translationAccessorEleCnt * 3;
+
+            m_skeletalMesh.skeleton.joints[jointId].translationAnimation.keyframeTransformationsData.resize(translationAccessorEleCnt * 3);
+
+            const unsigned char* pTranslationBufferData = model.buffers[translationBufferView.buffer].data.data();
+            memcpy(m_skeletalMesh.skeleton.joints[jointId].translationAnimation.keyframeTransformationsData.data(),
+                   &pTranslationBufferData[translationBufferOffset], translationBufferByteCnt);
+        }
+        else if (target.compare("rotation") == 0)
+        {
+            m_skeletalMesh.skeleton.joints[jointId].rotationAnimation.keyframeTimes.resize(timeAccessorEleCnt);
+
+            memcpy(m_skeletalMesh.skeleton.joints[jointId].rotationAnimation.keyframeTimes.data(),
+                   &pTimeBufferData[timeBufferOffset],
+                   timeBufferByteCnt);
+
+            const auto& rotationAccessor = model.accessors[sampler.output];
+
+            assert(rotationAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT, "The rotation accessor component type should be float.");
+            assert(rotationAccessor.type == TINYGLTF_TYPE_VEC4, "The rotation accessor type should be VEC4.");
+
+            int rotationAccessorByteOffset = rotationAccessor.byteOffset;
+            int rotationAccessorEleCnt = rotationAccessor.count;
+            const auto& rotationBufferView = model.bufferViews[rotationAccessor.bufferView];
+
+            int rotationBufferOffset = rotationAccessorByteOffset + rotationBufferView.byteOffset;
+            int rotationBufferByteCnt = sizeof(float) * rotationAccessorEleCnt * 4;
+
+            m_skeletalMesh.skeleton.joints[jointId].rotationAnimation.keyframeTransformationsData.resize(rotationAccessorEleCnt * 4);
+
+            const unsigned char* pRotationBufferData = model.buffers[rotationBufferView.buffer].data.data();
+            memcpy(m_skeletalMesh.skeleton.joints[jointId].rotationAnimation.keyframeTransformationsData.data(),
+                   &pRotationBufferData[rotationBufferOffset],
+                   rotationBufferByteCnt);
+        }
+        else
+        {
+            std::cerr << "The animation example only supports translation/rotation animation" << std::endl;
+            exit(1);
+        }
+    }
+    
 }
 
 // ================================================================================================================

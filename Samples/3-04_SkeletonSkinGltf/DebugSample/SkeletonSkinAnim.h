@@ -38,7 +38,8 @@ struct Mesh
 
 struct Animation
 {
-
+    std::vector<float> keyframeTimes;
+    std::vector<float> keyframeTransformationsData; // Translation: 3 ele vector. Rotation: 4 ele vector.
 };
 
 struct Joint
@@ -46,6 +47,10 @@ struct Joint
     float localTranslation[3];
     float localRotatoin[4];
     float localScale[3];
+
+    Animation translationAnimation;
+    Animation rotationAnimation;
+    // Animation scaling; -- We don't support scaling animation currently since it's not so useful. 
 
     std::array<float, 16> inverseBindMatrix; // Transform a vert in the model space to this joint's local space.
     std::vector<Joint*> children;
@@ -66,7 +71,6 @@ struct SkeletalMesh
 {
     Mesh mesh;
     Skeleton skeleton;
-    Animation animSeqence;
 
     // Global transformation
     float translation[3];
