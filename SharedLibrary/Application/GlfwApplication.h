@@ -36,6 +36,8 @@ namespace SharedLib
         VkImageView GetSwapchainDepthImageView() { return m_swapchainDepthImageViews[m_acqSwapchainImgIdx]; }
         VkExtent2D GetSwapchainImageExtent() { return m_swapchainImageExtent; }
 
+        int GetSwapchainImgCnt() { return m_swapchainImgCnt; }
+
         void CmdSwapchainColorImgLayoutTrans(VkCommandBuffer      cmdBuffer,
                                              VkImageLayout        oldLayout,
                                              VkImageLayout        newLayout,

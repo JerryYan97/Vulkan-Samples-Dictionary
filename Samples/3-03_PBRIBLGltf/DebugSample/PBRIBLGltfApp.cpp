@@ -129,7 +129,7 @@ void PBRIBLGltfApp::DestroyHdrRenderObjs()
 // ================================================================================================================
 void PBRIBLGltfApp::DestroyCameraUboObjects()
 {
-    for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
+    for (uint32_t i = 0; i < m_swapchainImgCnt; i++)
     {
         vmaDestroyBuffer(*m_pAllocator, m_cameraParaBuffers[i], m_cameraParaBufferAllocs[i]);
     }
@@ -220,7 +220,7 @@ void PBRIBLGltfApp::UpdateCameraAndGpuBuffer()
 
     m_lastTime = thisTime;
 
-    SendCameraDataToBuffer(m_currentFrame);
+    SendCameraDataToBuffer(m_acqSwapchainImgIdx);
 }
 
 // ================================================================================================================
@@ -578,11 +578,11 @@ void PBRIBLGltfApp::InitCameraUboObjects()
             VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
     }
 
-    m_cameraParaBuffers.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
-    m_cameraParaBufferAllocs.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
-    m_cameraParaBuffersDescriptorsInfos.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
+    m_cameraParaBuffers.resize(m_swapchainImgCnt);
+    m_cameraParaBufferAllocs.resize(m_swapchainImgCnt);
+    m_cameraParaBuffersDescriptorsInfos.resize(m_swapchainImgCnt);
 
-    for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
+    for (uint32_t i = 0; i < m_swapchainImgCnt; i++)
     {
         vmaCreateBuffer(*m_pAllocator,
                         &bufferInfo,
@@ -727,10 +727,11 @@ void PBRIBLGltfApp::AppInit()
     InitPresentQueue();
     InitKHRFuncPtrs();
 
-    InitGfxCommandPool();
-    InitGfxCommandBuffers(SharedLib::MAX_FRAMES_IN_FLIGHT);
-
     InitSwapchain();
+
+    InitGfxCommandPool();
+    InitGfxCommandBuffers(m_swapchainImgCnt);
+
     InitModelInfo();
     InitVpMatBuffer();
     InitIblMvpMatsBuffer();
@@ -1561,7 +1562,7 @@ void PBRIBLGltfApp::CmdPushCubemapDescriptors(
         writeCameraBufDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         writeCameraBufDesSet.dstBinding = 1;
         writeCameraBufDesSet.descriptorCount = 1;
-        writeCameraBufDesSet.pBufferInfo = &m_cameraParaBuffersDescriptorsInfos[m_currentFrame];
+        writeCameraBufDesSet.pBufferInfo = &m_cameraParaBuffersDescriptorsInfos[m_acqSwapchainImgIdx];
     }
     skyboxDescriptorsInfos.push_back(writeCameraBufDesSet);
 
@@ -1590,7 +1591,7 @@ void PBRIBLGltfApp::CmdPushIblModelRenderingDescriptors(
         writeIblMvpMatUboBufDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         writeIblMvpMatUboBufDesSet.dstBinding = 0;
         writeIblMvpMatUboBufDesSet.descriptorCount = 1;
-        writeIblMvpMatUboBufDesSet.pBufferInfo = &m_iblMvpMatsUboDescriptorBuffersInfos[m_currentFrame];
+        writeIblMvpMatUboBufDesSet.pBufferInfo = &m_iblMvpMatsUboDescriptorBuffersInfos[m_acqSwapchainImgIdx];
     }
     iblRenderDescriptorSet0Infos.push_back(writeIblMvpMatUboBufDesSet);
 
@@ -1703,8 +1704,8 @@ void PBRIBLGltfApp::InitVpMatBuffer()
                                 VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
     }
 
-    m_vpMatUboBuffer.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
-    m_vpMatUboAlloc.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
+    m_vpMatUboBuffer.resize(m_swapchainImgCnt);
+    m_vpMatUboAlloc.resize(m_swapchainImgCnt);
 
     float vpMatData[16] = {};
     float tmpViewMatData[16] = {};
@@ -1712,7 +1713,7 @@ void PBRIBLGltfApp::InitVpMatBuffer()
     m_pCamera->GenViewPerspectiveMatrices(tmpViewMatData, tmpPersMatData, vpMatData);
     SharedLib::MatTranspose(vpMatData, 4);
 
-    for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
+    for (uint32_t i = 0; i < m_swapchainImgCnt; i++)
     {
         vmaCreateBuffer(*m_pAllocator,
                         &bufferInfo,
@@ -1731,7 +1732,7 @@ void PBRIBLGltfApp::InitVpMatBuffer()
 // ================================================================================================================
 void PBRIBLGltfApp::DestroyVpMatBuffer()
 {
-    for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
+    for (uint32_t i = 0; i < m_swapchainImgCnt; i++)
     {
         vmaDestroyBuffer(*m_pAllocator, m_vpMatUboBuffer[i], m_vpMatUboAlloc[i]);
     }
@@ -1827,9 +1828,9 @@ void PBRIBLGltfApp::InitIblMvpMatsBuffer()
                                 VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
     }
 
-    m_iblMvpMatsUboBuffer.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
-    m_iblMvpMatsUboAlloc.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
-    m_iblMvpMatsUboDescriptorBuffersInfos.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
+    m_iblMvpMatsUboBuffer.resize(m_swapchainImgCnt);
+    m_iblMvpMatsUboAlloc.resize(m_swapchainImgCnt);
+    m_iblMvpMatsUboDescriptorBuffersInfos.resize(m_swapchainImgCnt);
 
     // NOTE: Perspective Mat x View Mat x Model Mat x position.
     float modelMatData[16] = {
@@ -1848,7 +1849,7 @@ void PBRIBLGltfApp::InitIblMvpMatsBuffer()
     memcpy(iblUboData, modelMatData, sizeof(modelMatData));
     memcpy(&iblUboData[16], vpMatData, sizeof(vpMatData));
 
-    for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
+    for (uint32_t i = 0; i < m_swapchainImgCnt; i++)
     {
         vmaCreateBuffer(*m_pAllocator,
                         &bufferInfo,

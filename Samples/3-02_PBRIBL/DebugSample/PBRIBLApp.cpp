@@ -116,7 +116,7 @@ void PBRIBLApp::DestroyHdrRenderObjs()
 // ================================================================================================================
 void PBRIBLApp::DestroyCameraUboObjects()
 {
-    for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
+    for (uint32_t i = 0; i < m_swapchainImgCnt; i++)
     {
         vmaDestroyBuffer(*m_pAllocator, m_cameraParaBuffers[i], m_cameraParaBufferAllocs[i]);
     }
@@ -165,7 +165,7 @@ void PBRIBLApp::UpdateCameraAndGpuBuffer()
 {
     SharedLib::HEvent midMouseDownEvent = CreateMiddleMouseEvent(g_isDown);
     m_pCamera->OnEvent(midMouseDownEvent);
-    SendCameraDataToBuffer(m_currentFrame);
+    SendCameraDataToBuffer(m_acqSwapchainImgIdx);
 }
 
 // ================================================================================================================
@@ -507,10 +507,10 @@ void PBRIBLApp::InitCameraUboObjects()
             VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
     }
 
-    m_cameraParaBuffers.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
-    m_cameraParaBufferAllocs.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
+    m_cameraParaBuffers.resize(m_swapchainImgCnt);
+    m_cameraParaBufferAllocs.resize(m_swapchainImgCnt);
 
-    for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
+    for (uint32_t i = 0; i < m_swapchainImgCnt; i++)
     {
         vmaCreateBuffer(*m_pAllocator,
                         &bufferInfo,
@@ -723,7 +723,7 @@ void PBRIBLApp::AppInit()
     InitDescriptorPool();
 
     InitGfxCommandPool();
-    InitGfxCommandBuffers(SharedLib::MAX_FRAMES_IN_FLIGHT);
+    InitGfxCommandBuffers(m_swapchainImgCnt);
 
     InitSwapchain();
     InitSphereVertexIndexBuffers();

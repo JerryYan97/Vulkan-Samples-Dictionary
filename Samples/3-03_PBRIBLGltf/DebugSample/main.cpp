@@ -349,140 +349,8 @@ int main()
                                         *pAllocator);
         }
 
-        // Transform all images layout to shader read optimal.
-        VkCommandBufferBeginInfo beginInfo{};
-        {
-            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        }
-        VK_CHECK(vkBeginCommandBuffer(stagingCmdBuffer, &beginInfo));
-
-        // Transform the layout of the image to shader access resource
-        // VkImageMemoryBarrier imgResMemBarriers[4] = {};
-        std::vector<VkImageMemoryBarrier> imgResMemBarriers;
-        uint32_t modelTexCnt = app.GetModelTexCnt();
-        imgResMemBarriers.resize(4 + modelTexCnt);
-        {
-            // Background cubemap
-            imgResMemBarriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            imgResMemBarriers[0].image = app.GetCubeMapImage();
-            imgResMemBarriers[0].subresourceRange = cubemap1MipSubResRange;
-            imgResMemBarriers[0].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            imgResMemBarriers[0].dstAccessMask = VK_ACCESS_NONE;
-            imgResMemBarriers[0].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-            imgResMemBarriers[0].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-            // Diffuse irradiance
-            imgResMemBarriers[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            imgResMemBarriers[1].image = diffIrrCubemap;
-            imgResMemBarriers[1].subresourceRange = cubemap1MipSubResRange;
-            imgResMemBarriers[1].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            imgResMemBarriers[1].dstAccessMask = VK_ACCESS_NONE;
-            imgResMemBarriers[1].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-            imgResMemBarriers[1].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-            // Prefilter environment map
-            imgResMemBarriers[2].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            imgResMemBarriers[2].image = prefilterEnvCubemap;
-            {
-                imgResMemBarriers[2].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                imgResMemBarriers[2].subresourceRange.baseArrayLayer = 0;
-                imgResMemBarriers[2].subresourceRange.layerCount = 6;
-                imgResMemBarriers[2].subresourceRange.baseMipLevel = 0;
-                imgResMemBarriers[2].subresourceRange.levelCount = mipLevelCnt;
-            }
-            imgResMemBarriers[2].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            imgResMemBarriers[2].dstAccessMask = VK_ACCESS_NONE;
-            imgResMemBarriers[2].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-            imgResMemBarriers[2].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-            // Environment brdf
-            imgResMemBarriers[3].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            imgResMemBarriers[3].image = envBrdfImg;
-            imgResMemBarriers[3].subresourceRange = tex2dSubResRange;
-            imgResMemBarriers[3].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            imgResMemBarriers[3].dstAccessMask = VK_ACCESS_NONE;
-            imgResMemBarriers[3].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-            imgResMemBarriers[3].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-            // Others models' textures
-            uint32_t modelTexTransReadyCnt = 0;
-            for (const auto& mesh : gltfMeshes)
-            {
-                // Base color
-                if (mesh.baseColorImg != VK_NULL_HANDLE)
-                {
-                    imgResMemBarriers[modelTexTransReadyCnt + 4].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-                    imgResMemBarriers[modelTexTransReadyCnt + 4].image = mesh.baseColorImg;
-                    imgResMemBarriers[modelTexTransReadyCnt + 4].subresourceRange = tex2dSubResRange;
-                    imgResMemBarriers[modelTexTransReadyCnt + 4].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-                    imgResMemBarriers[modelTexTransReadyCnt + 4].dstAccessMask = VK_ACCESS_NONE;
-                    imgResMemBarriers[modelTexTransReadyCnt + 4].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-                    imgResMemBarriers[modelTexTransReadyCnt + 4].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-                    modelTexTransReadyCnt++;
-                }
-
-                // Normal
-                if (mesh.normalImg != VK_NULL_HANDLE)
-                {
-                    imgResMemBarriers[modelTexTransReadyCnt + 4].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-                    imgResMemBarriers[modelTexTransReadyCnt + 4].image = mesh.normalImg;
-                    imgResMemBarriers[modelTexTransReadyCnt + 4].subresourceRange = tex2dSubResRange;
-                    imgResMemBarriers[modelTexTransReadyCnt + 4].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-                    imgResMemBarriers[modelTexTransReadyCnt + 4].dstAccessMask = VK_ACCESS_NONE;
-                    imgResMemBarriers[modelTexTransReadyCnt + 4].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-                    imgResMemBarriers[modelTexTransReadyCnt + 4].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-                    modelTexTransReadyCnt++;
-                }
-
-                // Metallic roughness
-                if (mesh.metallicRoughnessImg != VK_NULL_HANDLE)
-                {
-                    imgResMemBarriers[modelTexTransReadyCnt + 4].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-                    imgResMemBarriers[modelTexTransReadyCnt + 4].image = mesh.metallicRoughnessImg;
-                    imgResMemBarriers[modelTexTransReadyCnt + 4].subresourceRange = tex2dSubResRange;
-                    imgResMemBarriers[modelTexTransReadyCnt + 4].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-                    imgResMemBarriers[modelTexTransReadyCnt + 4].dstAccessMask = VK_ACCESS_NONE;
-                    imgResMemBarriers[modelTexTransReadyCnt + 4].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-                    imgResMemBarriers[modelTexTransReadyCnt + 4].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-                    modelTexTransReadyCnt++;
-                }
-
-                // Occlusion
-                if (mesh.occlusionImg != VK_NULL_HANDLE)
-                {
-                    imgResMemBarriers[modelTexTransReadyCnt + 4].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-                    imgResMemBarriers[modelTexTransReadyCnt + 4].image = mesh.occlusionImg;
-                    imgResMemBarriers[modelTexTransReadyCnt + 4].subresourceRange = tex2dSubResRange;
-                    imgResMemBarriers[modelTexTransReadyCnt + 4].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-                    imgResMemBarriers[modelTexTransReadyCnt + 4].dstAccessMask = VK_ACCESS_NONE;
-                    imgResMemBarriers[modelTexTransReadyCnt + 4].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-                    imgResMemBarriers[modelTexTransReadyCnt + 4].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-                    modelTexTransReadyCnt++;
-                }
-            }
-        }
-
-        vkCmdPipelineBarrier(
-            stagingCmdBuffer,
-            VK_PIPELINE_STAGE_TRANSFER_BIT,
-            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-            0,
-            0, nullptr,
-            0, nullptr,
-            imgResMemBarriers.size(),
-            imgResMemBarriers.data());
-
-        // End the command buffer and submit the packets
-        vkEndCommandBuffer(stagingCmdBuffer);
-
-        SharedLib::SubmitCmdBufferAndWait(device, gfxQueue, stagingCmdBuffer);
-
         // Copy camera data to ubo buffer
-        for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
+        for (uint32_t i = 0; i < app.GetSwapchainImgCnt(); i++)
         {
             app.SendCameraDataToBuffer(i);
         }
@@ -494,25 +362,17 @@ int main()
     while (!app.WindowShouldClose())
     {
         VkDevice device = app.GetVkDevice();
-        VkFence inFlightFence = app.GetCurrentFrameFence();
-        VkCommandBuffer currentCmdBuffer = app.GetCurrentFrameGfxCmdBuffer();
-        VkExtent2D swapchainImageExtent = app.GetSwapchainImageExtent();
-
+        
         app.FrameStart();
 
-        // Wait for the resources from the possible on flight frame
-        vkWaitForFences(device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
-
         // Get next available image from the swapchain
-        uint32_t imageIndex;
-        if (app.NextImgIdxOrNewSwapchain(imageIndex) == false)
+        if (app.WaitNextImgIdxOrNewSwapchain() == false)
         {
             continue;
         }
 
-        // Reset unused previous frame's resource
-        vkResetFences(device, 1, &inFlightFence);
-        vkResetCommandBuffer(currentCmdBuffer, 0);
+        VkCommandBuffer currentCmdBuffer = app.GetCurrentFrameGfxCmdBuffer();
+        VkExtent2D swapchainImageExtent = app.GetSwapchainImageExtent();
 
         // Fill the command buffer
         VkCommandBufferBeginInfo beginInfo{};
@@ -531,7 +391,7 @@ int main()
             swapchainRenderTargetTransBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
             swapchainRenderTargetTransBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
             swapchainRenderTargetTransBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            swapchainRenderTargetTransBarrier.image = app.GetSwapchainColorImage(imageIndex);
+            swapchainRenderTargetTransBarrier.image = app.GetSwapchainColorImage();
             swapchainRenderTargetTransBarrier.subresourceRange = swapchainPresentSubResRange;
         }
 
@@ -542,7 +402,7 @@ int main()
             swapchainDepthTargetTransBarrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
             swapchainDepthTargetTransBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
             swapchainDepthTargetTransBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-            swapchainDepthTargetTransBarrier.image = app.GetSwapchainDepthImage(imageIndex);
+            swapchainDepthTargetTransBarrier.image = app.GetSwapchainDepthImage();
             swapchainDepthTargetTransBarrier.subresourceRange = swapchainDepthSubResRange;
         }
 
@@ -565,7 +425,7 @@ int main()
         VkRenderingAttachmentInfoKHR renderBackgroundAttachmentInfo{};
         {
             renderBackgroundAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-            renderBackgroundAttachmentInfo.imageView = app.GetSwapchainColorImageView(imageIndex);
+            renderBackgroundAttachmentInfo.imageView = app.GetSwapchainColorImageView();
             renderBackgroundAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
             renderBackgroundAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             renderBackgroundAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -575,7 +435,7 @@ int main()
         VkRenderingAttachmentInfoKHR renderSpheresAttachmentInfo{};
         {
             renderSpheresAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-            renderSpheresAttachmentInfo.imageView = app.GetSwapchainColorImageView(imageIndex);
+            renderSpheresAttachmentInfo.imageView = app.GetSwapchainColorImageView();
             renderSpheresAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
             renderSpheresAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
             renderSpheresAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -587,7 +447,7 @@ int main()
         VkRenderingAttachmentInfoKHR depthModelAttachmentInfo{};
         {
             depthModelAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-            depthModelAttachmentInfo.imageView = app.GetSwapchainDepthImageView(imageIndex);
+            depthModelAttachmentInfo.imageView = app.GetSwapchainDepthImageView();
             depthModelAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
             depthModelAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
             depthModelAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -644,7 +504,7 @@ int main()
         }
 
         vkCmdClearDepthStencilImage(currentCmdBuffer,
-                                    app.GetSwapchainDepthImage(imageIndex),
+                                    app.GetSwapchainDepthImage(),
                                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                     &clearDepthStencilVal, 1, &swapchainDepthSubResRange);
 
@@ -656,7 +516,7 @@ int main()
                                                                   VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
             swapchainTransDstToDepthTargetBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
             swapchainTransDstToDepthTargetBarrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-            swapchainTransDstToDepthTargetBarrier.image = app.GetSwapchainDepthImage(imageIndex);
+            swapchainTransDstToDepthTargetBarrier.image = app.GetSwapchainDepthImage();
             swapchainTransDstToDepthTargetBarrier.subresourceRange = swapchainDepthSubResRange;
         }
 
@@ -734,7 +594,7 @@ int main()
             swapchainPresentTransBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
             swapchainPresentTransBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
             swapchainPresentTransBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-            swapchainPresentTransBarrier.image = app.GetSwapchainColorImage(imageIndex);
+            swapchainPresentTransBarrier.image = app.GetSwapchainColorImage();
             swapchainPresentTransBarrier.subresourceRange = swapchainPresentSubResRange;
         }
 
