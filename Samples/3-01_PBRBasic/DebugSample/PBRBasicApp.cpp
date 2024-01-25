@@ -500,11 +500,11 @@ void PBRBasicApp::AppInit()
     InitGraphicsQueue();
     InitPresentQueue();
 
-    InitGfxCommandPool();
-    InitGfxCommandBuffers(SharedLib::MAX_FRAMES_IN_FLIGHT);
-
     InitSwapchain();
-    
+
+    InitGfxCommandPool();
+    InitGfxCommandBuffers(m_swapchainImgCnt);
+
     // Create the graphics pipeline
     ReadInSphereData();
     InitSphereVertexIndexBuffers();

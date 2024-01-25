@@ -107,6 +107,10 @@ namespace SharedLib
 
         void SubmitCmdBufToGfxQueue(VkCommandBuffer cmdBuf, VkFence signalFence);
 
+        VkFence CreateFence();
+        void WaitAndDestroyTheFence(VkFence fence);
+        void WaitTheFence(VkFence fence);
+
         GpuImg CreateGpuImage(GpuImgCreateInfo createInfo);
         GpuImg CreateDummyPureColorImg(float* pColor);
         void TransImageLayout(GpuImg* pTargetImg,

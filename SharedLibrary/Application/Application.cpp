@@ -646,6 +646,37 @@ namespace SharedLib
     }
 
     // ================================================================================================================
+    VkFence Application::CreateFence()
+    {
+        VkFence fence;
+
+        VkFenceCreateInfo fenceInfo{};
+        {
+            fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+            fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+        }
+        VK_CHECK(vkCreateFence(m_device, &fenceInfo, nullptr, &fence));
+        VK_CHECK(vkResetFences(m_device, 1, &fence));
+
+        return fence;
+    }
+
+    // ================================================================================================================
+    void Application::WaitAndDestroyTheFence(
+        VkFence fence)
+    {
+        VK_CHECK(vkWaitForFences(m_device, 1, &fence, VK_TRUE, UINT64_MAX));
+        vkDestroyFence(m_device, fence, nullptr);
+    }
+
+    // ================================================================================================================
+    void Application::WaitTheFence(
+        VkFence fence)
+    {
+        VK_CHECK(vkWaitForFences(m_device, 1, &fence, VK_TRUE, UINT64_MAX));
+    }
+
+    // ================================================================================================================
     RAIICommandBuffer::RAIICommandBuffer(
         VkCommandPool cmdPool,
         VkDevice      device) :

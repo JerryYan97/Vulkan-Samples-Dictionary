@@ -9,8 +9,6 @@ namespace SharedLib
 
     class HEvent;
 
-    constexpr int MAX_FRAMES_IN_FLIGHT = 2;
-
     // Vulkan application with a swapchain and glfwWindow.
     // - Hide swapchain operations.
     // - Hide GLFW.
@@ -23,19 +21,19 @@ namespace SharedLib
         virtual void AppInit() override { /* Unimplemented */ };
 
         bool WindowShouldClose();
-        bool NextImgIdxOrNewSwapchain(uint32_t& idx); // True: Get the idx; False: Recreate Swapchain.
+        bool WaitNextImgIdxOrNewSwapchain(); // True: Get the idx; False: Recreate Swapchain.
         virtual void FrameStart();
         virtual void FrameEnd();
 
         void GfxCmdBufferFrameSubmitAndPresent();
 
-        VkFence GetCurrentFrameFence() { return m_inFlightFences[m_currentFrame]; }
-        VkCommandBuffer GetCurrentFrameGfxCmdBuffer() { return m_gfxCmdBufs[m_currentFrame]; }
-        uint32_t GetCurrentFrame() { return m_currentFrame; }
-        VkImage GetSwapchainColorImage(uint32_t i) { return m_swapchainColorImages[i]; }
-        VkImageView GetSwapchainColorImageView(uint32_t i) { return m_swapchainColorImageViews[i]; }
-        VkImage GetSwapchainDepthImage(uint32_t i) { return m_swapchainDepthImages[i]; }
-        VkImageView GetSwapchainDepthImageView(uint32_t i) { return m_swapchainDepthImageViews[i]; }
+        VkFence GetCurrentFrameFence() { return m_inFlightFences[m_acqSwapchainImgIdx]; }
+        VkCommandBuffer GetCurrentFrameGfxCmdBuffer() { return m_gfxCmdBufs[m_acqSwapchainImgIdx]; }
+        uint32_t GetCurrentFrame() { return m_acqSwapchainImgIdx; }
+        VkImage GetSwapchainColorImage() { return m_swapchainColorImages[m_acqSwapchainImgIdx]; }
+        VkImageView GetSwapchainColorImageView() { return m_swapchainColorImageViews[m_acqSwapchainImgIdx]; }
+        VkImage GetSwapchainDepthImage() { return m_swapchainDepthImages[m_acqSwapchainImgIdx]; }
+        VkImageView GetSwapchainDepthImageView() { return m_swapchainDepthImageViews[m_acqSwapchainImgIdx]; }
         VkExtent2D GetSwapchainImageExtent() { return m_swapchainImageExtent; }
 
         void CmdSwapchainColorImgLayoutTrans(VkCommandBuffer      cmdBuffer,
@@ -77,8 +75,9 @@ namespace SharedLib
         HEvent CreateKeyboardEvent(bool isDown, std::string eventName);
 
         // The class manages both of the creation and destruction of the objects below.
-        uint32_t                 m_currentFrame;
-        uint32_t                 m_swapchainNextImgId;
+        // uint32_t                 m_currentFrame; -- We will wait until all rsrc ready when we grab the next image.
+        // uint32_t                 m_swapchainNextImgId;
+        uint32_t                 m_acqSwapchainImgIdx; // Obstructive to make sure all rsrc at this slot is available.
         VkSurfaceKHR             m_surface;
         VkSwapchainKHR           m_swapchain;
         GLFWwindow*              m_pWindow;
@@ -94,7 +93,7 @@ namespace SharedLib
         std::vector<VkImage>       m_swapchainDepthImages;
         std::vector<VmaAllocation> m_swapchainDepthImagesAllocs;
 
-        std::vector<VkSemaphore> m_imageAvailableSemaphores;
+        // std::vector<VkSemaphore> m_imageAvailableSemaphores;
         std::vector<VkSemaphore> m_renderFinishedSemaphores;
         std::vector<VkFence>     m_inFlightFences;
 

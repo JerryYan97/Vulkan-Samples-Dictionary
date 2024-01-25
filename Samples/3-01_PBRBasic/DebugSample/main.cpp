@@ -24,27 +24,19 @@ int main()
     // Main Loop
     while (!app.WindowShouldClose())
     {
-        VkDevice device = app.GetVkDevice();
-        VkFence inFlightFence = app.GetCurrentFrameFence();
-        VkCommandBuffer currentCmdBuffer = app.GetCurrentFrameGfxCmdBuffer();
-
-        VkExtent2D swapchainImageExtent = app.GetSwapchainImageExtent();
-
         app.FrameStart();
 
-        // Wait for the resources from the possible on flight frame
-        vkWaitForFences(device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
-
-        // Get next available image from the swapchain
-        uint32_t imageIndex;
-        if (app.NextImgIdxOrNewSwapchain(imageIndex) == false)
+        // Get next available image from the swapchain. Update the current frame ID. Wait for previous frame resources.
+        // Reset boiler plate per frame resources.
+        if (app.WaitNextImgIdxOrNewSwapchain() == false)
         {
             continue;
         }
 
-        // Reset unused previous frame's resource
-        vkResetFences(device, 1, &inFlightFence);
-        vkResetCommandBuffer(currentCmdBuffer, 0);
+        VkDevice device = app.GetVkDevice();
+        VkCommandBuffer currentCmdBuffer = app.GetCurrentFrameGfxCmdBuffer();
+
+        VkExtent2D swapchainImageExtent = app.GetSwapchainImageExtent();
 
         // Fill the command buffer
         VkCommandBufferBeginInfo beginInfo{};
@@ -60,7 +52,7 @@ int main()
             swapchainRenderTargetTransBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
             swapchainRenderTargetTransBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
             swapchainRenderTargetTransBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            swapchainRenderTargetTransBarrier.image = app.GetSwapchainColorImage(imageIndex);
+            swapchainRenderTargetTransBarrier.image = app.GetSwapchainColorImage();
             swapchainRenderTargetTransBarrier.subresourceRange = swapchainPresentSubResRange;
         }
 
@@ -79,7 +71,7 @@ int main()
         VkRenderingAttachmentInfoKHR colorAttachmentInfo{};
         {
             colorAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-            colorAttachmentInfo.imageView = app.GetSwapchainColorImageView(imageIndex);
+            colorAttachmentInfo.imageView = app.GetSwapchainColorImageView();
             colorAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
             colorAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             colorAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -91,7 +83,7 @@ int main()
         VkRenderingAttachmentInfoKHR depthAttachmentInfo{};
         {
             depthAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-            depthAttachmentInfo.imageView = app.GetSwapchainDepthImageView(imageIndex);
+            depthAttachmentInfo.imageView = app.GetSwapchainDepthImageView();
             depthAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
             depthAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             depthAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -162,7 +154,7 @@ int main()
             swapchainPresentTransBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
             swapchainPresentTransBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
             swapchainPresentTransBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-            swapchainPresentTransBarrier.image = app.GetSwapchainColorImage(imageIndex);
+            swapchainPresentTransBarrier.image = app.GetSwapchainColorImage();
             swapchainPresentTransBarrier.subresourceRange = swapchainPresentSubResRange;
         }
 

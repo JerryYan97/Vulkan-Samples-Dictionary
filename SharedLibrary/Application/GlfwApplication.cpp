@@ -27,7 +27,7 @@ namespace SharedLib
     // ================================================================================================================
     GlfwApplication::GlfwApplication() :
         Application::Application(),
-        m_currentFrame(0),
+        // m_currentFrame(0),
         m_surface(VK_NULL_HANDLE),
         m_swapchain(VK_NULL_HANDLE),
         m_pWindow(nullptr),
@@ -36,7 +36,8 @@ namespace SharedLib
         m_swapchainImageExtent(),
         m_presentQueue(VK_NULL_HANDLE),
         m_swapchainImgCnt(0),
-        m_swapchainNextImgId(0),
+        // m_swapchainNextImgId(0),
+        m_acqSwapchainImgIdx(0),
         m_gammaCorrectionPipeline(),
         m_gammaCorrectionVsShaderModule(VK_NULL_HANDLE),
         m_gammaCorrectionPsShaderModule(VK_NULL_HANDLE),
@@ -51,11 +52,6 @@ namespace SharedLib
         CleanupSwapchain();
 
         // Cleanup syn objects
-        for (auto itr : m_imageAvailableSemaphores)
-        {
-            vkDestroySemaphore(m_device, itr, nullptr);
-        }
-
         for (auto itr : m_renderFinishedSemaphores)
         {
             vkDestroySemaphore(m_device, itr, nullptr);
@@ -121,18 +117,23 @@ namespace SharedLib
     }
 
     // ================================================================================================================
-    bool GlfwApplication::NextImgIdxOrNewSwapchain(
-        uint32_t& idx)
+    bool GlfwApplication::WaitNextImgIdxOrNewSwapchain()
     {
-        // Get next available image from the swapchain
+        VkFence tmpFence = CreateFence();
+
+        // Get next available image from the swapchain. Wait for relevant rsrc.
+        // The vkAcquireNextImageKHR(...) itself is not obstructive but we can use a fence to make it obstructive
+        // manually. Besides, other GPU rsrc are also linked to the m_acqSwapchainImgIdx and wait here so that we can
+        // manage the sync easily.
         VkResult result = vkAcquireNextImageKHR(m_device,
             m_swapchain,
             UINT64_MAX,
-            m_imageAvailableSemaphores[m_currentFrame],
+            // m_imageAvailableSemaphores[m_currentFrame],
             VK_NULL_HANDLE,
-            &idx);
+            tmpFence,
+            &m_acqSwapchainImgIdx);
 
-        m_swapchainNextImgId = idx;
+        WaitAndDestroyTheFence(tmpFence);
 
         if (result == VK_ERROR_OUT_OF_DATE_KHR)
         {
@@ -146,6 +147,12 @@ namespace SharedLib
             throw std::runtime_error("failed to acquire swap chain image!");
         }
 
+        WaitTheFence(m_inFlightFences[m_acqSwapchainImgIdx]);
+
+        // Reset unused previous frame's resource
+        vkResetFences(m_device, 1, &m_inFlightFences[m_acqSwapchainImgIdx]);
+        vkResetCommandBuffer(m_gfxCmdBufs[m_acqSwapchainImgIdx], 0);
+
         return true;
     }
 
@@ -158,26 +165,26 @@ namespace SharedLib
         {
             submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
             // This draw would wait at dstStage and wait for the waitSemaphores
-            submitInfo.waitSemaphoreCount = 1;
-            submitInfo.pWaitSemaphores = &m_imageAvailableSemaphores[m_currentFrame];
+            // submitInfo.waitSemaphoreCount = 0;
+            // submitInfo.pWaitSemaphores = &m_imageAvailableSemaphores[m_acqSwapchainImgIdx];
             submitInfo.pWaitDstStageMask = waitStages;
             submitInfo.commandBufferCount = 1;
-            submitInfo.pCommandBuffers = &m_gfxCmdBufs[m_currentFrame];
+            submitInfo.pCommandBuffers = &m_gfxCmdBufs[m_acqSwapchainImgIdx];
             // This draw would let the signalSemaphore sign when it finishes
             submitInfo.signalSemaphoreCount = 1;
-            submitInfo.pSignalSemaphores = &m_renderFinishedSemaphores[m_currentFrame];
+            submitInfo.pSignalSemaphores = &m_renderFinishedSemaphores[m_acqSwapchainImgIdx];
         }
-        VK_CHECK(vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_inFlightFences[m_currentFrame]));
+        VK_CHECK(vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_inFlightFences[m_acqSwapchainImgIdx]));
 
         // Put the swapchain into the present info and wait for the graphics queue previously before presenting.
         VkPresentInfoKHR presentInfo{};
         {
             presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
             presentInfo.waitSemaphoreCount = 1;
-            presentInfo.pWaitSemaphores = &m_renderFinishedSemaphores[m_currentFrame];
+            presentInfo.pWaitSemaphores = &m_renderFinishedSemaphores[m_acqSwapchainImgIdx];
             presentInfo.swapchainCount = 1;
             presentInfo.pSwapchains = &m_swapchain;
-            presentInfo.pImageIndices = &m_swapchainNextImgId;
+            presentInfo.pImageIndices = &m_acqSwapchainImgIdx;
         }
         VkResult result = vkQueuePresentKHR(m_presentQueue, &presentInfo);
 
@@ -195,7 +202,7 @@ namespace SharedLib
     // ================================================================================================================
     void GlfwApplication::FrameEnd()
     {
-        m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+        // m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
 
     // ================================================================================================================
@@ -212,9 +219,8 @@ namespace SharedLib
     void GlfwApplication::InitSwapchainSyncObjects()
     {
         // Create Sync objects
-        m_imageAvailableSemaphores.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
-        m_renderFinishedSemaphores.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
-        m_inFlightFences.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
+        m_renderFinishedSemaphores.resize(m_swapchainImgCnt);
+        m_inFlightFences.resize(m_swapchainImgCnt);
 
         VkSemaphoreCreateInfo semaphoreInfo{};
         {
@@ -227,9 +233,8 @@ namespace SharedLib
             fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
         }
 
-        for (size_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
+        for (size_t i = 0; i < m_swapchainImgCnt; i++)
         {
-            VK_CHECK(vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_imageAvailableSemaphores[i]));
             VK_CHECK(vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_renderFinishedSemaphores[i]));
             VK_CHECK(vkCreateFence(m_device, &fenceInfo, nullptr, &m_inFlightFences[i]));
         }
@@ -517,7 +522,7 @@ namespace SharedLib
         }
 
         vkCmdClearColorImage(cmdBuffer,
-                             GetSwapchainColorImage(m_swapchainNextImgId),
+                             GetSwapchainColorImage(),
                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                              &clearColor,
                              1, &swapchainPresentSubResRange);
@@ -539,7 +544,7 @@ namespace SharedLib
         }
 
         vkCmdClearDepthStencilImage(cmdBuffer,
-                                    GetSwapchainDepthImage(m_swapchainNextImgId),
+                                    GetSwapchainDepthImage(),
                                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                     &clearDepthStencil,
                                     1, &swapchainPresentSubResRange);
@@ -572,7 +577,7 @@ namespace SharedLib
             swapchainRenderTargetTransBarrier.dstAccessMask = dstAccessMask;
             swapchainRenderTargetTransBarrier.oldLayout = oldLayout;
             swapchainRenderTargetTransBarrier.newLayout = newLayout;
-            swapchainRenderTargetTransBarrier.image = GetSwapchainColorImage(m_swapchainNextImgId);
+            swapchainRenderTargetTransBarrier.image = GetSwapchainColorImage();
             swapchainRenderTargetTransBarrier.subresourceRange = swapchainPresentSubResRange;
         }
 
@@ -614,7 +619,7 @@ namespace SharedLib
             swapchainRenderTargetTransBarrier.dstAccessMask = dstAccessMask;
             swapchainRenderTargetTransBarrier.oldLayout = oldLayout;
             swapchainRenderTargetTransBarrier.newLayout = newLayout;
-            swapchainRenderTargetTransBarrier.image = GetSwapchainDepthImage(m_swapchainNextImgId);
+            swapchainRenderTargetTransBarrier.image = GetSwapchainDepthImage();
             swapchainRenderTargetTransBarrier.subresourceRange = swapchainPresentSubResRange;
         }
 
@@ -650,7 +655,7 @@ namespace SharedLib
             swapchainPresentTransBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
             swapchainPresentTransBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
             swapchainPresentTransBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-            swapchainPresentTransBarrier.image = GetSwapchainColorImage(m_swapchainNextImgId);
+            swapchainPresentTransBarrier.image = GetSwapchainColorImage();
             swapchainPresentTransBarrier.subresourceRange = swapchainPresentSubResRange;
         }
 
@@ -773,7 +778,7 @@ namespace SharedLib
         VkRenderingAttachmentInfoKHR gammaCorrectionColorAttachmentInfo{};
         {
             gammaCorrectionColorAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-            gammaCorrectionColorAttachmentInfo.imageView = m_swapchainColorImageViews[m_swapchainNextImgId];
+            gammaCorrectionColorAttachmentInfo.imageView = m_swapchainColorImageViews[m_acqSwapchainImgIdx];
             gammaCorrectionColorAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
             gammaCorrectionColorAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             gammaCorrectionColorAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
