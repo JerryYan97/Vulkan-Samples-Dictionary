@@ -1,5 +1,9 @@
 #include <GGXModel.hlsl>
 
+// NOTE: [[vk::binding(X[, Y])]] -- X: binding number, Y: descriptor set.
+// NOTE: We assume that the metallic, roughness and occlusion are in the same texture. x: occlusion, y: roughness, z: metal.
+// NOTE: Push Descriptor only supports one descriptor set.
+
 const static float3 Albedo = float3(0.56, 0.57, 0.58); 
 
 struct SceneInfoUbo
@@ -7,14 +11,14 @@ struct SceneInfoUbo
     float maxMipLevel;
 };
 
-TextureCube i_diffuseCubeMapTexture : register(t1);
-SamplerState i_diffuseCubemapSamplerState : register(s1);
+[[vk::binding(1, 0)]] TextureCube i_diffuseCubeMapTexture;
+[[vk::binding(1, 0)]] SamplerState i_diffuseCubemapSamplerState;
 
-TextureCube i_prefilterEnvCubeMapTexture : register(t2);
-SamplerState i_prefilterEnvCubeMapSamplerState : register(s2);
+[[vk::binding(2, 0)]] TextureCube i_prefilterEnvCubeMapTexture;
+[[vk::binding(2, 0)]] SamplerState i_prefilterEnvCubeMapSamplerState;
 
-Texture2D    i_envBrdfTexture : register(t3);
-SamplerState i_envBrdfSamplerState : register(s3);
+[[vk::binding(3, 0)]] Texture2D    i_envBrdfTexture;
+[[vk::binding(3, 0)]] SamplerState i_envBrdfSamplerState;
 
 [[vk::push_constant]] SceneInfoUbo i_sceneInfo;
 

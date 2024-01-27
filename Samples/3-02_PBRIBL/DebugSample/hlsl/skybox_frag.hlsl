@@ -8,10 +8,10 @@ struct CameraInfoUbo
     float2 viewportWidthHeight; // Screen width and height in the unit of pixels.
 };
 
-TextureCube i_cubeMapTexture : register(t0);
-SamplerState samplerState : register(s0);
+[[vk::binding(0, 0)]] TextureCube i_cubeMapTexture;
+[[vk::binding(0, 0)]] SamplerState samplerState;
 
-cbuffer UBO0 : register(b1) { CameraInfoUbo i_cameraInfo; }
+[[vk::binding(1, 0)]] cbuffer UBO0 { CameraInfoUbo i_cameraInfo; }
 
 float4 main(
     float4 fragCoord : SV_Position) : SV_Target

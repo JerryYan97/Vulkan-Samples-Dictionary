@@ -9,13 +9,6 @@ namespace SharedLib
     class Camera;
 }
 
-struct ImgInfo
-{
-    uint32_t pixWidth;
-    uint32_t pixHeight;
-    float* pData;
-};
-
 const uint32_t VpMatBytesCnt = 4 * 4 * sizeof(float);
 
 class PBRIBLApp : public SharedLib::GlfwApplication
@@ -29,34 +22,15 @@ public:
     void UpdateCameraAndGpuBuffer();
 
     void GetCameraPos(float* pOut);
-    uint32_t GetMaxMipLevel() { return m_prefilterEnvCubemapImgsInfo.size(); }
-
-    VkDeviceSize GetHdrByteNum();
-    void* GetHdrDataPointer() { return m_hdrImgCubemap.pData; }
-    VkImage GetCubeMapImage() { return m_hdrCubeMapImage; }
-    VkExtent2D GetHdrImgExtent() 
-        { return VkExtent2D{ m_hdrImgCubemap.pixWidth, m_hdrImgCubemap.pixHeight }; }
-    ImgInfo GetBackgroundCubemapInfo() { return m_hdrImgCubemap; }
-    ImgInfo GetDiffuseIrradianceImgInfo() { return m_diffuseIrradianceCubemapImgInfo; }
-    VkImage GetDiffuseIrradianceCubemap() { return m_diffuseIrradianceCubemap; }
-    std::vector<ImgInfo> GetPrefilterEnvImgsInfo() { return m_prefilterEnvCubemapImgsInfo; }
-    VkImage GetPrefilterEnvCubemap() { return m_prefilterEnvCubemap; }
-    ImgInfo GetEnvBrdfImgInfo() { return m_envBrdfImgInfo; }
-    VkImage GetEnvBrdf() { return m_envBrdfImg; }
-
-    VkFence GetFence(uint32_t i) { return m_inFlightFences[i]; }
 
     VkPipelineLayout GetSkyboxPipelineLayout() { return m_skyboxPipelineLayout; }
 
-    VkDescriptorSet GetSkyboxCurrentFrameDescriptorSet0()
-        { return m_skyboxPipelineDescriptorSet0s[m_currentFrame]; }
+    uint32_t GetMaxMipLevel() { return m_prefilterEnvMipsCnt; }
+
+    void CmdPushSkyboxDescriptors(VkCommandBuffer cmdBuffer);
+    void CmdPushSphereIBLDescriptors(VkCommandBuffer cmdBuffer);
 
     VkPipeline GetSkyboxPipeline() { return m_skyboxPipeline.GetVkPipeline(); }
-
-    void GetCameraData(float* pBuffer);
-
-    VkDescriptorSet GetIblCurrentFrameDescriptorSet0() 
-        { return m_iblPipelineDescriptorSet0s[m_currentFrame]; }
 
     VkBuffer GetIblVertBuffer() { return m_vertBuffer; }
     VkBuffer GetIblIdxBuffer() { return m_idxBuffer; }
@@ -65,7 +39,7 @@ public:
     VkPipeline GetIblPipeline() { return m_iblPipeline.GetVkPipeline(); }
     VkPipelineLayout GetIblPipelineLayout() { return m_iblPipelineLayout; }
     
-    void SendCameraDataToBuffer(uint32_t i);
+    void SendCameraDataToBuffer();
 
 private:
     VkPipelineVertexInputStateCreateInfo CreatePipelineVertexInputInfo();
@@ -80,7 +54,6 @@ private:
     void InitSkyboxPipelineDescriptorSetLayout();
     void InitSkyboxPipelineLayout();
     void InitSkyboxShaderModules();
-    void InitSkyboxPipelineDescriptorSets();
     void DestroySkyboxPipelineRes();
 
     // IBL spheres pipeline resources init.
@@ -88,7 +61,6 @@ private:
     void InitIblPipelineDescriptorSetLayout();
     void InitIblPipelineLayout();
     void InitIblShaderModules();
-    void InitIblPipelineDescriptorSets();
     void DestroyIblPipelineRes();
 
     void InitVpMatBuffer();
@@ -101,12 +73,7 @@ private:
     void DestroyHdrRenderObjs();
     void DestroyCameraUboObjects();
 
-    VkImage         m_hdrCubeMapImage;
-    VkImageView     m_hdrCubeMapView;
-    VkSampler       m_hdrSampler;
-    VmaAllocation   m_hdrCubeMapAlloc;
-
-    ImgInfo m_hdrImgCubemap;
+    SharedLib::GpuImg m_hdrCubeMap;
 
     std::vector<float>    m_vertBufferData;
     std::vector<uint32_t> m_idxBufferData;
@@ -115,13 +82,10 @@ private:
     VkBuffer              m_idxBuffer;
     VmaAllocation         m_idxBufferAlloc;
 
-    std::vector<VkBuffer>      m_vpMatUboBuffer;
-    std::vector<VmaAllocation> m_vpMatUboAlloc;
+    std::vector<SharedLib::GpuBuffer> m_vpMatUboBuffer;
 
-    SharedLib::Camera*           m_pCamera;
-    std::vector<VkBuffer>        m_cameraParaBuffers;
-    std::vector<VmaAllocation>   m_cameraParaBufferAllocs;
-    std::vector<VkDescriptorSet> m_skyboxPipelineDescriptorSet0s;
+    SharedLib::Camera*                m_pCamera;
+    std::vector<SharedLib::GpuBuffer> m_cameraParaBuffers;
 
     VkShaderModule        m_vsSkyboxShaderModule;
     VkShaderModule        m_psSkyboxShaderModule;
@@ -130,28 +94,15 @@ private:
     SharedLib::Pipeline   m_skyboxPipeline;
 
     // Sphere rendering
-    VkShaderModule               m_vsIblShaderModule;
-    VkShaderModule               m_psIblShaderModule;
-    VkDescriptorSetLayout        m_iblPipelineDesSet0Layout;
-    VkPipelineLayout             m_iblPipelineLayout;
-    std::vector<VkDescriptorSet> m_iblPipelineDescriptorSet0s; // For different frames.
-    SharedLib::Pipeline          m_iblPipeline;
+    VkShaderModule        m_vsIblShaderModule;
+    VkShaderModule        m_psIblShaderModule;
+    VkDescriptorSetLayout m_iblPipelineDesSet0Layout;
+    VkPipelineLayout      m_iblPipelineLayout;
+    SharedLib::Pipeline   m_iblPipeline;
 
-    VkImage       m_diffuseIrradianceCubemap;
-    VkImageView   m_diffuseIrradianceCubemapImgView;
-    VkSampler     m_diffuseIrradianceCubemapSampler;
-    VmaAllocation m_diffuseIrradianceCubemapAlloc;
-    ImgInfo       m_diffuseIrradianceCubemapImgInfo;
+    SharedLib::GpuImg m_diffuseIrradianceCubemap;
+    SharedLib::GpuImg m_prefilterEnvCubemap;
+    SharedLib::GpuImg m_envBrdfImg;
 
-    VkImage              m_prefilterEnvCubemap;
-    VkImageView          m_prefilterEnvCubemapView;
-    VkSampler            m_prefilterEnvCubemapSampler;
-    VmaAllocation        m_prefilterEnvCubemapAlloc;
-    std::vector<ImgInfo> m_prefilterEnvCubemapImgsInfo;
-
-    VkImage       m_envBrdfImg;
-    VkImageView   m_envBrdfImgView;
-    VkSampler     m_envBrdfImgSampler;
-    VmaAllocation m_envBrdfImgAlloc;
-    ImgInfo       m_envBrdfImgInfo;
+    uint32_t m_prefilterEnvMipsCnt;
 };

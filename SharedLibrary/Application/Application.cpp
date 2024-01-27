@@ -564,6 +564,79 @@ namespace SharedLib
     }
 
     // ================================================================================================================
+    void Application::DestroyGpuImgResource(
+        const GpuImg& gpuImg)
+    {
+        if (gpuImg.image != VK_NULL_HANDLE)
+        {
+            vmaDestroyImage(*m_pAllocator, gpuImg.image, gpuImg.imageAllocation);
+        }
+        
+        if (gpuImg.imageSampler != VK_NULL_HANDLE)
+        {
+            vkDestroySampler(m_device, gpuImg.imageSampler, nullptr);
+        }
+
+        if (gpuImg.imageView != VK_NULL_HANDLE)
+        {
+            vkDestroyImageView(m_device, gpuImg.imageView, nullptr);
+        }
+    }
+
+    // ================================================================================================================
+    VkImageSubresourceRange Application::GetImgSubrsrcRange(
+        uint32_t           baseMipLevel,
+        uint32_t           levelCnt,
+        uint32_t           baseArrayLayer,
+        uint32_t           layerCnt,
+        VkImageAspectFlags imgAspectFlags)
+    {
+        VkImageSubresourceRange subResRange{};
+        {
+            subResRange.aspectMask = imgAspectFlags;
+            subResRange.baseMipLevel = baseMipLevel;
+            subResRange.levelCount = levelCnt;
+            subResRange.baseArrayLayer = baseArrayLayer;
+            subResRange.layerCount = layerCnt;
+        }
+        return subResRange;
+    }
+
+    // ================================================================================================================
+    VkImageSubresource Application::GetImgSubrsrc(
+        uint32_t           mipLevel,
+        uint32_t           arrayLayer,
+        VkImageAspectFlags imgAspectFlags)
+    {
+        VkImageSubresource imgSubRsrc{};
+        {
+            imgSubRsrc.aspectMask = imgAspectFlags;
+            imgSubRsrc.mipLevel = mipLevel;
+            imgSubRsrc.arrayLayer = arrayLayer;
+        }
+
+        return imgSubRsrc;
+    }
+
+    // ================================================================================================================
+    VkImageSubresourceLayers Application::GetImgSubrsrcLayers(
+        uint32_t           mipLevel,
+        uint32_t           baseArrayLayer,
+        uint32_t           layerCnt,
+        VkImageAspectFlags imgAspectFlags)
+    {
+        VkImageSubresourceLayers imgSubRsrcLayers{};
+        {
+            imgSubRsrcLayers.aspectMask = imgAspectFlags;
+            imgSubRsrcLayers.mipLevel = mipLevel;
+            imgSubRsrcLayers.baseArrayLayer = baseArrayLayer;
+            imgSubRsrcLayers.layerCount = layerCnt;
+        }
+
+        return imgSubRsrcLayers;
+    }
+
+    // ================================================================================================================
     GpuImg Application::CreateDummyPureColorImg(
         float* pColor)
     {
@@ -674,6 +747,59 @@ namespace SharedLib
         VkFence fence)
     {
         VK_CHECK(vkWaitForFences(m_device, 1, &fence, VK_TRUE, UINT64_MAX));
+    }
+
+    // ================================================================================================================
+    GpuBuffer Application::CreateGpuBuffer(
+        VkBufferUsageFlags       usage,
+        VmaAllocationCreateFlags vmaFlags,
+        uint32_t                 bytesNum)
+    {
+        // Create Buffer and allocate memory for vertex buffer, index buffer and render target.
+        VmaAllocationCreateInfo bufAllocInfo = {};
+        {
+            bufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+            bufAllocInfo.flags = vmaFlags;
+        }
+
+        // Create Vertex Buffer
+        VkBufferCreateInfo bufferInfo = {};
+        {
+            bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+            bufferInfo.size = bytesNum;
+            bufferInfo.usage = usage;
+        }
+
+        GpuBuffer gpuBuffer;
+
+        VK_CHECK(vmaCreateBuffer(*m_pAllocator,
+            &bufferInfo,
+            &bufAllocInfo,
+            &(gpuBuffer.buffer),
+            &(gpuBuffer.bufferAlloc),
+            nullptr));
+
+        if (usage == VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT)
+        {
+            gpuBuffer.gpuBufferDescriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        }
+        else if (usage == VK_BUFFER_USAGE_STORAGE_BUFFER_BIT)
+        {
+            gpuBuffer.gpuBufferDescriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        }
+
+        gpuBuffer.bufferDescInfo.buffer = gpuBuffer.buffer;
+        gpuBuffer.bufferDescInfo.offset = 0;
+        gpuBuffer.bufferDescInfo.range = bytesNum;
+
+        return gpuBuffer;
+    }
+
+    // ================================================================================================================
+    void Application::DestroyGpuBufferResource(
+        const GpuBuffer& gpuBuffer)
+    {
+        vmaDestroyBuffer(*m_pAllocator, gpuBuffer.buffer, gpuBuffer.bufferAlloc);
     }
 
     // ================================================================================================================

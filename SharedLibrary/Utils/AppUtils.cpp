@@ -754,6 +754,7 @@ namespace SharedLib
 
     // ================================================================================================================
     // Append the last element as 1.f.
+    // TODO: It can be compute shader based func to speed up.
     void Img3EleTo4Ele(
         float* pSrc,
         float* pDst,

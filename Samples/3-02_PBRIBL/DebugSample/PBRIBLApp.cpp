@@ -4,11 +4,13 @@
 #include "../../../SharedLibrary/Camera/Camera.h"
 #include "../../../SharedLibrary/Event/Event.h"
 #include "../../../SharedLibrary/Utils/StrPathUtils.h"
+#include "../../../SharedLibrary/Utils/AppUtils.h"
+#include "../../../SharedLibrary/Utils/CmdBufUtils.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
 
-#define STB_IMAGE_IMPLEMENTATION
+// #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
 #include "vk_mem_alloc.h"
@@ -31,10 +33,6 @@ static void MouseButtonCallback(GLFWwindow* window, int button, int action, int 
 // ================================================================================================================
 PBRIBLApp::PBRIBLApp() : 
     GlfwApplication(),
-    m_hdrCubeMapImage(VK_NULL_HANDLE),
-    m_hdrCubeMapView(VK_NULL_HANDLE),
-    m_hdrSampler(VK_NULL_HANDLE),
-    m_hdrCubeMapAlloc(VK_NULL_HANDLE),
     m_vsSkyboxShaderModule(VK_NULL_HANDLE),
     m_psSkyboxShaderModule(VK_NULL_HANDLE),
     m_skyboxPipelineDesSet0Layout(VK_NULL_HANDLE),
@@ -45,27 +43,17 @@ PBRIBLApp::PBRIBLApp() :
     m_iblPipelineDesSet0Layout(VK_NULL_HANDLE),
     m_iblPipelineLayout(VK_NULL_HANDLE),
     m_iblPipeline(),
-    m_diffuseIrradianceCubemap(VK_NULL_HANDLE),
-    m_diffuseIrradianceCubemapImgView(VK_NULL_HANDLE),
-    m_diffuseIrradianceCubemapSampler(VK_NULL_HANDLE),
-    m_diffuseIrradianceCubemapAlloc(VK_NULL_HANDLE),
-    m_prefilterEnvCubemap(VK_NULL_HANDLE),
-    m_prefilterEnvCubemapView(VK_NULL_HANDLE),
-    m_prefilterEnvCubemapSampler(VK_NULL_HANDLE),
-    m_prefilterEnvCubemapAlloc(VK_NULL_HANDLE),
-    m_envBrdfImg(VK_NULL_HANDLE),
-    m_envBrdfImgView(VK_NULL_HANDLE),
-    m_envBrdfImgSampler(VK_NULL_HANDLE),
-    m_envBrdfImgAlloc(VK_NULL_HANDLE),
-    m_hdrImgCubemap(),
-    m_diffuseIrradianceCubemapImgInfo(),
-    m_envBrdfImgInfo(),
+    m_diffuseIrradianceCubemap(),
+    m_prefilterEnvCubemap(),
+    m_envBrdfImg(),
+    m_hdrCubeMap(),
     m_vertBufferData(),
     m_idxBufferData(),
     m_vertBuffer(VK_NULL_HANDLE),
     m_vertBufferAlloc(VK_NULL_HANDLE),
     m_idxBuffer(VK_NULL_HANDLE),
-    m_idxBufferAlloc(VK_NULL_HANDLE)
+    m_idxBufferAlloc(VK_NULL_HANDLE),
+    m_prefilterEnvMipsCnt(0)
 {
     m_pCamera = new SharedLib::Camera();
 }
@@ -89,28 +77,10 @@ void PBRIBLApp::DestroyHdrRenderObjs()
 {
     DestroySphereVertexIndexBuffers();
 
-    delete m_diffuseIrradianceCubemapImgInfo.pData;
-    for (auto itr : m_prefilterEnvCubemapImgsInfo)
-    {
-        delete itr.pData;
-    }
-    delete m_envBrdfImgInfo.pData;
-
-    vmaDestroyImage(*m_pAllocator, m_diffuseIrradianceCubemap, m_diffuseIrradianceCubemapAlloc);
-    vkDestroyImageView(m_device, m_diffuseIrradianceCubemapImgView, nullptr);
-    vkDestroySampler(m_device, m_diffuseIrradianceCubemapSampler, nullptr);
-
-    vmaDestroyImage(*m_pAllocator, m_prefilterEnvCubemap, m_prefilterEnvCubemapAlloc);
-    vkDestroyImageView(m_device, m_prefilterEnvCubemapView, nullptr);
-    vkDestroySampler(m_device, m_prefilterEnvCubemapSampler, nullptr);
-
-    vmaDestroyImage(*m_pAllocator, m_envBrdfImg, m_envBrdfImgAlloc);
-    vkDestroyImageView(m_device, m_envBrdfImgView, nullptr);
-    vkDestroySampler(m_device, m_envBrdfImgSampler, nullptr);
-
-    vmaDestroyImage(*m_pAllocator, m_hdrCubeMapImage, m_hdrCubeMapAlloc);
-    vkDestroyImageView(m_device, m_hdrCubeMapView, nullptr);
-    vkDestroySampler(m_device, m_hdrSampler, nullptr);
+    DestroyGpuImgResource(m_diffuseIrradianceCubemap);
+    DestroyGpuImgResource(m_prefilterEnvCubemap);
+    DestroyGpuImgResource(m_envBrdfImg);
+    DestroyGpuImgResource(m_hdrCubeMap);
 }
 
 // ================================================================================================================
@@ -118,26 +88,12 @@ void PBRIBLApp::DestroyCameraUboObjects()
 {
     for (uint32_t i = 0; i < m_swapchainImgCnt; i++)
     {
-        vmaDestroyBuffer(*m_pAllocator, m_cameraParaBuffers[i], m_cameraParaBufferAllocs[i]);
+        DestroyGpuBufferResource(m_cameraParaBuffers[i]);
     }
 }
 
 // ================================================================================================================
-VkDeviceSize PBRIBLApp::GetHdrByteNum()
-{
-    return 3 * sizeof(float) * m_hdrImgCubemap.pixWidth * m_hdrImgCubemap.pixHeight;
-}
-
-// ================================================================================================================
-void PBRIBLApp::GetCameraData(
-    float* pBuffer)
-{
-    
-}
-
-// ================================================================================================================
-void PBRIBLApp::SendCameraDataToBuffer(
-    uint32_t i)
+void PBRIBLApp::SendCameraDataToBuffer()
 {
     float cameraData[16] = {};
     m_pCamera->GetView(cameraData);
@@ -156,8 +112,15 @@ void PBRIBLApp::SendCameraDataToBuffer(
     cameraData[14] = swapchainImgExtent.width;
     cameraData[15] = swapchainImgExtent.height;
 
-    CopyRamDataToGpuBuffer(cameraData, m_cameraParaBuffers[i], m_cameraParaBufferAllocs[i], sizeof(cameraData));
-    CopyRamDataToGpuBuffer(vpMatData, m_vpMatUboBuffer[i], m_vpMatUboAlloc[i], sizeof(vpMatData));
+    CopyRamDataToGpuBuffer(cameraData,
+                           m_cameraParaBuffers[m_acqSwapchainImgIdx].buffer,
+                           m_cameraParaBuffers[m_acqSwapchainImgIdx].bufferAlloc,
+                           sizeof(cameraData));
+
+    CopyRamDataToGpuBuffer(vpMatData,
+                           m_vpMatUboBuffer[m_acqSwapchainImgIdx].buffer,
+                           m_vpMatUboBuffer[m_acqSwapchainImgIdx].bufferAlloc,
+                           sizeof(vpMatData));
 }
 
 // ================================================================================================================
@@ -165,7 +128,7 @@ void PBRIBLApp::UpdateCameraAndGpuBuffer()
 {
     SharedLib::HEvent midMouseDownEvent = CreateMiddleMouseEvent(g_isDown);
     m_pCamera->OnEvent(midMouseDownEvent);
-    SendCameraDataToBuffer(m_acqSwapchainImgIdx);
+    SendCameraDataToBuffer();
 }
 
 // ================================================================================================================
@@ -176,158 +139,186 @@ void PBRIBLApp::GetCameraPos(
 }
 
 // ================================================================================================================
+// - In the `cmftStudio`, you can choose hStrip. The code below is an example of using the hStrip.
+// - The buffer data of the image cannot be interleaved (The data of a separate image should be continues in the buffer address space.)
+// - However, our cubemap data (hStrip) is interleaved. 
+// - So, we have multiple choices to put them into the cubemap image. Here, I choose to offset the buffer starting point, specify the
+// -     long row length and copy that for 6 times.
+        /*
+        VkBufferImageCopy hdrBufToImgCopies[6];
+        memset(hdrBufToImgCopies, 0, sizeof(hdrBufToImgCopies));
+        for (uint32_t i = 0; i < 6; i++)
+        {
+            VkExtent3D extent{};
+            {
+                extent.width = hdrImgExtent.width / 6;
+                extent.height = hdrImgExtent.height;
+                extent.depth = 1;
+            }
+
+            hdrBufToImgCopies[i].bufferRowLength = hdrImgExtent.width;
+            // hdrBufToImgCopies[i].bufferImageHeight = hdrImgExtent.height;
+            hdrBufToImgCopies[i].imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            hdrBufToImgCopies[i].imageSubresource.mipLevel = 0;
+            hdrBufToImgCopies[i].imageSubresource.baseArrayLayer = i;
+            hdrBufToImgCopies[i].imageSubresource.layerCount = 1;
+
+            hdrBufToImgCopies[i].imageExtent = extent;
+            // In the unit of bytes:
+            hdrBufToImgCopies[i].bufferOffset = i * (hdrImgExtent.width / 6) * sizeof(float) * 3;
+        }
+
+        vkCmdCopyBufferToImage(
+            stagingCmdBuffer,
+            stagingBuffer,
+            cubeMapImage,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            6, hdrBufToImgCopies);
+        */
 void PBRIBLApp::InitHdrRenderObjects()
 {
+    SharedLib::RAIICommandBuffer raiiCmdBuffer(m_gfxCmdPool, m_device);
+
     // Load the HDRI image into RAM
     std::string hdriFilePath = SOURCE_PATH;
     hdriFilePath += "/../data/";
+
+    VkSamplerCreateInfo samplerInfo{};
+    {
+        samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        samplerInfo.magFilter = VK_FILTER_LINEAR;
+        samplerInfo.minFilter = VK_FILTER_LINEAR;
+        samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        samplerInfo.minLod = -1000;
+        samplerInfo.maxLod = 1000;
+        samplerInfo.maxAnisotropy = 1.0f;
+    }
 
     // Read in and init background cubemap
     {
         std::string cubemapPathName = hdriFilePath + "iblOutput/background_cubemap.hdr";
 
         int width, height, nrComponents;
-        m_hdrImgCubemap.pData = stbi_loadf(cubemapPathName.c_str(), &width, &height, &nrComponents, 0);
+        float* pHdrImgCubemapData = stbi_loadf(cubemapPathName.c_str(), &width, &height, &nrComponents, 0);
 
-        m_hdrImgCubemap.pixWidth = (uint32_t)width;
-        m_hdrImgCubemap.pixHeight = (uint32_t)height;
-
-        VmaAllocationCreateInfo hdrAllocInfo{};
+        if (nrComponents == 3)
         {
-            hdrAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-            hdrAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+            float* pExtentedData = new float[4 * width * height];
+            SharedLib::Img3EleTo4Ele(pHdrImgCubemapData, pExtentedData, width * height);
+            delete[] pHdrImgCubemapData;
+            pHdrImgCubemapData = pExtentedData;
         }
 
         VkExtent3D extent{};
         {
-            // extent.width = m_hdrImgWidth / 6;
-            // extent.height = m_hdrImgHeight;
-            extent.width = m_hdrImgCubemap.pixWidth;
-            extent.height = m_hdrImgCubemap.pixWidth;
+            extent.width = width;
+            extent.height = width;
             extent.depth = 1;
         }
 
-        VkImageCreateInfo cubeMapImgInfo{};
+        SharedLib::GpuImgCreateInfo backgroundCubemapInfo{};
         {
-            cubeMapImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-            cubeMapImgInfo.imageType = VK_IMAGE_TYPE_2D;
-            cubeMapImgInfo.format = VK_FORMAT_R32G32B32_SFLOAT;
-            cubeMapImgInfo.extent = extent;
-            cubeMapImgInfo.mipLevels = 1;
-            cubeMapImgInfo.arrayLayers = 6;
-            cubeMapImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-            cubeMapImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
-            cubeMapImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-            cubeMapImgInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-            cubeMapImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            backgroundCubemapInfo.allocFlags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+            backgroundCubemapInfo.hasSampler = true;
+            backgroundCubemapInfo.imgCreateFlags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+            backgroundCubemapInfo.imgExtent = extent;
+            backgroundCubemapInfo.imgFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+            backgroundCubemapInfo.imgSubresRange = GetImgSubrsrcRange(0, 1, 0, 6);
+            backgroundCubemapInfo.imgUsageFlags = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+            backgroundCubemapInfo.imgViewType = VK_IMAGE_VIEW_TYPE_CUBE;
+            backgroundCubemapInfo.samplerInfo = samplerInfo;
         }
 
-        VK_CHECK(vmaCreateImage(*m_pAllocator,
-            &cubeMapImgInfo,
-            &hdrAllocInfo,
-            &m_hdrCubeMapImage,
-            &m_hdrCubeMapAlloc,
-            nullptr));
+        m_hdrCubeMap = CreateGpuImage(backgroundCubemapInfo);
 
-        VkImageViewCreateInfo info{};
+        VkBufferImageCopy backgroundBufToImgCopy{};
         {
-            info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            info.image = m_hdrCubeMapImage;
-            info.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
-            info.format = VK_FORMAT_R32G32B32_SFLOAT;
-            info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            info.subresourceRange.levelCount = 1;
-            info.subresourceRange.layerCount = 6;
+            backgroundBufToImgCopy.bufferRowLength = width;
+            backgroundBufToImgCopy.imageSubresource = GetImgSubrsrcLayers(0, 0, 6);
+            backgroundBufToImgCopy.imageExtent = extent;
         }
-        VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_hdrCubeMapView));
 
-        VkSamplerCreateInfo sampler_info{};
-        {
-            sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-            sampler_info.magFilter = VK_FILTER_LINEAR;
-            sampler_info.minFilter = VK_FILTER_LINEAR;
-            sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-            sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            sampler_info.minLod = -1000;
-            sampler_info.maxLod = 1000;
-            sampler_info.maxAnisotropy = 1.0f;
-        }
-        VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_hdrSampler));
+        const uint32_t backgroundCubemapBytes = width * height * 4 * sizeof(float);
+
+        SharedLib::SendImgDataToGpu(
+            raiiCmdBuffer.m_cmdBuffer,
+            m_device,
+            m_graphicsQueue,
+            pHdrImgCubemapData,
+            backgroundCubemapBytes,
+            m_hdrCubeMap.image,
+            GetImgSubrsrcRange(0, 1, 0, 6),
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            backgroundBufToImgCopy,
+            *m_pAllocator
+        );
+
+        delete[] pHdrImgCubemapData;
     }
     
     // Read in and init diffuse irradiance cubemap
     {
         std::string diffIrradiancePathName = hdriFilePath + "iblOutput/diffuse_irradiance_cubemap.hdr";
         int width, height, nrComponents;
-        m_diffuseIrradianceCubemapImgInfo.pData = stbi_loadf(diffIrradiancePathName.c_str(),
-                                                             &width, &height, &nrComponents, 0);
+        float* pDiffuseIrradianceCubemapImgInfoData = stbi_loadf(diffIrradiancePathName.c_str(),
+                                                                 &width, &height, &nrComponents, 0);
 
-        m_diffuseIrradianceCubemapImgInfo.pixWidth = (uint32_t)width;
-        m_diffuseIrradianceCubemapImgInfo.pixHeight = (uint32_t)height;
-
-        VmaAllocationCreateInfo diffIrrAllocInfo{};
+        if (nrComponents == 3)
         {
-            diffIrrAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-            diffIrrAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+            float* pExtentedData = new float[4 * width * height];
+            SharedLib::Img3EleTo4Ele(pDiffuseIrradianceCubemapImgInfoData, pExtentedData, width * height);
+            delete[] pDiffuseIrradianceCubemapImgInfoData;
+            pDiffuseIrradianceCubemapImgInfoData = pExtentedData;
         }
 
         VkExtent3D extent{};
         {
-            extent.width = m_diffuseIrradianceCubemapImgInfo.pixWidth;
-            extent.height = m_diffuseIrradianceCubemapImgInfo.pixWidth;
+            extent.width = width;
+            extent.height = width;
             extent.depth = 1;
         }
 
-        VkImageCreateInfo cubeMapImgInfo{};
+        SharedLib::GpuImgCreateInfo diffIrradianceInfo{};
         {
-            cubeMapImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-            cubeMapImgInfo.imageType = VK_IMAGE_TYPE_2D;
-            cubeMapImgInfo.format = VK_FORMAT_R32G32B32_SFLOAT;
-            cubeMapImgInfo.extent = extent;
-            cubeMapImgInfo.mipLevels = 1;
-            cubeMapImgInfo.arrayLayers = 6;
-            cubeMapImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-            cubeMapImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
-            cubeMapImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-            cubeMapImgInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-            cubeMapImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            diffIrradianceInfo.allocFlags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+            diffIrradianceInfo.hasSampler = true;
+            diffIrradianceInfo.imgCreateFlags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+            diffIrradianceInfo.imgExtent = extent;
+            diffIrradianceInfo.imgFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+            diffIrradianceInfo.imgSubresRange = GetImgSubrsrcRange(0, 1, 0, 6);
+            diffIrradianceInfo.imgUsageFlags = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+            diffIrradianceInfo.imgViewType = VK_IMAGE_VIEW_TYPE_CUBE;
+            diffIrradianceInfo.samplerInfo = samplerInfo;
         }
 
-        VK_CHECK(vmaCreateImage(*m_pAllocator,
-            &cubeMapImgInfo,
-            &diffIrrAllocInfo,
-            &m_diffuseIrradianceCubemap,
-            &m_diffuseIrradianceCubemapAlloc,
-            nullptr));
+        m_diffuseIrradianceCubemap = CreateGpuImage(diffIrradianceInfo);
 
-        VkImageViewCreateInfo info{};
+        VkBufferImageCopy diffIrradianceBufToImgCopy{};
         {
-            info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            info.image = m_diffuseIrradianceCubemap;
-            info.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
-            info.format = VK_FORMAT_R32G32B32_SFLOAT;
-            info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            info.subresourceRange.levelCount = 1;
-            info.subresourceRange.layerCount = 6;
+            diffIrradianceBufToImgCopy.bufferRowLength = width;
+            diffIrradianceBufToImgCopy.imageSubresource = GetImgSubrsrcLayers(0, 0, 6);
+            diffIrradianceBufToImgCopy.imageExtent = extent;
         }
-        VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_diffuseIrradianceCubemapImgView));
 
-        VkSamplerCreateInfo sampler_info{};
-        {
-            sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-            sampler_info.magFilter = VK_FILTER_LINEAR;
-            sampler_info.minFilter = VK_FILTER_LINEAR;
-            sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-            sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            sampler_info.minLod = -1000;
-            sampler_info.maxLod = 1000;
-            sampler_info.maxAnisotropy = 1.0f;
-        }
-        VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_diffuseIrradianceCubemapSampler));
+        const uint32_t diffIrradianceCubemapBytes = width * height * 4 * sizeof(float);
+
+        SharedLib::SendImgDataToGpu(
+            raiiCmdBuffer.m_cmdBuffer,
+            m_device,
+            m_graphicsQueue,
+            pDiffuseIrradianceCubemapImgInfoData,
+            diffIrradianceCubemapBytes,
+            m_diffuseIrradianceCubemap.image,
+            GetImgSubrsrcRange(0, 1, 0, 6),
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            diffIrradianceBufToImgCopy,
+            *m_pAllocator
+        );
+
+        delete[] pDiffuseIrradianceCubemapImgInfoData;
     }
 
     // Read in and init prefilter environment cubemap
@@ -336,93 +327,91 @@ void PBRIBLApp::InitHdrRenderObjects()
         std::vector<std::string> mipImgNames;
         SharedLib::GetAllFileNames(prefilterEnvPath, mipImgNames);
 
-        const uint32_t mipCnts = mipImgNames.size();
+        m_prefilterEnvMipsCnt = mipImgNames.size();
 
-        m_prefilterEnvCubemapImgsInfo.resize(mipCnts);
-
-        for (uint32_t i = 0; i < mipCnts; i++)
+        for (uint32_t i = 0; i < m_prefilterEnvMipsCnt; i++)
         {
             int width, height, nrComponents;
             std::string prefilterEnvMipImgPathName = hdriFilePath +
-                                                     "iblOutput/prefilterEnvMaps/prefilterMip" +
-                                                     std::to_string(i) + ".hdr";
+                "iblOutput/prefilterEnvMaps/prefilterMip" +
+                std::to_string(i) + ".hdr";
 
-            m_prefilterEnvCubemapImgsInfo[i].pData = stbi_loadf(prefilterEnvMipImgPathName.c_str(),
-                                                                &width, &height, &nrComponents, 0);
-            m_prefilterEnvCubemapImgsInfo[i].pixWidth = width;
-            m_prefilterEnvCubemapImgsInfo[i].pixHeight = height;
-        }
+            float* pPrefilterEnvCubemapImgsMipIData = stbi_loadf(prefilterEnvMipImgPathName.c_str(),
+                &width, &height, &nrComponents, 0);
 
-        VmaAllocationCreateInfo prefilterEnvCubemapAllocInfo{};
-        {
-            prefilterEnvCubemapAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-            prefilterEnvCubemapAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
-        }
+            VkExtent3D extent{};
+            {
+                extent.width = width;
+                extent.height = width;
+                extent.depth = 1;
+            }
 
-        VkExtent3D extent{};
-        {
-            extent.width = m_prefilterEnvCubemapImgsInfo[0].pixWidth;
-            extent.height = m_prefilterEnvCubemapImgsInfo[0].pixWidth;
-            extent.depth = 1;
-        }
+            if (nrComponents == 3)
+            {
+                float* pExtentedData = new float[4 * width * height];
+                SharedLib::Img3EleTo4Ele(pPrefilterEnvCubemapImgsMipIData, pExtentedData, width * height);
+                delete[] pPrefilterEnvCubemapImgsMipIData;
+                pPrefilterEnvCubemapImgsMipIData = pExtentedData;
+            }
 
-        VkImageCreateInfo cubeMapImgInfo{};
-        {
-            cubeMapImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-            cubeMapImgInfo.imageType = VK_IMAGE_TYPE_2D;
-            cubeMapImgInfo.format = VK_FORMAT_R32G32B32_SFLOAT;
-            cubeMapImgInfo.extent = extent;
-            cubeMapImgInfo.mipLevels = mipCnts;
-            cubeMapImgInfo.arrayLayers = 6;
-            cubeMapImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-            cubeMapImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
-            cubeMapImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-            cubeMapImgInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-            cubeMapImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        }
+            if (i == 0)
+            {
+                // Create the gpu image after the first mipmap read.
+                SharedLib::GpuImgCreateInfo prefilterEnvInfo{};
+                {
+                    prefilterEnvInfo.allocFlags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+                    prefilterEnvInfo.hasSampler = true;
+                    prefilterEnvInfo.imgCreateFlags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+                    prefilterEnvInfo.imgExtent = extent;
+                    prefilterEnvInfo.imgFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+                    prefilterEnvInfo.imgSubresRange = GetImgSubrsrcRange(0, m_prefilterEnvMipsCnt, 0, 6);
+                    prefilterEnvInfo.imgUsageFlags = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+                    prefilterEnvInfo.imgViewType = VK_IMAGE_VIEW_TYPE_CUBE;
+                    prefilterEnvInfo.samplerInfo = samplerInfo;
+                }
 
-        VK_CHECK(vmaCreateImage(*m_pAllocator,
-            &cubeMapImgInfo,
-            &prefilterEnvCubemapAllocInfo,
-            &m_prefilterEnvCubemap,
-            &m_prefilterEnvCubemapAlloc,
-            nullptr));
+                m_prefilterEnvCubemap = CreateGpuImage(prefilterEnvInfo);
+            }
 
-        VkImageViewCreateInfo info{};
-        {
-            info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            info.image = m_prefilterEnvCubemap;
-            info.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
-            info.format = VK_FORMAT_R32G32B32_SFLOAT;
-            info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            info.subresourceRange.levelCount = mipCnts;
-            info.subresourceRange.layerCount = 6;
-        }
-        VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_prefilterEnvCubemapView));
+            VkBufferImageCopy prefilterEnvBufToImgCopy{};
+            {
+                prefilterEnvBufToImgCopy.bufferRowLength = width;
+                prefilterEnvBufToImgCopy.imageSubresource = GetImgSubrsrcLayers(i, 0, 6);
+                prefilterEnvBufToImgCopy.imageExtent = extent;
+            }
 
-        VkSamplerCreateInfo sampler_info{};
-        {
-            sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-            sampler_info.magFilter = VK_FILTER_LINEAR;
-            sampler_info.minFilter = VK_FILTER_LINEAR;
-            sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-            sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            sampler_info.minLod = -1000;
-            sampler_info.maxLod = 1000;
-            sampler_info.maxAnisotropy = 1.0f;
-        }
-        VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_prefilterEnvCubemapSampler));
+            const uint32_t prefilterEnvCubemapBytes = width * height * 4 * sizeof(float);
+
+            SharedLib::SendImgDataToGpu(
+                raiiCmdBuffer.m_cmdBuffer,
+                m_device,
+                m_graphicsQueue,
+                pPrefilterEnvCubemapImgsMipIData,
+                prefilterEnvCubemapBytes,
+                m_prefilterEnvCubemap.image,
+                GetImgSubrsrcRange(i, 1, 0, 6),
+                VK_IMAGE_LAYOUT_UNDEFINED,
+                prefilterEnvBufToImgCopy,
+                *m_pAllocator
+            );
+
+            delete[] pPrefilterEnvCubemapImgsMipIData;
+        }        
     }
 
     // Read in and init environment brdf map
     {
         std::string envBrdfMapPathName = hdriFilePath + "iblOutput/envBrdf.hdr";
         int width, height, nrComponents;
-        m_envBrdfImgInfo.pData = stbi_loadf(envBrdfMapPathName.c_str(), &width, &height, &nrComponents, 0);
-        m_envBrdfImgInfo.pixWidth = width;
-        m_envBrdfImgInfo.pixHeight = height;
+        float* pEnvBrdfImgInfoData = stbi_loadf(envBrdfMapPathName.c_str(), &width, &height, &nrComponents, 0);
+
+        if (nrComponents == 3)
+        {
+            float* pExtentedData = new float[4 * width * height];
+            SharedLib::Img3EleTo4Ele(pEnvBrdfImgInfoData, pExtentedData, width * height);
+            delete[] pEnvBrdfImgInfoData;
+            pEnvBrdfImgInfoData = pExtentedData;
+        }
 
         VmaAllocationCreateInfo envBrdfMapAllocInfo{};
         {
@@ -432,58 +421,49 @@ void PBRIBLApp::InitHdrRenderObjects()
 
         VkExtent3D extent{};
         {
-            extent.width = m_envBrdfImgInfo.pixWidth;
-            extent.height = m_envBrdfImgInfo.pixHeight;
+            extent.width = width;
+            extent.height = height;
             extent.depth = 1;
         }
 
-        VkImageCreateInfo envBrdfImgInfo{};
+        // Create the gpu image after the first mipmap read.
+        SharedLib::GpuImgCreateInfo envBrdfInfo{};
         {
-            envBrdfImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-            envBrdfImgInfo.imageType = VK_IMAGE_TYPE_2D;
-            envBrdfImgInfo.format = VK_FORMAT_R32G32B32_SFLOAT;
-            envBrdfImgInfo.extent = extent;
-            envBrdfImgInfo.mipLevels = 1;
-            envBrdfImgInfo.arrayLayers = 1;
-            envBrdfImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-            envBrdfImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
-            envBrdfImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-            envBrdfImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            envBrdfInfo.allocFlags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+            envBrdfInfo.hasSampler = true;
+            envBrdfInfo.imgExtent = extent;
+            envBrdfInfo.imgFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+            envBrdfInfo.imgSubresRange = GetImgSubrsrcRange(0, 1, 0, 1);
+            envBrdfInfo.imgUsageFlags = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+            envBrdfInfo.imgViewType = VK_IMAGE_VIEW_TYPE_2D;
+            envBrdfInfo.samplerInfo = samplerInfo;
         }
 
-        VK_CHECK(vmaCreateImage(*m_pAllocator,
-            &envBrdfImgInfo,
-            &envBrdfMapAllocInfo,
-            &m_envBrdfImg,
-            &m_envBrdfImgAlloc,
-            nullptr));
-
-        VkImageViewCreateInfo info{};
+        m_envBrdfImg = CreateGpuImage(envBrdfInfo);
+        
+        VkBufferImageCopy envBrdfBufToImgCopy{};
         {
-            info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            info.image = m_envBrdfImg;
-            info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-            info.format = VK_FORMAT_R32G32B32_SFLOAT;
-            info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            info.subresourceRange.levelCount = 1;
-            info.subresourceRange.layerCount = 1;
+            envBrdfBufToImgCopy.bufferRowLength = width;
+            envBrdfBufToImgCopy.imageSubresource = GetImgSubrsrcLayers(0, 0, 1);
+            envBrdfBufToImgCopy.imageExtent = extent;
         }
-        VK_CHECK(vkCreateImageView(m_device, &info, nullptr, &m_envBrdfImgView));
 
-        VkSamplerCreateInfo sampler_info{};
-        {
-            sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-            sampler_info.magFilter = VK_FILTER_LINEAR;
-            sampler_info.minFilter = VK_FILTER_LINEAR;
-            sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-            sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            sampler_info.minLod = -1000;
-            sampler_info.maxLod = 1000;
-            sampler_info.maxAnisotropy = 1.0f;
-        }
-        VK_CHECK(vkCreateSampler(m_device, &sampler_info, nullptr, &m_envBrdfImgSampler));
+        const uint32_t envBrdfBytes = width * height * 4 * sizeof(float);
+
+        SharedLib::SendImgDataToGpu(
+            raiiCmdBuffer.m_cmdBuffer,
+            m_device,
+            m_graphicsQueue,
+            pEnvBrdfImgInfoData,
+            envBrdfBytes,
+            m_envBrdfImg.image,
+            GetImgSubrsrcRange(0, 1, 0, 1),
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            envBrdfBufToImgCopy,
+            *m_pAllocator
+        );
+
+        delete[] pEnvBrdfImgInfoData;
     }
 }
 
@@ -492,97 +472,14 @@ void PBRIBLApp::InitCameraUboObjects()
 {
     // The alignment of a vec3 is 4 floats and the element alignment of a struct is the largest element alignment,
     // which is also the 4 float. Therefore, we need 16 floats as the buffer to store the Camera's parameters.
-    VkBufferCreateInfo bufferInfo{};
-    {
-        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = 16 * sizeof(float);
-        bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    }
-
-    VmaAllocationCreateInfo bufferAllocInfo{};
-    {
-        bufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        bufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
-            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    }
-
     m_cameraParaBuffers.resize(m_swapchainImgCnt);
-    m_cameraParaBufferAllocs.resize(m_swapchainImgCnt);
 
     for (uint32_t i = 0; i < m_swapchainImgCnt; i++)
     {
-        vmaCreateBuffer(*m_pAllocator,
-                        &bufferInfo,
-                        &bufferAllocInfo,
-                        &m_cameraParaBuffers[i],
-                        &m_cameraParaBufferAllocs[i],
-                        nullptr);
-    }
-}
-
-// ================================================================================================================
-// TODO: I may need to put most the content in this function to CreateXXXX(...) in the parent class.
-void PBRIBLApp::InitSkyboxPipelineDescriptorSets()
-{
-    // Create pipeline descirptor
-    VkDescriptorSetAllocateInfo skyboxPipelineDesSet0AllocInfo{};
-    {
-        skyboxPipelineDesSet0AllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        skyboxPipelineDesSet0AllocInfo.descriptorPool = m_descriptorPool;
-        skyboxPipelineDesSet0AllocInfo.pSetLayouts = &m_skyboxPipelineDesSet0Layout;
-        skyboxPipelineDesSet0AllocInfo.descriptorSetCount = 1;
-    }
-    
-    m_skyboxPipelineDescriptorSet0s.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
-    for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
-    {
-        VK_CHECK(vkAllocateDescriptorSets(m_device,
-                                          &skyboxPipelineDesSet0AllocInfo,
-                                          &m_skyboxPipelineDescriptorSet0s[i]));
-    }
-
-    // Link descriptors to the buffer and image
-    VkDescriptorImageInfo hdriDesImgInfo{};
-    {
-        hdriDesImgInfo.imageView = m_hdrCubeMapView;
-        hdriDesImgInfo.sampler = m_hdrSampler;
-        hdriDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    }
-
-    for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
-    {
-        VkDescriptorBufferInfo desCameraParaBufInfo{};
-        {
-            desCameraParaBufInfo.buffer = m_cameraParaBuffers[i];
-            desCameraParaBufInfo.offset = 0;
-            desCameraParaBufInfo.range = sizeof(float) * 16;
-        }
-
-        VkWriteDescriptorSet writeCameraBufDesSet{};
-        {
-            writeCameraBufDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            writeCameraBufDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            writeCameraBufDesSet.dstSet = m_skyboxPipelineDescriptorSet0s[i];
-            writeCameraBufDesSet.dstBinding = 1;
-            writeCameraBufDesSet.descriptorCount = 1;
-            writeCameraBufDesSet.pBufferInfo = &desCameraParaBufInfo;
-        }
-
-        VkWriteDescriptorSet writeHdrDesSet{};
-        {
-            writeHdrDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            writeHdrDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            writeHdrDesSet.dstSet = m_skyboxPipelineDescriptorSet0s[i];
-            writeHdrDesSet.dstBinding = 0;
-            writeHdrDesSet.pImageInfo = &hdriDesImgInfo;
-            writeHdrDesSet.descriptorCount = 1;
-        }
-
-        // Linking skybox pipeline descriptors: skybox cubemap and camera buffer descriptors to their GPU memory
-        // and info.
-        VkWriteDescriptorSet writeSkyboxPipelineDescriptors[2] = { writeHdrDesSet, writeCameraBufDesSet };
-        vkUpdateDescriptorSets(m_device, 2, writeSkyboxPipelineDescriptors, 0, NULL);
+        m_cameraParaBuffers[i] = CreateGpuBuffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                                                 VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
+                                                 VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+                                                 16 * sizeof(float));
     }
 }
 
@@ -635,6 +532,7 @@ void PBRIBLApp::InitSkyboxPipelineDescriptorSetLayout()
     VkDescriptorSetLayoutCreateInfo skyboxPipelineDesSet0LayoutInfo{};
     {
         skyboxPipelineDesSet0LayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        skyboxPipelineDesSet0LayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
         skyboxPipelineDesSet0LayoutInfo.bindingCount = 2;
         skyboxPipelineDesSet0LayoutInfo.pBindings = skyboxPipelineDesSet0LayoutBindings;
     }
@@ -707,25 +605,18 @@ void PBRIBLApp::AppInit()
     std::vector<VkDeviceQueueCreateInfo> deviceQueueInfos = CreateDeviceQueueInfos({ m_graphicsQueueFamilyIdx,
                                                                                      m_presentQueueFamilyIdx });
     // We need the swap chain device extension and the dynamic rendering extension.
-    const std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-                                                        VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME };
+    const std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 
-    VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeature{};
-    {
-        dynamicRenderingFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
-        dynamicRenderingFeature.dynamicRendering = VK_TRUE;
-    }
-
-    InitDevice(deviceExtensions, 2, deviceQueueInfos, &dynamicRenderingFeature);
+    InitDevice(deviceExtensions, deviceQueueInfos, nullptr);
     InitVmaAllocator();
     InitGraphicsQueue();
     InitPresentQueue();
-    InitDescriptorPool();
-
     InitGfxCommandPool();
-    InitGfxCommandBuffers(m_swapchainImgCnt);
+    InitKHRFuncPtrs();
+    InitSwapchain();  
 
-    InitSwapchain();
+    InitGfxCommandBuffers(m_swapchainImgCnt);
+    
     InitSphereVertexIndexBuffers();
     InitVpMatBuffer();
 
@@ -742,8 +633,6 @@ void PBRIBLApp::AppInit()
 
     InitHdrRenderObjects();
     InitCameraUboObjects();
-    InitSkyboxPipelineDescriptorSets();
-    InitIblPipelineDescriptorSets();
     InitSwapchainSyncObjects();
 }
 
@@ -941,6 +830,7 @@ void PBRIBLApp::InitIblPipelineDescriptorSetLayout()
     VkDescriptorSetLayoutCreateInfo pipelineDesSetLayoutInfo{};
     {
         pipelineDesSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        pipelineDesSetLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
         pipelineDesSetLayoutInfo.bindingCount = 4;
         pipelineDesSetLayoutInfo.pBindings = pipelineDesSetLayoutBindings;
     }
@@ -982,105 +872,6 @@ void PBRIBLApp::InitIblShaderModules()
 }
 
 // ================================================================================================================
-void PBRIBLApp::InitIblPipelineDescriptorSets()
-{
-    // Create pipeline descirptor
-    VkDescriptorSetAllocateInfo pipelineDesSet0AllocInfo{};
-    {
-        pipelineDesSet0AllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        pipelineDesSet0AllocInfo.descriptorPool = m_descriptorPool;
-        pipelineDesSet0AllocInfo.pSetLayouts = &m_iblPipelineDesSet0Layout;
-        pipelineDesSet0AllocInfo.descriptorSetCount = 1;
-    }
-
-    // Link descriptors to the buffer and image
-    VkDescriptorImageInfo diffIrrDesImgInfo{};
-    {
-        diffIrrDesImgInfo.imageView = m_diffuseIrradianceCubemapImgView;
-        diffIrrDesImgInfo.sampler = m_diffuseIrradianceCubemapSampler;
-        diffIrrDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    }
-
-    VkDescriptorImageInfo prefilterEnvDesImgInfo{};
-    {
-        prefilterEnvDesImgInfo.imageView = m_prefilterEnvCubemapView;
-        prefilterEnvDesImgInfo.sampler = m_prefilterEnvCubemapSampler;
-        prefilterEnvDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    }
-
-    VkDescriptorImageInfo envBrdfDesImgInfo{};
-    {
-        envBrdfDesImgInfo.imageView = m_envBrdfImgView;
-        envBrdfDesImgInfo.sampler = m_envBrdfImgSampler;
-        envBrdfDesImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    }
-
-    m_iblPipelineDescriptorSet0s.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
-
-    for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
-    {
-        VkDescriptorBufferInfo vpMatDesBufInfo{};
-        {
-            vpMatDesBufInfo.buffer = m_vpMatUboBuffer[i];
-            vpMatDesBufInfo.offset = 0;
-            vpMatDesBufInfo.range = VpMatBytesCnt;
-        }
-
-        VK_CHECK(vkAllocateDescriptorSets(m_device,
-                                          &pipelineDesSet0AllocInfo,
-                                          &m_iblPipelineDescriptorSet0s[i]));
-
-        VkWriteDescriptorSet writeVpMatUboBufDesSet{};
-        {
-            writeVpMatUboBufDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            writeVpMatUboBufDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            writeVpMatUboBufDesSet.dstSet = m_iblPipelineDescriptorSet0s[i];
-            writeVpMatUboBufDesSet.dstBinding = 0;
-            writeVpMatUboBufDesSet.descriptorCount = 1;
-            writeVpMatUboBufDesSet.pBufferInfo = &vpMatDesBufInfo;
-        }
-
-        VkWriteDescriptorSet writeDiffIrrDesSet{};
-        {
-            writeDiffIrrDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            writeDiffIrrDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            writeDiffIrrDesSet.dstSet = m_iblPipelineDescriptorSet0s[i];
-            writeDiffIrrDesSet.dstBinding = 1;
-            writeDiffIrrDesSet.pImageInfo = &diffIrrDesImgInfo;
-            writeDiffIrrDesSet.descriptorCount = 1;
-        }
-
-        VkWriteDescriptorSet writePrefilterEnvDesSet{};
-        {
-            writePrefilterEnvDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            writePrefilterEnvDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            writePrefilterEnvDesSet.dstSet = m_iblPipelineDescriptorSet0s[i];
-            writePrefilterEnvDesSet.dstBinding = 2;
-            writePrefilterEnvDesSet.pImageInfo = &prefilterEnvDesImgInfo;
-            writePrefilterEnvDesSet.descriptorCount = 1;
-        }
-
-        VkWriteDescriptorSet writeEnvBrdfDesSet{};
-        {
-            writeEnvBrdfDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            writeEnvBrdfDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            writeEnvBrdfDesSet.dstSet = m_iblPipelineDescriptorSet0s[i];
-            writeEnvBrdfDesSet.dstBinding = 3;
-            writeEnvBrdfDesSet.pImageInfo = &envBrdfDesImgInfo;
-            writeEnvBrdfDesSet.descriptorCount = 1;
-        }
-
-        // Linking pipeline descriptors: cubemap and scene buffer descriptors to their GPU memory and info.
-        VkWriteDescriptorSet writeIblPipelineDescriptors[4] = { writeVpMatUboBufDesSet,
-                                                                writeDiffIrrDesSet,
-                                                                writePrefilterEnvDesSet,
-                                                                writeEnvBrdfDesSet };
-
-        vkUpdateDescriptorSets(m_device, 4, writeIblPipelineDescriptors, 0, NULL);
-    }
-}
-
-// ================================================================================================================
 void PBRIBLApp::DestroyIblPipelineRes()
 {
     // Destroy shader modules
@@ -1097,23 +888,7 @@ void PBRIBLApp::DestroyIblPipelineRes()
 // ================================================================================================================
 void PBRIBLApp::InitVpMatBuffer()
 {
-    VkBufferCreateInfo bufferInfo{};
-    {
-        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = 16 * sizeof(float);
-        bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    }
-
-    VmaAllocationCreateInfo bufferAllocInfo{};
-    {
-        bufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        bufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
-                                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    }
-
-    m_vpMatUboBuffer.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
-    m_vpMatUboAlloc.resize(SharedLib::MAX_FRAMES_IN_FLIGHT);
+    m_vpMatUboBuffer.resize(m_swapchainImgCnt);
 
     float vpMatData[16] = {};
     float tmpViewMatData[16] = {};
@@ -1121,18 +896,15 @@ void PBRIBLApp::InitVpMatBuffer()
     m_pCamera->GenViewPerspectiveMatrices(tmpViewMatData, tmpPersMatData, vpMatData);
     SharedLib::MatTranspose(vpMatData, 4);
 
-    for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
+    for (uint32_t i = 0; i < m_swapchainImgCnt; i++)
     {
-        vmaCreateBuffer(*m_pAllocator,
-                        &bufferInfo,
-                        &bufferAllocInfo,
-                        &m_vpMatUboBuffer[i],
-                        &m_vpMatUboAlloc[i],
-                        nullptr);
+        m_vpMatUboBuffer[i] = CreateGpuBuffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                        VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+                        16 * sizeof(float));
 
         CopyRamDataToGpuBuffer(vpMatData,
-                               m_vpMatUboBuffer[i],
-                               m_vpMatUboAlloc[i],
+                               m_vpMatUboBuffer[i].buffer,
+                               m_vpMatUboBuffer[i].bufferAlloc,
                                sizeof(vpMatData));
     }
 }
@@ -1140,9 +912,9 @@ void PBRIBLApp::InitVpMatBuffer()
 // ================================================================================================================
 void PBRIBLApp::DestroyVpMatBuffer()
 {
-    for (uint32_t i = 0; i < SharedLib::MAX_FRAMES_IN_FLIGHT; i++)
+    for (uint32_t i = 0; i < m_swapchainImgCnt; i++)
     {
-        vmaDestroyBuffer(*m_pAllocator, m_vpMatUboBuffer[i], m_vpMatUboAlloc[i]);
+        DestroyGpuBufferResource(m_vpMatUboBuffer[i]);
     }
 }
 
@@ -1203,4 +975,93 @@ VkPipelineDepthStencilStateCreateInfo PBRIBLApp::CreateDepthStencilStateInfo()
     }
 
     return depthStencilInfo;
+}
+
+// ================================================================================================================
+void PBRIBLApp::CmdPushSkyboxDescriptors(
+    VkCommandBuffer cmdBuffer)
+{
+    std::vector<VkWriteDescriptorSet> skyboxDescriptorsInfos;
+
+    // Set 0 -- Binding 0: The skybox cubemap
+    VkWriteDescriptorSet writeHdrDesSet{};
+    {
+        writeHdrDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeHdrDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writeHdrDesSet.dstBinding = 0;
+        writeHdrDesSet.pImageInfo = &m_hdrCubeMap.imageDescInfo;
+        writeHdrDesSet.descriptorCount = 1;
+    }
+    skyboxDescriptorsInfos.push_back(writeHdrDesSet);
+
+    // Set 0 -- Binding 1: The cubemap render camera buffer
+    VkWriteDescriptorSet writeCameraBufDesSet{};
+    {
+        writeCameraBufDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeCameraBufDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        writeCameraBufDesSet.dstBinding = 1;
+        writeCameraBufDesSet.descriptorCount = 1;
+        writeCameraBufDesSet.pBufferInfo = &m_cameraParaBuffers[m_acqSwapchainImgIdx].bufferDescInfo;
+    }
+    skyboxDescriptorsInfos.push_back(writeCameraBufDesSet);
+
+    m_vkCmdPushDescriptorSetKHR(cmdBuffer,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        m_skyboxPipelineLayout,
+        0, skyboxDescriptorsInfos.size(), skyboxDescriptorsInfos.data());
+}
+
+// ================================================================================================================
+// TODO: Push descriptors can be more automatic.
+void PBRIBLApp::CmdPushSphereIBLDescriptors(
+    VkCommandBuffer cmdBuffer)
+{
+    std::vector<VkWriteDescriptorSet> iblRenderDescriptorSet0Infos;
+
+    // Descriptor set 0 infos.
+    VkWriteDescriptorSet writeIblMvpMatUboBufDesSet{};
+    {
+        writeIblMvpMatUboBufDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeIblMvpMatUboBufDesSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        writeIblMvpMatUboBufDesSet.dstBinding = 0;
+        writeIblMvpMatUboBufDesSet.descriptorCount = 1;
+        writeIblMvpMatUboBufDesSet.pBufferInfo = &m_vpMatUboBuffer[m_acqSwapchainImgIdx].bufferDescInfo;
+    }
+    iblRenderDescriptorSet0Infos.push_back(writeIblMvpMatUboBufDesSet);
+
+    VkWriteDescriptorSet writeDiffIrrDesSet{};
+    {
+        writeDiffIrrDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeDiffIrrDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writeDiffIrrDesSet.dstBinding = 1;
+        writeDiffIrrDesSet.pImageInfo = &m_diffuseIrradianceCubemap.imageDescInfo;
+        writeDiffIrrDesSet.descriptorCount = 1;
+    }
+    iblRenderDescriptorSet0Infos.push_back(writeDiffIrrDesSet);
+
+    VkWriteDescriptorSet writePrefilterEnvDesSet{};
+    {
+        writePrefilterEnvDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writePrefilterEnvDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writePrefilterEnvDesSet.dstBinding = 2;
+        writePrefilterEnvDesSet.pImageInfo = &m_prefilterEnvCubemap.imageDescInfo;
+        writePrefilterEnvDesSet.descriptorCount = 1;
+    }
+    iblRenderDescriptorSet0Infos.push_back(writePrefilterEnvDesSet);
+
+    VkWriteDescriptorSet writeEnvBrdfDesSet{};
+    {
+        writeEnvBrdfDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeEnvBrdfDesSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writeEnvBrdfDesSet.dstBinding = 3;
+        writeEnvBrdfDesSet.pImageInfo = &m_envBrdfImg.imageDescInfo;
+        writeEnvBrdfDesSet.descriptorCount = 1;
+    }
+    iblRenderDescriptorSet0Infos.push_back(writeEnvBrdfDesSet);
+
+    // Push decriptors
+    m_vkCmdPushDescriptorSetKHR(cmdBuffer,
+                                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                m_iblPipelineLayout,
+                                0, iblRenderDescriptorSet0Infos.size(), iblRenderDescriptorSet0Infos.data());
 }

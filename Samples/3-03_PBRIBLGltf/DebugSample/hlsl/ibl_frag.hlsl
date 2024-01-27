@@ -4,7 +4,6 @@
 
 // NOTE: [[vk::binding(X[, Y])]] -- X: binding number, Y: descriptor set.
 // NOTE: We assume that the metallic, roughness and occlusion are in the same texture. x: occlusion, y: roughness, z: metal.
-// TODO: We'll two descriptor sets since only the camera matrices are needed to be updated.
 
 struct SceneInfoUbo
 {

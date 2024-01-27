@@ -28,6 +28,7 @@ namespace SharedLib
         VkBuffer               buffer;
         VmaAllocation          bufferAlloc;
         VkDescriptorBufferInfo bufferDescInfo;
+        VkDescriptorType       gpuBufferDescriptorType; // Uniform buffer or storage buffer?
     };
 
     struct GpuImg
@@ -66,6 +67,17 @@ namespace SharedLib
     private:
         VkDevice m_device;
         VkCommandPool m_cmdPool;
+    };
+
+    class RAIIHeapRAM
+    {
+    public:
+        RAIIHeapRAM(void* pData, bool isArray) : m_pData(pData), m_isArray(isArray) {}
+        ~RAIIHeapRAM() { if (m_isArray) { delete[] m_pData; } else { delete m_pData; } }
+
+    private:
+        void* m_pData;
+        bool m_isArray;
     };
 
     // Base Vulkan application without a swapchain -- Basically abstract.
@@ -112,6 +124,11 @@ namespace SharedLib
         void WaitTheFence(VkFence fence);
 
         GpuImg CreateGpuImage(GpuImgCreateInfo createInfo);
+        void DestroyGpuImgResource(const GpuImg& gpuImg);
+
+        GpuBuffer CreateGpuBuffer(VkBufferUsageFlags usage, VmaAllocationCreateFlags vmaFlags, uint32_t bytesNum);
+        void DestroyGpuBufferResource(const GpuBuffer& pGpuBuffer);
+
         GpuImg CreateDummyPureColorImg(float* pColor);
         void TransImageLayout(GpuImg* pTargetImg,
             VkImageLayout targetLayout,
@@ -119,6 +136,10 @@ namespace SharedLib
             VkAccessFlags dstAccess,
             VkPipelineStageFlags srcPipelineStg,
             VkPipelineStageFlags dstPipelineStg) {}
+
+        VkImageSubresourceRange GetImgSubrsrcRange(uint32_t baseMipLevel, uint32_t levelCnt, uint32_t baseArrayLayer, uint32_t layerCnt, VkImageAspectFlags imgAspectFlags = VK_IMAGE_ASPECT_COLOR_BIT);
+        VkImageSubresource GetImgSubrsrc(uint32_t mipLevel, uint32_t baseArrayLayer, VkImageAspectFlags imgAspectFlags = VK_IMAGE_ASPECT_COLOR_BIT);
+        VkImageSubresourceLayers GetImgSubrsrcLayers(uint32_t mipLevel, uint32_t baseArrayLayer, uint32_t layerCnt, VkImageAspectFlags imgAspectFlags = VK_IMAGE_ASPECT_COLOR_BIT);
 
         // GpuImg CreateSwapchainSizeOneMipOneLayerGpuImg(usage, ...);
         // void DestroyGpuImg(GpuImg xxx);
