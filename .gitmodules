@@ -25,3 +25,6 @@
 [submodule "ThirdPartyLibs/TinyGltf"]
 	path = ThirdPartyLibs/TinyGltf
 	url = https://github.com/syoyo/tinygltf.git
+[submodule "ThirdPartyLibs/glm"]
+	path = ThirdPartyLibs/glm
+	url = https://github.com/g-truc/glm.git

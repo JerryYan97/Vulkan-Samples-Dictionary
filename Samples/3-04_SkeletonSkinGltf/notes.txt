@@ -14,6 +14,8 @@ Rotations with quaterninos:
 https://juliageometry.github.io/Quaternions.jl/v0.7/examples/rotations/
 http://www.lighthouse3d.com/tutorials/glsl-tutorial/the-normal-matrix/
 
+Slerp: https://keithmaggio.wordpress.com/2011/02/15/math-magician-lerp-slerp-and-nlerp/
+
 Buffer, buffer view, accessor:
 https://github.com/KhronosGroup/glTF-Tutorials/blob/master/gltfTutorial/gltfTutorial_005_BuffersBufferViewsAccessors.md
 

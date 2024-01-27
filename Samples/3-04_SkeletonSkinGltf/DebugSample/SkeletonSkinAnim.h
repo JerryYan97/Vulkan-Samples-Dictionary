@@ -28,7 +28,8 @@ struct Mesh
     std::vector<float>    vertData;
     std::vector<uint16_t> idxData;
 
-    ImgInfo baseColorImg;
+    // ImgInfo baseColorImg;
+    SharedLib::GpuImg baseColorImg;
 
     SharedLib::GpuBuffer vertBuffer;
     SharedLib::GpuBuffer idxBuffer;
@@ -46,7 +47,7 @@ struct Joint
 {
     float localTranslation[3];
     float localRotatoin[4];
-    float localScale[3];
+    // float localScale[3];
 
     Animation translationAnimation;
     Animation rotationAnimation;
@@ -64,7 +65,7 @@ struct Skeleton
 {
     std::vector<Joint> joints; // joints[0] is the root joint.
 
-    SharedLib::GpuBuffer jointsMatsBuffer;
+    std::vector<SharedLib::GpuBuffer> jointsMatsBuffers; // Each in-flight frame has its own joints matrices buffer.
 };
 
 struct SkeletalMesh
@@ -80,7 +81,7 @@ struct SkeletalMesh
 
 const uint32_t VpMatBytesCnt = 4 * 4 * sizeof(float);
 const uint32_t IblMvpMatsBytesCnt = 2 * 4 * 4 * sizeof(float);
-const float ModelWorldPos[3] = {0.f, -0.5f, 0.f};
+const float ModelWorldPos[3] = {0.f, 0.f, 0.f};
 const float Radius = 1.5f;
 const float RotateRadiensPerSecond = 3.1415926 * 2.f / 10.f; // 10s -- a circle.
 
@@ -91,10 +92,9 @@ public:
     ~SkinAnimGltfApp();
 
     virtual void AppInit() override;
+    virtual void FrameStart() override;
 
-    void CmdPushSkeletonSkinRenderingDescriptors(VkCommandBuffer cmdBuffer, const Mesh& mesh);
-
-    void UpdateCameraAndGpuBuffer();
+    void CmdPushSkeletonSkinRenderingDescriptors(VkCommandBuffer cmdBuffer);
 
     void GetCameraPos(float* pOut);
 
@@ -105,12 +105,19 @@ public:
     
     std::vector<float> GetSkinAnimPushConsant();
 
+    SkeletalMesh* GetSkeletalMeshPtr() { return &m_skeletalMesh; }
+    uint32_t GetMeshIdxCnt() { return m_vertIdxCnt; }
+
+private:
+
+    void GenJointMatrix(float parentChainTransformationMat[16], uint32_t currentJoint, std::vector<float>& jointsMatBuffer);
+
+    void UpdateCamera();
     // Update joints/skeleton's local transformation and the joints' matrices.
     // It's obstructive because I only want to keep one joints matrix gpu buffer. Thus GPU has to finish works after
     // the buffer updates.
     void UpdateJointsTransAndMats();
 
-private:
     VkPipelineVertexInputStateCreateInfo CreatePipelineVertexInputInfo();
     VkPipelineDepthStencilStateCreateInfo CreateDepthStencilStateInfo();
 
@@ -137,9 +144,12 @@ private:
     VkPipelineLayout      m_skinAnimPipelineLayout;
     SharedLib::Pipeline   m_skinAnimPipeline;
 
-    ImgInfo m_diffuseIrradianceCubemap;
-    ImgInfo m_prefilterEnvCubemap;
-    ImgInfo m_envBrdfImg;
+    SharedLib::GpuImg m_diffuseIrradianceCubemap;
+    SharedLib::GpuImg m_prefilterEnvCubemap;
+    SharedLib::GpuImg m_envBrdfImg;
+
+    uint32_t m_prefilterEnvMipsCnt;
+    uint32_t m_vertIdxCnt;
 
     SkeletalMesh m_skeletalMesh;
     float        m_currentAnimTime;

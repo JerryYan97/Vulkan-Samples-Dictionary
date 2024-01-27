@@ -23,6 +23,8 @@ typedef VkFlags VmaAllocationCreateFlags;
 // TODO3: GPU image format should have more information like currnet GPU image format.
 namespace SharedLib
 {
+    typedef std::pair<VkDescriptorType, void*> PushDescriptorInfo;
+
     struct GpuBuffer
     {
         VkBuffer               buffer;
@@ -183,6 +185,10 @@ namespace SharedLib
         std::vector<VkDeviceQueueCreateInfo> CreateDeviceQueueInfos(const std::set<uint32_t>& uniqueQueueFamilies);
         
         VkPipelineShaderStageCreateInfo CreateDefaultShaderStgCreateInfo(const VkShaderModule& shaderModule, const VkShaderStageFlagBits stg);
+
+        VkSamplerCreateInfo GetSamplerInfo(VkFilter filter, VkSamplerAddressMode addrMode);
+
+        void CmdAutoPushDescriptors(const std::vector<PushDescriptorInfo> pushDescriptors);
 
         // The class manages both of the creation and destruction of the objects below.
         VkInstance       m_instance;

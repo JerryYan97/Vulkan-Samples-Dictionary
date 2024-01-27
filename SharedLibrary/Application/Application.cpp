@@ -803,6 +803,70 @@ namespace SharedLib
     }
 
     // ================================================================================================================
+    VkSamplerCreateInfo Application::GetSamplerInfo(
+        VkFilter filter,
+        VkSamplerAddressMode addrMode)
+    {
+        VkSamplerCreateInfo samplerInfo{};
+        {
+            samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+            samplerInfo.magFilter = filter;
+            samplerInfo.minFilter = filter;
+            samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+            samplerInfo.addressModeU = addrMode;
+            samplerInfo.addressModeV = addrMode;
+            samplerInfo.addressModeW = addrMode;
+            samplerInfo.minLod = -1000;
+            samplerInfo.maxLod = 1000;
+            samplerInfo.maxAnisotropy = 1.0f;
+        }
+
+        return samplerInfo;
+    }
+
+    // ================================================================================================================
+    void Application::CmdAutoPushDescriptors(
+        const std::vector<PushDescriptorInfo> pushDescriptors)
+    {
+        assert(m_vkCmdPushDescriptorSetKHR != nullptr, "The vkCmdPushDescriptorSetKHR is not init!!!!");
+
+        constexpr uint32_t BufferDescriptorTypeFlags = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER |
+                                                       VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+
+        constexpr uint32_t ImgDescriptorTypeFlags = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+
+        std::vector<VkWriteDescriptorSet> descriptorSetInfos;
+        for (uint32_t i = 0; i < pushDescriptors.size(); i++)
+        {
+            const auto& desriptorInfo = pushDescriptors[i];
+
+            VkWriteDescriptorSet writeDesSet{};
+            {
+                writeDesSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                writeDesSet.descriptorType = desriptorInfo.first;
+                writeDesSet.dstBinding = i;
+                writeDesSet.descriptorCount = 1;
+            }
+
+            if ((desriptorInfo.first | BufferDescriptorTypeFlags) != 0)
+            {
+                writeDesSet.pBufferInfo = (VkDescriptorBufferInfo*)desriptorInfo.second;
+                descriptorSetInfos.push_back(writeDesSet);
+            }
+            else if ((desriptorInfo.first | ImgDescriptorTypeFlags) != 0)
+            {
+                writeDesSet.pImageInfo = (VkDescriptorImageInfo*)desriptorInfo.second;
+                descriptorSetInfos.push_back(writeDesSet);
+            }
+            else
+            {
+                std::cerr << "Invalid descirptor type." << std::endl;
+                exit(1);
+            }
+        }
+    }
+
+    // ================================================================================================================
     RAIICommandBuffer::RAIICommandBuffer(
         VkCommandPool cmdPool,
         VkDevice      device) :
