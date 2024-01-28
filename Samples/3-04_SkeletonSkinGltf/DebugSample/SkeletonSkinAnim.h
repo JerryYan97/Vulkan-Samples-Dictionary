@@ -46,8 +46,8 @@ struct Animation
 struct Joint
 {
     float localTranslation[3];
-    float localRotatoin[4];
-    // float localScale[3];
+    float localRotation[4]; // GLTF: (x,y,z,w), where the w-component is the cosine of half of the rotation angle.
+    float localScale[3];
 
     Animation translationAnimation;
     Animation rotationAnimation;
@@ -153,6 +153,10 @@ private:
 
     SkeletalMesh m_skeletalMesh;
     float        m_currentAnimTime;
+    float        m_maxAnimTime;
+
+    std::chrono::steady_clock::time_point m_lastAnimTimeStamp;
+
 
     float m_currentRadians;
     std::chrono::steady_clock::time_point m_lastTime;

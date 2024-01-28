@@ -7,6 +7,11 @@
 #include "../../../SharedLibrary/Utils/DiskOpsUtils.h"
 #include "../../../SharedLibrary/Utils/CmdBufUtils.h"
 #include "../../../SharedLibrary/Utils/AppUtils.h"
+#include <glm/ext/quaternion_common.hpp>
+#include <glm/ext/quaternion_float.hpp>
+#include <glm/gtx/quaternion.hpp>
+#include <glm/gtc/matrix_access.hpp>
+#include <cmath>
 
 #define TINYGLTF_IMPLEMENTATION
 // #define STB_IMAGE_IMPLEMENTATION
@@ -48,9 +53,10 @@ SkinAnimGltfApp::SkinAnimGltfApp(
     m_lastTime(),
     m_skinAnimPipelineDesSetLayout(VK_NULL_HANDLE),
     m_skeletalMesh(),
-    m_currentAnimTime(0.f),
+    m_currentAnimTime(-1.f),
     m_iblDir(iblPath),
-    m_gltfPathName(gltfPathName)
+    m_gltfPathName(gltfPathName),
+    m_maxAnimTime(-1.f)
 {
     m_pCamera = new SharedLib::Camera();
     
@@ -835,17 +841,17 @@ void SkinAnimGltfApp::ReadInInitGltf()
         // Set joint rotation from the gltf -- quternion
         if (jointI.rotation.size() != 0)
         {
-            m_skeletalMesh.skeleton.joints[i].localRotatoin[0] = jointI.rotation[0];
-            m_skeletalMesh.skeleton.joints[i].localRotatoin[1] = jointI.rotation[1];
-            m_skeletalMesh.skeleton.joints[i].localRotatoin[2] = jointI.rotation[2];
-            m_skeletalMesh.skeleton.joints[i].localRotatoin[3] = jointI.rotation[3];
+            m_skeletalMesh.skeleton.joints[i].localRotation[0] = jointI.rotation[0];
+            m_skeletalMesh.skeleton.joints[i].localRotation[1] = jointI.rotation[1];
+            m_skeletalMesh.skeleton.joints[i].localRotation[2] = jointI.rotation[2];
+            m_skeletalMesh.skeleton.joints[i].localRotation[3] = jointI.rotation[3];
         }
         else
         {
-            m_skeletalMesh.skeleton.joints[i].localRotatoin[0] = 0.f;
-            m_skeletalMesh.skeleton.joints[i].localRotatoin[1] = 0.f;
-            m_skeletalMesh.skeleton.joints[i].localRotatoin[2] = 0.f;
-            m_skeletalMesh.skeleton.joints[i].localRotatoin[3] = 1.f;
+            m_skeletalMesh.skeleton.joints[i].localRotation[0] = 0.f;
+            m_skeletalMesh.skeleton.joints[i].localRotation[1] = 0.f;
+            m_skeletalMesh.skeleton.joints[i].localRotation[2] = 0.f;
+            m_skeletalMesh.skeleton.joints[i].localRotation[3] = 1.f;
         }
 
         // Set joint scaling from the gltf
@@ -918,6 +924,9 @@ void SkinAnimGltfApp::ReadInInitGltf()
                    &pTimeBufferData[timeBufferOffset],
                    timeBufferByteCnt);
 
+            m_maxAnimTime = std::max(m_maxAnimTime,
+                                     m_skeletalMesh.skeleton.joints[jointId].translationAnimation.keyframeTimes[timeAccessorEleCnt - 1]);
+
             const auto& translationAccessor = model.accessors[sampler.output];
 
             assert(translationAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT, "The translation accessor component type should be float.");
@@ -943,6 +952,9 @@ void SkinAnimGltfApp::ReadInInitGltf()
             memcpy(m_skeletalMesh.skeleton.joints[jointId].rotationAnimation.keyframeTimes.data(),
                    &pTimeBufferData[timeBufferOffset],
                    timeBufferByteCnt);
+
+            m_maxAnimTime = std::max(m_maxAnimTime,
+                                     m_skeletalMesh.skeleton.joints[jointId].rotationAnimation.keyframeTimes[timeAccessorEleCnt - 1]);
 
             const auto& rotationAccessor = model.accessors[sampler.output];
 
@@ -1264,19 +1276,133 @@ std::vector<float> SkinAnimGltfApp::GetSkinAnimPushConsant()
 }
 
 // ================================================================================================================
+float GetInterploationAndInterval(
+    const std::vector<float>& keyframeTimes,
+    const float curAnimTime,
+    uint32_t& preIdx,
+    uint32_t& postIdx)
+{
+    int idx0 = -1;
+    int idx1 = -1;
+    for (uint32_t i = 0; i < keyframeTimes.size(); i++)
+    {
+        float keyframeTime = keyframeTimes[i];
+        if (curAnimTime > keyframeTime)
+        {
+            idx0 = i;
+        }
+        else
+        {
+            idx1 = i;
+            break;
+        }
+    }
+
+    if (idx0 == -1)
+    {
+        idx0 = idx1;
+        idx1--;
+        preIdx = idx0;
+        postIdx = idx1;
+
+        return 0.f;
+    }
+    else
+    {
+        preIdx = idx0;
+        postIdx = idx1;
+
+        float previousTime = keyframeTimes[preIdx];
+        float nextTime = keyframeTimes[postIdx];
+        
+        float interpolationValue = (curAnimTime - previousTime) / (nextTime - previousTime);
+
+        return interpolationValue;
+    }
+}
+
+// ================================================================================================================
 // A chain trans matrix transforms a point in the joint space to the world/model space.
 // Joint i's joint matrix = Joint i's world (chain trans) matrix * joint i's inverse bind matrix.
 // A model sapce vert multiples joint matrix generates a vert that is 100% connected/affected by the joint, so for
 // a vertex affected by several joints, the vert final pos is the weight blend of these 100% affected vertices.
+//
+// The local transform matrix always has to be computed as M = T * R * S, where T is the matrix for the translation
+// part, R is the matrix for the rotation part, and S is the matrix for the scale part.
 void SkinAnimGltfApp::GenJointMatrix(
     float parentChainTransformationMat[16],
     uint32_t currentJoint,
     std::vector<float>& jointsMatBuffer)
 {
-    float currentChainTransformation[16];
-    float localTransformation[16];
+    const auto& joint = m_skeletalMesh.skeleton.joints[currentJoint];
 
-    m_skeletalMesh.skeleton.joints[currentJoint].;
+    float interpolatedTranslation[3];
+    memcpy(interpolatedTranslation, joint.localTranslation, sizeof(interpolatedTranslation));
+
+    glm::quat interpolatedRotQuat(joint.localRotation[3],
+                                  joint.localRotation[0],
+                                  joint.localRotation[1],
+                                  joint.localRotation[2]);
+    
+    if (joint.translationAnimation.keyframeTimes.size() != 0)
+    {
+        uint32_t preIdx;
+        uint32_t postIdx;
+        float weight = GetInterploationAndInterval(joint.translationAnimation.keyframeTimes,
+                                                   m_currentAnimTime, preIdx, postIdx);
+
+        const std::vector<float>& translationAnimData = joint.translationAnimation.keyframeTransformationsData;
+
+        float preTranslation[3] = { translationAnimData[preIdx * 3],
+                                    translationAnimData[preIdx * 3 + 1],
+                                    translationAnimData[preIdx * 3 + 2] };
+
+        float postTranslation[3] = { translationAnimData[postIdx * 3],
+                                     translationAnimData[postIdx * 3 + 1],
+                                     translationAnimData[postIdx * 3 + 2] };
+
+        // C++ 20
+        interpolatedTranslation[0] = std::lerp(preTranslation[0], postTranslation[0], weight);
+        interpolatedTranslation[1] = std::lerp(preTranslation[1], postTranslation[1], weight);
+        interpolatedTranslation[2] = std::lerp(preTranslation[2], postTranslation[2], weight);
+    }
+
+    if (joint.rotationAnimation.keyframeTimes.size() != 0)
+    {
+        uint32_t preIdx;
+        uint32_t postIdx;
+        float weight = GetInterploationAndInterval(joint.rotationAnimation.keyframeTimes,
+                                                   m_currentAnimTime, preIdx, postIdx);
+
+        const std::vector<float>& rotationAnimData = joint.rotationAnimation.keyframeTransformationsData;
+
+        glm::quat preRotQuat(rotationAnimData[preIdx * 4 + 3],
+                             rotationAnimData[preIdx * 4],
+                             rotationAnimData[preIdx * 4 + 1],
+                             rotationAnimData[preIdx * 4 + 2]);
+
+        glm::quat postRotQuat(rotationAnimData[postIdx * 4 + 3],
+                              rotationAnimData[postIdx * 4],
+                              rotationAnimData[postIdx * 4 + 1],
+                              rotationAnimData[postIdx * 4 + 2]);
+
+        interpolatedRotQuat = glm::slerp(preRotQuat, postRotQuat, weight);
+    }
+
+    glm::mat4 rotationMatrix = glm::toMat4(interpolatedRotQuat);
+    glm::vec4 rotRow0 = glm::row(rotationMatrix, 0);
+    glm::vec4 rotRow1 = glm::row(rotationMatrix, 1);
+    glm::vec4 rotRow2 = glm::row(rotationMatrix, 2);
+
+    float localTransformMat[16] = {
+        rotRow0[0], rotRow0[1], rotRow0[2], interpolatedTranslation[0],
+        rotRow1[0], rotRow1[1], rotRow1[2], interpolatedTranslation[1],
+        rotRow2[0], rotRow2[1], rotRow2[2], interpolatedTranslation[2],
+        0.f,        0.f,        0.f,        1.f
+    };
+
+    uint32_t jointMatStartIdx = 16 * currentJoint;
+    memcpy(&jointsMatBuffer[jointMatStartIdx], localTransformMat, sizeof(localTransformMat));
 }
 
 // ================================================================================================================
@@ -1302,5 +1428,28 @@ void SkinAnimGltfApp::FrameStart()
 {
     GlfwApplication::FrameStart();
     UpdateCamera();
+
+    // Update time stamp and the current anim time.
+    if (m_currentAnimTime < 0.f)
+    {
+        // The first time render
+        m_currentAnimTime = 0.f;
+        m_lastAnimTimeStamp = std::chrono::high_resolution_clock::now();
+    }
+    else
+    {
+        const auto& thisTime = std::chrono::high_resolution_clock::now();
+        auto durationMiliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(thisTime - m_lastTime).count();
+        float delta = (float)durationMiliseconds / 1000.f; // Delta is in second.
+        
+        m_currentAnimTime += delta;
+        if (m_currentAnimTime > m_maxAnimTime)
+        {
+            m_currentAnimTime -= m_maxAnimTime;
+        }
+
+        m_lastAnimTimeStamp = thisTime;
+    }
+
     UpdateJointsTransAndMats();
 }
