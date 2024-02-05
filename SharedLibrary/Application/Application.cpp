@@ -826,6 +826,8 @@ namespace SharedLib
 
     // ================================================================================================================
     void Application::CmdAutoPushDescriptors(
+        VkCommandBuffer                       cmdBuf,
+        VkPipelineLayout                      pipelineLayout,
         const std::vector<PushDescriptorInfo> pushDescriptors)
     {
         assert(m_vkCmdPushDescriptorSetKHR != nullptr, "The vkCmdPushDescriptorSetKHR is not init!!!!");
@@ -848,12 +850,13 @@ namespace SharedLib
                 writeDesSet.descriptorCount = 1;
             }
 
-            if ((desriptorInfo.first | BufferDescriptorTypeFlags) != 0)
+            if ((desriptorInfo.first == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER) ||
+                (desriptorInfo.first == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER))
             {
                 writeDesSet.pBufferInfo = (VkDescriptorBufferInfo*)desriptorInfo.second;
                 descriptorSetInfos.push_back(writeDesSet);
             }
-            else if ((desriptorInfo.first | ImgDescriptorTypeFlags) != 0)
+            else if (desriptorInfo.first == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
             {
                 writeDesSet.pImageInfo = (VkDescriptorImageInfo*)desriptorInfo.second;
                 descriptorSetInfos.push_back(writeDesSet);
@@ -864,6 +867,11 @@ namespace SharedLib
                 exit(1);
             }
         }
+
+        m_vkCmdPushDescriptorSetKHR(cmdBuf,
+                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    pipelineLayout, 0,
+                                    descriptorSetInfos.size(), descriptorSetInfos.data());
     }
 
     // ================================================================================================================

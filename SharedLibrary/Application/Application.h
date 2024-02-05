@@ -188,7 +188,7 @@ namespace SharedLib
 
         VkSamplerCreateInfo GetSamplerInfo(VkFilter filter, VkSamplerAddressMode addrMode);
 
-        void CmdAutoPushDescriptors(const std::vector<PushDescriptorInfo> pushDescriptors);
+        void CmdAutoPushDescriptors(VkCommandBuffer cmdBuf, VkPipelineLayout pipelineLayout, const std::vector<PushDescriptorInfo> pushDescriptors);
 
         // The class manages both of the creation and destruction of the objects below.
         VkInstance       m_instance;

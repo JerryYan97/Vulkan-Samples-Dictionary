@@ -1163,9 +1163,9 @@ void SkinAnimGltfApp::CmdPushSkeletonSkinRenderingDescriptors(
                                          &m_envBrdfImg.imageDescInfo });
 
     skinAnimDescriptorsInfos.push_back({ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                                         &m_skeletalMesh.mesh.baseColorImg });
+                                         &m_skeletalMesh.mesh.baseColorImg.imageDescInfo });
     
-    CmdAutoPushDescriptors(skinAnimDescriptorsInfos);
+    CmdAutoPushDescriptors(cmdBuffer, m_skinAnimPipelineLayout, skinAnimDescriptorsInfos);
 }
 
 // ================================================================================================================
