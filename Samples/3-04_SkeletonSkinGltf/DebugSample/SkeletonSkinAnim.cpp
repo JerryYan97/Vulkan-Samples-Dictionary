@@ -9,7 +9,10 @@
 #include "../../../SharedLibrary/Utils/AppUtils.h"
 #include <glm/ext/quaternion_common.hpp>
 #include <glm/ext/quaternion_float.hpp>
+
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
+
 #include <glm/gtc/matrix_access.hpp>
 #include <cmath>
 
@@ -395,16 +398,18 @@ void SkinAnimGltfApp::AppInit()
     // We need the swap chain device extension and the dynamic rendering extension.
     const std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 
+    // Standard setup
     InitDevice(deviceExtensions, deviceQueueInfos, nullptr);
     InitVmaAllocator();
     InitGraphicsQueue();
     InitPresentQueue();
     InitKHRFuncPtrs();
+    InitSwapchain();
+    // --------------
 
     InitGfxCommandPool();
     InitGfxCommandBuffers(m_swapchainImgCnt);
 
-    InitSwapchain();
     ReadInInitGltf();
     ReadInInitIBL();
 
@@ -877,7 +882,7 @@ void SkinAnimGltfApp::ReadInInitGltf()
         for (uint32_t childIdx = 0; childIdx < jointI.children.size(); childIdx++)
         {
             uint32_t childJointIdx = jointI.children[childIdx] - 1; // Assume that the first node is always the mesh+skeleton.
-            m_skeletalMesh.skeleton.joints[i].children.push_back(&m_skeletalMesh.skeleton.joints[childJointIdx]);
+            m_skeletalMesh.skeleton.joints[i].children.push_back(childJointIdx);
         }
     }
 
@@ -1113,7 +1118,7 @@ void SkinAnimGltfApp::InitSkinAnimPipelineLayout()
 
     {
         skinAnimPushConstantRanges[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        skinAnimPushConstantRanges[1].offset = 0;
+        skinAnimPushConstantRanges[1].offset = 64;
         skinAnimPushConstantRanges[1].size = 4 * sizeof(float); // Camera pos, Max IBL mipmap.
     }
 
@@ -1300,10 +1305,12 @@ float GetInterploationAndInterval(
 
     if (idx0 == -1)
     {
-        idx0 = idx1;
-        idx1--;
-        preIdx = idx0;
-        postIdx = idx1;
+        // The idx0 == -1 only happens when curAnimTime is smaller than the first keyframe's time.
+        // In this case, idx1 is equal to 0 definitly, so we will give 0 back to idx0 and let idx1 = 1.
+        // idx0 = idx1;
+        // idx1--;
+        preIdx = 0;
+        postIdx = 1;
 
         return 0.f;
     }
@@ -1401,8 +1408,19 @@ void SkinAnimGltfApp::GenJointMatrix(
         0.f,        0.f,        0.f,        1.f
     };
 
+    float jointModelMat[16] = {};
+    SharedLib::MatrixMul4x4(parentChainTransformationMat, localTransformMat, jointModelMat);
+    
+    float jointMat[16] = {};
+    SharedLib::MatrixMul4x4(jointModelMat, joint.inverseBindMatrix.data(), jointMat);
+
     uint32_t jointMatStartIdx = 16 * currentJoint;
-    memcpy(&jointsMatBuffer[jointMatStartIdx], localTransformMat, sizeof(localTransformMat));
+    memcpy(&jointsMatBuffer[jointMatStartIdx], jointMat, sizeof(jointMat));
+
+    for (uint32_t childIdx : joint.children)
+    {
+        GenJointMatrix(jointModelMat, childIdx, jointsMatBuffer);
+    }
 }
 
 // ================================================================================================================
@@ -1421,6 +1439,10 @@ void SkinAnimGltfApp::UpdateJointsTransAndMats()
     GenJointMatrix(modelMatData, 0, jointsMatBuffer);
 
     // Send the joint RAM buffer to the corresponding joint gpu buffer.
+    CopyRamDataToGpuBuffer(jointsMatBuffer.data(),
+                           m_skeletalMesh.skeleton.jointsMatsBuffers[m_acqSwapchainImgIdx].buffer,
+                           m_skeletalMesh.skeleton.jointsMatsBuffers[m_acqSwapchainImgIdx].bufferAlloc,
+                           sizeof(float) * jointsMatBuffer.size());
 }
 
 // ================================================================================================================

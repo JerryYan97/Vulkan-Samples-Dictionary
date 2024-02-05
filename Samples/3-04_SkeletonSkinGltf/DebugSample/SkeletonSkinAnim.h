@@ -33,8 +33,6 @@ struct Mesh
 
     SharedLib::GpuBuffer vertBuffer;
     SharedLib::GpuBuffer idxBuffer;
-    SharedLib::GpuBuffer jointMatsBuffer;
-    SharedLib::GpuBuffer weightBuffer;
 };
 
 struct Animation
@@ -54,7 +52,7 @@ struct Joint
     // Animation scaling; -- We don't support scaling animation currently since it's not so useful. 
 
     std::array<float, 16> inverseBindMatrix; // Transform a vert in the model space to this joint's local space.
-    std::vector<Joint*> children;
+    std::vector<uint32_t> children;          // Offset in the Skeleton.joints[].
 };
 
 // Skeleton and mesh are both in the model space.

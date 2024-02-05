@@ -6,7 +6,7 @@
 // NOTE: We assume that metallic and roughness are fixed number. The normal only comes from the vertex data instead of the normal map. 
 struct SceneInfoPushConstant
 {
-    float3 cameraPos;
+    [[vk::offset(64)]]float3 cameraPos;
     float maxMipLevel;
 };
 
