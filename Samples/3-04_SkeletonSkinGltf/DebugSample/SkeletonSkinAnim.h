@@ -101,7 +101,8 @@ public:
     VkPipeline GetSkinAimPipeline() { return m_skinAnimPipeline.GetVkPipeline(); }
     VkPipelineLayout GetSkinAimPipelineLayout() { return m_skinAnimPipelineLayout; }
     
-    std::vector<float> GetSkinAnimPushConsant();
+    std::vector<float> GetSkinAnimVertPushConsant();
+    std::vector<float> GetSkinAnimFragPushConstant();
 
     SkeletalMesh* GetSkeletalMeshPtr() { return &m_skeletalMesh; }
     uint32_t GetMeshIdxCnt() { return m_vertIdxCnt; }

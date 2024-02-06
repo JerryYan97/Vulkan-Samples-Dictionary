@@ -63,10 +63,10 @@ SkinAnimGltfApp::SkinAnimGltfApp(
 {
     m_pCamera = new SharedLib::Camera();
     
-    float cameraStartPos[3] = {-Radius, 0.f, 0.f};
+    float cameraStartPos[3] = {0.f, 1.f, 3.f * Radius};
     m_pCamera->SetPos(cameraStartPos);
 
-    float cameraStartView[3] = {1.f, 0.f, 0.f};
+    float cameraStartView[3] = {0.f, 0.f, -1.f};
     m_pCamera->SetView(cameraStartView);
 }
 
@@ -455,6 +455,8 @@ void SkinAnimGltfApp::ReadInInitGltf()
 
     // NOTE: (1): TinyGltf loader has already loaded the binary buffer data and the images data.
     //       (2): The gltf may has multiple buffers. The buffer idx should come from the buffer view.
+    //       (3): Be aware of the byte stride: https://github.com/KhronosGroup/glTF-Tutorials/blob/main/gltfTutorial/gltfTutorial_005_BuffersBufferViewsAccessors.md#data-interleaving
+    //       ------ It's time to have a standard GLTF Accessor data read function! -----
     // const auto& binaryBuffer = model.buffers[0].data;
     // const unsigned char* pBufferData = binaryBuffer.data();
 
@@ -607,6 +609,7 @@ void SkinAnimGltfApp::ReadInInitGltf()
     memcpy(vertWeights.data(), &pWeightBufferData[weightsBufferOffset], weightsBufferByteCnt);
 
     // Load joints that affect this vert -- The loaded gltf must have this.
+    // NOTE: It's incorrect to read joint data like this. I have to consider the stride bytes!
     std::vector<uint16_t> vertJoints;
     int jointsIdx = mesh.primitives[0].attributes.at("JOINTS_0");
     const auto& jointsAccessor = model.accessors[jointsIdx];
@@ -800,7 +803,8 @@ void SkinAnimGltfApp::ReadInInitGltf()
         m_skeletalMesh.mesh.baseColorImg = CreateDummyPureColorImg(white);
     }
 
-
+    // NOTE: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#data-alignment
+    // "Accessors of matrix type have data stored in column-major order;"
     // Read in the skin data
     const auto& skin = model.skins[0];
 
@@ -877,6 +881,12 @@ void SkinAnimGltfApp::ReadInInitGltf()
         memcpy(m_skeletalMesh.skeleton.joints[i].inverseBindMatrix.data(),
                &invBindMatricesData[i * 16],
                16 * sizeof(float));
+
+        // The gltf matrix is col-major. We need to transpose it to make it row-major.
+        float tmpInvBindMat[16] = {};
+        memcpy(tmpInvBindMat, &invBindMatricesData[i * 16], 16 * sizeof(float));
+        SharedLib::MatTranspose(tmpInvBindMat, 4);
+        memcpy(m_skeletalMesh.skeleton.joints[i].inverseBindMatrix.data(), tmpInvBindMat, sizeof(tmpInvBindMat));
 
         // Set children
         for (uint32_t childIdx = 0; childIdx < jointI.children.size(); childIdx++)
@@ -1260,7 +1270,7 @@ VkPipelineDepthStencilStateCreateInfo SkinAnimGltfApp::CreateDepthStencilStateIn
 }
 
 // ================================================================================================================
-std::vector<float> SkinAnimGltfApp::GetSkinAnimPushConsant()
+std::vector<float> SkinAnimGltfApp::GetSkinAnimVertPushConsant()
 {
     // NOTE: Perspective Mat x View Mat x Model Mat x position.
     float vpMatData[16] = {};
@@ -1268,14 +1278,21 @@ std::vector<float> SkinAnimGltfApp::GetSkinAnimPushConsant()
     float tmpPersMatData[16] = {};
     m_pCamera->GenViewPerspectiveMatrices(tmpViewMatData, tmpPersMatData, vpMatData);
 
+    std::vector<float> pushConstData(vpMatData, vpMatData + 16);
+
+    return pushConstData;
+}
+
+// ================================================================================================================
+std::vector<float> SkinAnimGltfApp::GetSkinAnimFragPushConstant()
+{
     float fragPushConstantData[4] = {};
     float cameraPosData[3] = {};
     m_pCamera->GetPos(cameraPosData);
     memcpy(fragPushConstantData, cameraPosData, sizeof(cameraPosData));
     fragPushConstantData[3] = m_prefilterEnvMipsCnt;
 
-    std::vector<float> pushConstData(vpMatData, vpMatData + 16);
-    pushConstData.insert(pushConstData.end(), fragPushConstantData, fragPushConstantData + 4);
+    std::vector<float> pushConstData(fragPushConstantData, fragPushConstantData + 4);
 
     return pushConstData;
 }
@@ -1313,6 +1330,13 @@ float GetInterploationAndInterval(
         postIdx = 1;
 
         return 0.f;
+    }
+    else if (idx1 == -1)
+    {
+        // The idx1 == -1 only happens when curAnimTime is equal or larger than the last keyframe's time.
+        preIdx = idx0 - 1;
+        postIdx = idx0;
+        return 1.f;
     }
     else
     {
@@ -1449,7 +1473,7 @@ void SkinAnimGltfApp::UpdateJointsTransAndMats()
 void SkinAnimGltfApp::FrameStart()
 {
     GlfwApplication::FrameStart();
-    UpdateCamera();
+    // UpdateCamera();
 
     // Update time stamp and the current anim time.
     if (m_currentAnimTime < 0.f)
@@ -1461,17 +1485,21 @@ void SkinAnimGltfApp::FrameStart()
     else
     {
         const auto& thisTime = std::chrono::high_resolution_clock::now();
-        auto durationMiliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(thisTime - m_lastTime).count();
+        auto durationMiliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(thisTime - m_lastAnimTimeStamp).count();
         float delta = (float)durationMiliseconds / 1000.f; // Delta is in second.
         
         m_currentAnimTime += delta;
         if (m_currentAnimTime > m_maxAnimTime)
         {
-            m_currentAnimTime -= m_maxAnimTime;
+            float div = m_currentAnimTime / m_maxAnimTime;
+            m_currentAnimTime -= (std::floor(div) * m_maxAnimTime);
         }
+        // std::cout << "delta: " << delta << std::endl;
 
         m_lastAnimTimeStamp = thisTime;
     }
+
+    // std::cout << m_currentAnimTime << std::endl;
 
     UpdateJointsTransAndMats();
 }

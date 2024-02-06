@@ -41,11 +41,16 @@ VSOutput main(
                        mul(i_vertInput.vBlendWeights.z, i_jointsMats[i_vertInput.vJointIndices.z]) +
                        mul(i_vertInput.vBlendWeights.w, i_jointsMats[i_vertInput.vJointIndices.w]);
     
-    float4x4 mvpMat = i_vertPushConstant.vpMat * skinMat;
+    float4x4 mvpMat = mul(i_vertPushConstant.vpMat, skinMat);
 
     output.Pos = mul(mvpMat, float4(i_vertInput.vPosition, 1.0));
     output.WorldPos = mul(skinMat, float4(i_vertInput.vPosition, 1.0));
     output.Normal = mul(skinMat, float4(i_vertInput.vNormal, 0.0));
+
+    // output.Pos = mul(i_vertPushConstant.vpMat, float4(i_vertInput.vPosition, 1.0));
+    // output.WorldPos = float4(i_vertInput.vPosition, 1.0);
+    // output.Normal = float4(i_vertInput.vNormal, 0.0);
+
     output.UV = i_vertInput.vUv;
 
     return output;

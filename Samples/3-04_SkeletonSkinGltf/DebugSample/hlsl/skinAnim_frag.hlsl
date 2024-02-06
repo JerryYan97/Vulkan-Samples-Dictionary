@@ -59,4 +59,5 @@ float4 main(
     float3 specular = prefilterEnv * (Ks * envBrdf.x + envBrdf.y);
 
     return float4(diffuse + specular, 1.0);
+    // return float4(specular, 1.0);
 }

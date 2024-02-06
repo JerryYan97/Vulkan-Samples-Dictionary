@@ -80,7 +80,7 @@ int main()
             swapchainDepthTargetTransBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
             swapchainDepthTargetTransBarrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
             swapchainDepthTargetTransBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-            swapchainDepthTargetTransBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            swapchainDepthTargetTransBarrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
             swapchainDepthTargetTransBarrier.image = app.GetSwapchainDepthImage();
             swapchainDepthTargetTransBarrier.subresourceRange = swapchainDepthSubResRange;
         }
@@ -106,7 +106,7 @@ int main()
             renderSpheresAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
             renderSpheresAttachmentInfo.imageView = app.GetSwapchainColorImageView();
             renderSpheresAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
-            renderSpheresAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+            renderSpheresAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             renderSpheresAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
             renderSpheresAttachmentInfo.clearValue = clearColor;
         }
@@ -118,7 +118,7 @@ int main()
             depthModelAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
             depthModelAttachmentInfo.imageView = app.GetSwapchainDepthImageView();
             depthModelAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
-            depthModelAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+            depthModelAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             depthModelAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
             depthModelAttachmentInfo.clearValue = depthClearVal;
         }
@@ -170,17 +170,18 @@ int main()
         // Assume uint16_t input idx data
         vkCmdBindIndexBuffer(currentCmdBuffer, pSkeletalMesh->mesh.idxBuffer.buffer, 0, VK_INDEX_TYPE_UINT16);
 
-        std::vector<float> pushConstantData = app.GetSkinAnimPushConsant();
+        std::vector<float> pushVertConstantData = app.GetSkinAnimVertPushConsant();
+        std::vector<float> pushFragConstantData = app.GetSkinAnimFragPushConstant();
 
         vkCmdPushConstants(currentCmdBuffer,
             app.GetSkinAimPipelineLayout(),
             VK_SHADER_STAGE_VERTEX_BIT,
-            0, 16 * sizeof(float), pushConstantData.data());
+            0, 16 * sizeof(float), pushVertConstantData.data());
 
         vkCmdPushConstants(currentCmdBuffer,
             app.GetSkinAimPipelineLayout(),
             VK_SHADER_STAGE_FRAGMENT_BIT,
-            16 * sizeof(float), 4 * sizeof(float), pushConstantData.data());
+            16 * sizeof(float), 4 * sizeof(float), pushFragConstantData.data());
 
         vkCmdDrawIndexed(currentCmdBuffer, app.GetMeshIdxCnt(), 1, 0, 0, 0);
 
