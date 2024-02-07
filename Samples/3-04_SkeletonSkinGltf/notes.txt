@@ -26,7 +26,7 @@ Slerp: https://keithmaggio.wordpress.com/2011/02/15/math-magician-lerp-slerp-and
 
 Buffer, buffer view, accessor:
 https://github.com/KhronosGroup/glTF-Tutorials/blob/master/gltfTutorial/gltfTutorial_005_BuffersBufferViewsAccessors.md
-
+https://github.com/KhronosGroup/glTF-Tutorials/blob/main/gltfTutorial/gltfTutorial_003_MinimalGltfFile.md#the-buffer-bufferview-and-accessor-concepts
 
 
 Push Constant in different shader stages:

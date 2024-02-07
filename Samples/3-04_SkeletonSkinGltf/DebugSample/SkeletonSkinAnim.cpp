@@ -7,6 +7,7 @@
 #include "../../../SharedLibrary/Utils/DiskOpsUtils.h"
 #include "../../../SharedLibrary/Utils/CmdBufUtils.h"
 #include "../../../SharedLibrary/Utils/AppUtils.h"
+#include "../../../SharedLibrary/Utils/GltfUtils.h"
 #include <glm/ext/quaternion_common.hpp>
 #include <glm/ext/quaternion_float.hpp>
 
@@ -431,6 +432,7 @@ void SkinAnimGltfApp::AppInit()
 //   specified in the byteOffset property and a total byte length specified by the byteLength property of the buffer
 //   view.
 // * TODO: The accessor data load can be abstracted to a function.
+// * TODO: The whole function can be abstracted out into a separate util function.
 void SkinAnimGltfApp::ReadInInitGltf()
 {
     tinygltf::Model model;
@@ -456,9 +458,6 @@ void SkinAnimGltfApp::ReadInInitGltf()
     // NOTE: (1): TinyGltf loader has already loaded the binary buffer data and the images data.
     //       (2): The gltf may has multiple buffers. The buffer idx should come from the buffer view.
     //       (3): Be aware of the byte stride: https://github.com/KhronosGroup/glTF-Tutorials/blob/main/gltfTutorial/gltfTutorial_005_BuffersBufferViewsAccessors.md#data-interleaving
-    //       ------ It's time to have a standard GLTF Accessor data read function! -----
-    // const auto& binaryBuffer = model.buffers[0].data;
-    // const unsigned char* pBufferData = binaryBuffer.data();
 
     // This example only supports gltf that only has one mesh and one skin.
     assert(model.meshes.size() == 1, "This example only supports one mesh.");
@@ -476,16 +475,10 @@ void SkinAnimGltfApp::ReadInInitGltf()
     assert(posAccessor.componentType == TINYGLTF_PARAMETER_TYPE_FLOAT, "The pos accessor data type should be float.");
     assert(posAccessor.type == TINYGLTF_TYPE_VEC3, "The pos accessor type should be vec3.");
 
-    int posAccessorByteOffset = posAccessor.byteOffset;
-    int posAccessorEleCnt = posAccessor.count; // Assume a position element is a float3.
     const auto& posBufferView = model.bufferViews[posAccessor.bufferView];
     // Assmue the data and element type of the position is float3
-    int posBufferOffset = posAccessorByteOffset + posBufferView.byteOffset;
-    int posBufferByteCnt = sizeof(float) * 3 * posAccessor.count;
     vertPos.resize(3 * posAccessor.count);
-
-    const unsigned char* pPosBufferData = model.buffers[posBufferView.buffer].data.data();
-    memcpy(vertPos.data(), &pPosBufferData[posBufferOffset], posBufferByteCnt);
+    SharedLib::ReadOutAccessorData(vertPos.data(), posAccessor, model.bufferViews, model.buffers);
 
 
     // Load indices
@@ -496,17 +489,9 @@ void SkinAnimGltfApp::ReadInInitGltf()
     assert(idxAccessor.componentType == TINYGLTF_PARAMETER_TYPE_UNSIGNED_SHORT, "The idx accessor data type should be uint16.");
     assert(idxAccessor.type == TINYGLTF_TYPE_SCALAR, "The idx accessor type should be scalar.");
 
-    int idxAccessorByteOffset = idxAccessor.byteOffset;
-    int idxAccessorEleCnt = idxAccessor.count;
-    const auto& idxBufferView = model.bufferViews[idxAccessor.bufferView];
-
-    int idxBufferOffset = idxAccessorByteOffset + idxBufferView.byteOffset;
-    int idxBufferByteCnt = sizeof(uint16_t) * idxAccessorEleCnt;
-    m_vertIdxCnt = idxAccessorEleCnt;
-    vertIdx.resize(idxAccessorEleCnt);
-
-    const unsigned char* pIdxBufferData = model.buffers[idxBufferView.buffer].data.data();
-    memcpy(vertIdx.data(), &pIdxBufferData[idxBufferOffset], idxBufferByteCnt);
+    m_vertIdxCnt = idxAccessor.count;
+    vertIdx.resize(idxAccessor.count);
+    SharedLib::ReadOutAccessorData(vertIdx.data(), idxAccessor, model.bufferViews, model.buffers);
 
 
     // Load normal
@@ -520,17 +505,8 @@ void SkinAnimGltfApp::ReadInInitGltf()
         assert(normalAccessor.componentType == TINYGLTF_PARAMETER_TYPE_FLOAT, "The normal accessor data type should be float.");
         assert(normalAccessor.type == TINYGLTF_TYPE_VEC3, "The normal accessor type should be vec3.");
 
-        int normalAccessorByteOffset = normalAccessor.byteOffset;
-        int normalAccessorEleCnt = normalAccessor.count;
-        const auto& normalBufferView = model.bufferViews[normalAccessor.bufferView];
-
-        int normalBufferOffset = normalAccessorByteOffset + normalBufferView.byteOffset;
-        int normalBufferByteCnt = sizeof(float) * 3 * normalAccessorEleCnt;
-        
-        vertNormal.resize(3 * normalAccessorEleCnt);
-
-        const unsigned char* pNormalBufferData = model.buffers[normalBufferView.buffer].data.data();
-        memcpy(vertNormal.data(), &pNormalBufferData[normalBufferOffset], normalBufferByteCnt);
+        vertNormal.resize(3 * normalAccessor.count);
+        SharedLib::ReadOutAccessorData(vertNormal.data(), normalAccessor, model.bufferViews, model.buffers);
     }
     else
     {
@@ -552,8 +528,8 @@ void SkinAnimGltfApp::ReadInInitGltf()
         SharedLib::CrossProductVec3(v1, v2, autoGenNormal);
         SharedLib::NormalizeVec(autoGenNormal, 3);
 
-        vertNormal.resize(3 * posAccessorEleCnt);
-        for (uint32_t i = 0; i < posAccessorEleCnt; i++)
+        vertNormal.resize(3 * posAccessor.count);
+        for (uint32_t i = 0; i < posAccessor.count; i++)
         {
             uint32_t normalStartingIdx = i * 3;
             vertNormal[normalStartingIdx]     = autoGenNormal[0];
@@ -572,20 +548,12 @@ void SkinAnimGltfApp::ReadInInitGltf()
         assert(uvAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT, "The uv accessor data type should be float.");
         assert(uvAccessor.type == TINYGLTF_TYPE_VEC2, "The uv accessor type should be vec2.");
 
-        int uvAccessorByteOffset = uvAccessor.byteOffset;
-        int uvAccessorEleCnt = uvAccessor.count;
-        const auto& uvBufferView = model.bufferViews[uvAccessor.bufferView];
-
-        int uvBufferOffset = uvAccessorByteOffset + uvBufferView.byteOffset;
-        int uvBufferByteCnt = sizeof(float) * 2 * uvAccessor.count;
         vertUv.resize(2 * uvAccessor.count);
-
-        const unsigned char* pUvBufferData = model.buffers[uvBufferView.buffer].data.data();
-        memcpy(vertUv.data(), &pUvBufferData[uvBufferOffset], uvBufferByteCnt);
+        SharedLib::ReadOutAccessorData(vertUv.data(), uvAccessor, model.bufferViews, model.buffers);
     }
     else
     {
-        vertUv = std::vector<float>(posAccessorEleCnt * 2, 0.f);
+        vertUv = std::vector<float>(posAccessor.count * 2, 0.f);
     }
 
 
@@ -597,16 +565,8 @@ void SkinAnimGltfApp::ReadInInitGltf()
     assert(weightsAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT, "The weights accessor data type should be float.");
     assert(weightsAccessor.type == TINYGLTF_TYPE_VEC4, "The weights accessor type should be vec4.");
 
-    int weightsAccessorByteOffset = weightsAccessor.byteOffset;
-    int weightsAccessorEleCnt = weightsAccessor.count;
-    const auto& weightsBufferView = model.bufferViews[weightsAccessor.bufferView];
-
-    int weightsBufferOffset = weightsAccessorByteOffset + weightsBufferView.byteOffset;
-    int weightsBufferByteCnt = sizeof(float) * 4 * weightsAccessorEleCnt;
-    vertWeights.resize(4 * weightsAccessorEleCnt);
-
-    const unsigned char* pWeightBufferData = model.buffers[weightsBufferView.buffer].data.data();
-    memcpy(vertWeights.data(), &pWeightBufferData[weightsBufferOffset], weightsBufferByteCnt);
+    vertWeights.resize(4 * weightsAccessor.count);
+    SharedLib::ReadOutAccessorData(vertWeights.data(), weightsAccessor, model.bufferViews, model.buffers);
 
     // Load joints that affect this vert -- The loaded gltf must have this.
     // NOTE: It's incorrect to read joint data like this. I have to consider the stride bytes!
@@ -617,24 +577,16 @@ void SkinAnimGltfApp::ReadInInitGltf()
     assert(jointsAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT, "The joints accessor data type shuold be uint16.");
     assert(jointsAccessor.type == TINYGLTF_TYPE_VEC4, "The joints accessor type should be vec4.");
     
-    int jointsAccessorByteOffset = jointsAccessor.byteOffset;
-    int jointsAccessorEleCnt = jointsAccessor.count;
-    const auto& jointsBufferView = model.bufferViews[jointsAccessor.bufferView];
-
-    int jointsBufferOffset = jointsAccessorByteOffset + jointsBufferView.byteOffset;
-    int jointsBufferByteCnt = sizeof(uint16_t) * 4 * jointsAccessorEleCnt;
-    vertJoints.resize(4 * jointsAccessorEleCnt);
-
-    const unsigned char* pJointsBufferData = model.buffers[jointsBufferView.buffer].data.data();
-    memcpy(vertJoints.data(), &pJointsBufferData[jointsBufferOffset], jointsBufferByteCnt);
+    vertJoints.resize(4 * jointsAccessor.count);
+    SharedLib::ReadOutAccessorData(vertJoints.data(), jointsAccessor, model.bufferViews, model.buffers);
 
     // Assemble the vertex buffer data.
     // The count of [pos, normal, uv, weights, jointsIdx] is equal to posAccessor/normalAccessor/uvAccessor/weightsAccessor/jointsAccessor.count.
     // [3 floats, 3 floats, 2 floats, 4 floats, 4 uints] --> 16 * sizeof(float).
-    float* pVertBufferData = new float[16 * posAccessorEleCnt];
-    uint32_t vertBufferByteCnt = 16 * posAccessorEleCnt * sizeof(float);
+    float* pVertBufferData = new float[16 * posAccessor.count];
+    uint32_t vertBufferByteCnt = 16 * posAccessor.count * sizeof(float);
 
-    for (int i = 0; i < posAccessorEleCnt; i++)
+    for (int i = 0; i < posAccessor.count; i++)
     {
         int vertDataStartingIdx = i * 16;
 
@@ -654,7 +606,7 @@ void SkinAnimGltfApp::ReadInInitGltf()
         VkBufferCreateInfo idxBufferInfo{};
         {
             idxBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-            idxBufferInfo.size = idxBufferByteCnt;
+            idxBufferInfo.size = SharedLib::GetAccessorDataBytes(idxAccessor);
             idxBufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
             idxBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
         }
@@ -710,7 +662,7 @@ void SkinAnimGltfApp::ReadInInitGltf()
         vertIdx.data(),
         m_skeletalMesh.mesh.idxBuffer.buffer,
         m_skeletalMesh.mesh.idxBuffer.bufferAlloc,
-        idxBufferByteCnt);
+        SharedLib::GetAccessorDataBytes(idxAccessor));
 
     delete[] pVertBufferData;
 
