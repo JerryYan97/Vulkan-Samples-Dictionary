@@ -6,7 +6,7 @@
 # SHARED_LIB_APP only includes Application.h and Application.cpp. 
 # SHARED_LIB_GLFW includes Application.h/cpp, GlfwApplication.h/cpp. 
 # SHARED_LIB_IMGUI includes Application.h/cpp, GlfwApplication.h/cpp, DearImGuiApplication.h/cpp.
-#
+# SHARED_LIB_GLTF_GLM includes gltf and glm. 
 # 
 
 add_library(SharedLibrary STATIC)
@@ -49,6 +49,14 @@ else()
 
     else()
         message(FATAL_ERROR "Application must defines one of SHARED_LIB_APP, SHARED_LIB_GLFW and SHARED_LIB_IMGUI.")
+    endif()
+
+
+    if(DEFINED SHARED_LIB_GLTF_GLM)
+        add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../ThirdPartyLibs/glm
+                         ${CMAKE_CURRENT_BINARY_DIR}/SharedLibrary)
+        target_link_libraries(SharedLibrary glm::glm)
+        add_dependencies(SharedLibrary glm::glm)
     endif()
 
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../ThirdPartyLibs/stb)

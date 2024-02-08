@@ -13,6 +13,12 @@ target_sources(
     ${CMAKE_CURRENT_SOURCE_DIR}/AppUtils.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/DiskOpsUtils.h
     ${CMAKE_CURRENT_SOURCE_DIR}/DiskOpsUtils.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/GltfUtils.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/GltfUtils.cpp
 )
+
+if(DEFINED SHARED_LIB_GLTF_GLM)
+    target_sources(
+        SharedLibrary PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/GltfUtils.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/GltfUtils.cpp
+    )
+endif()

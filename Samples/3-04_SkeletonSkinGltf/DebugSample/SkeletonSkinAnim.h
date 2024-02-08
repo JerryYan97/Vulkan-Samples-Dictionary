@@ -47,9 +47,12 @@ struct Joint
     float localRotation[4]; // GLTF: (x,y,z,w), where the w-component is the cosine of half of the rotation angle.
     float localScale[3];
 
+    float localTransformation[16];
+    bool isTransformationMat; // GLTF may just uses a transformation matrix to replace the separate transformation params.
+
     Animation translationAnimation;
     Animation rotationAnimation;
-    // Animation scaling; -- We don't support scaling animation currently since it's not so useful. 
+    Animation scalingAnimation; // -- We don't support scaling animation currently since it's not so useful. 
 
     std::array<float, 16> inverseBindMatrix; // Transform a vert in the model space to this joint's local space.
     std::vector<uint32_t> children;          // Offset in the Skeleton.joints[].
@@ -75,6 +78,9 @@ struct SkeletalMesh
     float translation[3];
     float rotation[4];
     float scale[3];
+
+    float transformationMat[16];
+    bool isMatTransformation; // GLTF may just uses a transformation matrix to replace the separate transformation params.
 };
 
 const uint32_t VpMatBytesCnt = 4 * 4 * sizeof(float);
@@ -86,7 +92,7 @@ const float RotateRadiensPerSecond = 3.1415926 * 2.f / 10.f; // 10s -- a circle.
 class SkinAnimGltfApp : public SharedLib::GlfwApplication
 {
 public:
-    SkinAnimGltfApp(const std::string& iblPath, const std::string& gltfPathName);
+    SkinAnimGltfApp(const std::string& iblPath, const std::string& gltfPathName, bool isCameraRotate, float cameraRadiusFactor, float cameraHeight, float cameraWatchPointOffset);
     ~SkinAnimGltfApp();
 
     virtual void AppInit() override;
@@ -163,4 +169,9 @@ private:
 
     std::string m_iblDir;
     std::string m_gltfPathName;
+
+    bool m_isCameraRotate;
+    float m_cameraRadiusFactor;
+    float m_cameraHeight;
+    float m_cameraWatchPointOffset;
 };

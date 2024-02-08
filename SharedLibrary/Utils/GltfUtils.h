@@ -10,4 +10,8 @@ namespace SharedLib
                              const tinygltf::Accessor&          accessor,
                              std::vector<tinygltf::BufferView>& bufferViews,
                              std::vector<tinygltf::Buffer>&     buffers);
+
+    void GetNodesModelMats(const tinygltf::Model& model, std::vector<float>& matsVec);
+
+    int GetArmatureNodeIdx(const tinygltf::Model& model);
 }

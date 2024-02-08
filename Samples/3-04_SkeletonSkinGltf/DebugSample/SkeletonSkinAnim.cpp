@@ -8,6 +8,7 @@
 #include "../../../SharedLibrary/Utils/CmdBufUtils.h"
 #include "../../../SharedLibrary/Utils/AppUtils.h"
 #include "../../../SharedLibrary/Utils/GltfUtils.h"
+#include <unordered_map>
 #include <glm/ext/quaternion_common.hpp>
 #include <glm/ext/quaternion_float.hpp>
 
@@ -43,7 +44,11 @@ static void MouseButtonCallback(GLFWwindow* window, int button, int action, int 
 // ================================================================================================================
 SkinAnimGltfApp::SkinAnimGltfApp(
     const std::string& iblPath,
-    const std::string& gltfPathName) :
+    const std::string& gltfPathName,
+    bool isCameraRotate,
+    float cameraRadiusFactor,
+    float cameraHeight,
+    float cameraWatchPointOffset) :
     GlfwApplication(),
     m_vsSkinAnimShaderModule(VK_NULL_HANDLE),
     m_psSkinAnimShaderModule(VK_NULL_HANDLE),
@@ -60,11 +65,15 @@ SkinAnimGltfApp::SkinAnimGltfApp(
     m_currentAnimTime(-1.f),
     m_iblDir(iblPath),
     m_gltfPathName(gltfPathName),
-    m_maxAnimTime(-1.f)
+    m_maxAnimTime(-1.f),
+    m_isCameraRotate(isCameraRotate),
+    m_cameraRadiusFactor(cameraRadiusFactor),
+    m_cameraHeight(cameraHeight),
+    m_cameraWatchPointOffset(cameraWatchPointOffset)
 {
     m_pCamera = new SharedLib::Camera();
     
-    float cameraStartPos[3] = {0.f, 1.f, 3.f * Radius};
+    float cameraStartPos[3] = {0.f, m_cameraHeight, cameraRadiusFactor * Radius};
     m_pCamera->SetPos(cameraStartPos);
 
     float cameraStartView[3] = {0.f, 0.f, -1.f};
@@ -119,11 +128,13 @@ void SkinAnimGltfApp::UpdateCamera()
     }
 
     float newCameraPos[3] = {
-        -cosf(m_currentRadians) * Radius, 0.f, sinf(m_currentRadians) * Radius
+        -cosf(m_currentRadians) * m_cameraRadiusFactor * Radius,
+        m_cameraHeight,
+        sinf(m_currentRadians) * m_cameraRadiusFactor * Radius
     };
 
     float newCameraView[3] = {
-        -newCameraPos[0], -newCameraPos[1], -newCameraPos[2]
+        -newCameraPos[0], m_cameraWatchPointOffset - newCameraPos[1], -newCameraPos[2]
     };
 
     m_pCamera->SetPos(newCameraPos);
@@ -433,6 +444,7 @@ void SkinAnimGltfApp::AppInit()
 //   view.
 // * TODO: The accessor data load can be abstracted to a function.
 // * TODO: The whole function can be abstracted out into a separate util function.
+// * TODO: A node based/Scene graph based GLTF reader.
 void SkinAnimGltfApp::ReadInInitGltf()
 {
     tinygltf::Model model;
@@ -458,7 +470,7 @@ void SkinAnimGltfApp::ReadInInitGltf()
     // NOTE: (1): TinyGltf loader has already loaded the binary buffer data and the images data.
     //       (2): The gltf may has multiple buffers. The buffer idx should come from the buffer view.
     //       (3): Be aware of the byte stride: https://github.com/KhronosGroup/glTF-Tutorials/blob/main/gltfTutorial/gltfTutorial_005_BuffersBufferViewsAccessors.md#data-interleaving
-
+    //       (4): Be aware of the base color factor: https://github.com/KhronosGroup/glTF-Tutorials/blob/main/gltfTutorial/gltfTutorial_011_SimpleMaterial.md#material-definition
     // This example only supports gltf that only has one mesh and one skin.
     assert(model.meshes.size() == 1, "This example only supports one mesh.");
     assert(model.skins.size() == 1, "This example only supports one skin.");
@@ -668,6 +680,7 @@ void SkinAnimGltfApp::ReadInInitGltf()
 
 
     // Load the base color texture or create a default pure color texture.
+    // The baseColorFactor contains the red, green, blue, and alpha components of the main color of the material.
     int materialIdx = mesh.primitives[0].material;
    
     if (materialIdx != -1)
@@ -675,79 +688,93 @@ void SkinAnimGltfApp::ReadInInitGltf()
         const auto& material = model.materials[materialIdx];
         int baseColorTexIdx = material.pbrMetallicRoughness.baseColorTexture.index;
 
-        // A texture is defined by an image index, denoted by the source property and a sampler index (sampler).
-        // Assmue that all textures are 8 bits per channel. They are all xxx / 255. They all have 4 components.
-        const auto& baseColorTex = model.textures[baseColorTexIdx];
-        int baseColorTexImgIdx = baseColorTex.source;
-        const auto& baseColorImg = model.images[baseColorTexImgIdx];
-        
-        VkImageSubresourceRange tex2dSubResRange{};
+        if (baseColorTexIdx == -1)
         {
-            tex2dSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            tex2dSubResRange.baseMipLevel = 0;
-            tex2dSubResRange.levelCount = 1;
-            tex2dSubResRange.baseArrayLayer = 0;
-            tex2dSubResRange.layerCount = 1;
+            // A pure color model.
+            float pureColor[3] = { material.pbrMetallicRoughness.baseColorFactor[0],
+                                   material.pbrMetallicRoughness.baseColorFactor[1],
+                                   material.pbrMetallicRoughness.baseColorFactor[2] };
+
+            m_skeletalMesh.mesh.baseColorImg = CreateDummyPureColorImg(pureColor);
         }
-
-        VkSamplerCreateInfo samplerInfo{};
+        else
         {
-            samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-            samplerInfo.magFilter = VK_FILTER_LINEAR;
-            samplerInfo.minFilter = VK_FILTER_LINEAR;
-            samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-            samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-            samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-            samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-            samplerInfo.minLod = -1000;
-            samplerInfo.maxLod = 1000;
-            samplerInfo.maxAnisotropy = 1.0f;
-        }
+            // A texture is defined by an image index, denoted by the source property and a sampler index (sampler).
+            // Assmue that all textures are 8 bits per channel. They are all xxx / 255. They all have 4 components.
+            const auto& baseColorTex = model.textures[baseColorTexIdx];
+            int baseColorTexImgIdx = baseColorTex.source;
 
-        SharedLib::GpuImgCreateInfo gpuImgCreateInfo{};
-        {
-            gpuImgCreateInfo.allocFlags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
-            gpuImgCreateInfo.hasSampler = true;
-            gpuImgCreateInfo.imgSubresRange = tex2dSubResRange;
-            gpuImgCreateInfo.imgUsageFlags = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-            gpuImgCreateInfo.imgViewType = VK_IMAGE_VIEW_TYPE_2D;
-            gpuImgCreateInfo.samplerInfo = samplerInfo;
-            gpuImgCreateInfo.imgExtent = VkExtent3D{ (uint32_t)baseColorImg.width, (uint32_t)baseColorImg.height, 1 };
-            gpuImgCreateInfo.imgFormat = VK_FORMAT_R8G8B8A8_SRGB;
-        }
+            // This model has a base color texture.
+            const auto& baseColorImg = model.images[baseColorTexImgIdx];
 
-        m_skeletalMesh.mesh.baseColorImg = CreateGpuImage(gpuImgCreateInfo);
-
-        VkBufferImageCopy baseColorBufToImgCopy{};
-        {
-            VkExtent3D extent{};
+            VkImageSubresourceRange tex2dSubResRange{};
             {
-                extent.width = baseColorImg.width;
-                extent.height = baseColorImg.height;
-                extent.depth = 1;
+                tex2dSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                tex2dSubResRange.baseMipLevel = 0;
+                tex2dSubResRange.levelCount = 1;
+                tex2dSubResRange.baseArrayLayer = 0;
+                tex2dSubResRange.layerCount = 1;
             }
 
-            baseColorBufToImgCopy.bufferRowLength = extent.width;
-            baseColorBufToImgCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            baseColorBufToImgCopy.imageSubresource.mipLevel = 0;
-            baseColorBufToImgCopy.imageSubresource.baseArrayLayer = 0;
-            baseColorBufToImgCopy.imageSubresource.layerCount = 1;
-            baseColorBufToImgCopy.imageExtent = extent;
+            VkSamplerCreateInfo samplerInfo{};
+            {
+                samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+                samplerInfo.magFilter = VK_FILTER_LINEAR;
+                samplerInfo.minFilter = VK_FILTER_LINEAR;
+                samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+                samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+                samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+                samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+                samplerInfo.minLod = -1000;
+                samplerInfo.maxLod = 1000;
+                samplerInfo.maxAnisotropy = 1.0f;
+            }
+
+            SharedLib::GpuImgCreateInfo gpuImgCreateInfo{};
+            {
+                gpuImgCreateInfo.allocFlags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+                gpuImgCreateInfo.hasSampler = true;
+                gpuImgCreateInfo.imgSubresRange = tex2dSubResRange;
+                gpuImgCreateInfo.imgUsageFlags = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+                gpuImgCreateInfo.imgViewType = VK_IMAGE_VIEW_TYPE_2D;
+                gpuImgCreateInfo.samplerInfo = samplerInfo;
+                gpuImgCreateInfo.imgExtent = VkExtent3D{ (uint32_t)baseColorImg.width, (uint32_t)baseColorImg.height, 1 };
+                gpuImgCreateInfo.imgFormat = VK_FORMAT_R8G8B8A8_SRGB;
+            }
+
+            m_skeletalMesh.mesh.baseColorImg = CreateGpuImage(gpuImgCreateInfo);
+
+            VkBufferImageCopy baseColorBufToImgCopy{};
+            {
+                VkExtent3D extent{};
+                {
+                    extent.width = baseColorImg.width;
+                    extent.height = baseColorImg.height;
+                    extent.depth = 1;
+                }
+
+                baseColorBufToImgCopy.bufferRowLength = extent.width;
+                baseColorBufToImgCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                baseColorBufToImgCopy.imageSubresource.mipLevel = 0;
+                baseColorBufToImgCopy.imageSubresource.baseArrayLayer = 0;
+                baseColorBufToImgCopy.imageSubresource.layerCount = 1;
+                baseColorBufToImgCopy.imageExtent = extent;
+            }
+
+
+            SharedLib::RAIICommandBuffer raiiCmdBuffer(m_gfxCmdPool, m_device);
+
+            SharedLib::SendImgDataToGpu(raiiCmdBuffer.m_cmdBuffer,
+                                        m_device,
+                                        m_graphicsQueue,
+                                        (void*)baseColorImg.image.data(),
+                                        baseColorImg.image.size() * sizeof(unsigned char),
+                                        m_skeletalMesh.mesh.baseColorImg.image,
+                                        tex2dSubResRange,
+                                        VK_IMAGE_LAYOUT_UNDEFINED,
+                                        baseColorBufToImgCopy,
+                                        *m_pAllocator);
         }
-
-
-        SharedLib::RAIICommandBuffer raiiCmdBuffer(m_gfxCmdPool, m_device);
-
-        SharedLib::SendImgDataToGpu(raiiCmdBuffer.m_cmdBuffer,
-                                    m_device,
-                                    m_graphicsQueue,
-                                    (void*)baseColorImg.image.data(),
-                                    baseColorImg.image.size() * sizeof(unsigned char),
-                                    m_skeletalMesh.mesh.baseColorImg.image,
-                                    tex2dSubResRange,
-                                    VK_IMAGE_LAYOUT_UNDEFINED,
-                                    baseColorBufToImgCopy,
-                                    *m_pAllocator);
     }
     else
     {
@@ -767,66 +794,88 @@ void SkinAnimGltfApp::ReadInInitGltf()
     assert(invBindMatAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT, "The inverse bind matrices accessor data type should be float.");
     assert(invBindMatAccessor.type == TINYGLTF_TYPE_MAT4, "The inverse bind matrices accessor type should be mat4.");
 
-    int invBindMatAccessorByteOffset = invBindMatAccessor.byteOffset;
-    int invBindMatAccessorEleCnt = invBindMatAccessor.count;
-    const auto& invBindMatBufferView = model.bufferViews[invBindMatAccessor.bufferView];
-
-    int invBindMatBufferOffset = invBindMatAccessorByteOffset + invBindMatBufferView.byteOffset;
-    int invBindMatBufferByteCnt = sizeof(float) * 16 * invBindMatAccessorEleCnt;
-    invBindMatricesData.resize(16 * invBindMatAccessorEleCnt);
-
-    const unsigned char* pInvBindMatBufferData = model.buffers[invBindMatBufferView.buffer].data.data();
-    memcpy(invBindMatricesData.data(), &pInvBindMatBufferData[invBindMatBufferOffset], invBindMatBufferByteCnt);
+    invBindMatricesData.resize(16 * invBindMatAccessor.count);
+    SharedLib::ReadOutAccessorData(invBindMatricesData.data(), invBindMatAccessor, model.bufferViews, model.buffers);
 
 
     // Construct the skeleton in RAM
     m_skeletalMesh.skeleton.joints.resize(skin.joints.size());
+
+    // GLTF Joint Node ID (key) maps to App's skeletalMesh's joint id (value)
+    std::unordered_map<int, int> jointNodeIdSkeletonJointIdMap;
+    for (uint32_t i = 0; i < skin.joints.size(); i++)
+    {
+        jointNodeIdSkeletonJointIdMap.insert({ skin.joints[i], i });
+    }
+
     for (uint32_t i = 0; i < skin.joints.size(); i++)
     {
         const auto& jointI = model.nodes[skin.joints[i]];
 
-        // Set joint translation from the gltf
-        if (jointI.translation.size() != 0)
-        {
-            m_skeletalMesh.skeleton.joints[i].localTranslation[0] = jointI.translation[0];
-            m_skeletalMesh.skeleton.joints[i].localTranslation[1] = jointI.translation[1];
-            m_skeletalMesh.skeleton.joints[i].localTranslation[2] = jointI.translation[2];
-        }
-        else
-        {
-            m_skeletalMesh.skeleton.joints[i].localTranslation[0] = 0.f;
-            m_skeletalMesh.skeleton.joints[i].localTranslation[1] = 0.f;
-            m_skeletalMesh.skeleton.joints[i].localTranslation[2] = 0.f;
-        }
-
         // Set joint rotation from the gltf -- quternion
-        if (jointI.rotation.size() != 0)
+        if (jointI.matrix.size() != 0)
         {
-            m_skeletalMesh.skeleton.joints[i].localRotation[0] = jointI.rotation[0];
-            m_skeletalMesh.skeleton.joints[i].localRotation[1] = jointI.rotation[1];
-            m_skeletalMesh.skeleton.joints[i].localRotation[2] = jointI.rotation[2];
-            m_skeletalMesh.skeleton.joints[i].localRotation[3] = jointI.rotation[3];
-        }
-        else
-        {
-            m_skeletalMesh.skeleton.joints[i].localRotation[0] = 0.f;
-            m_skeletalMesh.skeleton.joints[i].localRotation[1] = 0.f;
-            m_skeletalMesh.skeleton.joints[i].localRotation[2] = 0.f;
-            m_skeletalMesh.skeleton.joints[i].localRotation[3] = 1.f;
-        }
+            m_skeletalMesh.skeleton.joints[i].isTransformationMat = true;
 
-        // Set joint scaling from the gltf
-        if (jointI.scale.size() != 0)
-        {
-            m_skeletalMesh.skeleton.joints[i].localScale[0] = jointI.scale[0];
-            m_skeletalMesh.skeleton.joints[i].localScale[1] = jointI.scale[1];
-            m_skeletalMesh.skeleton.joints[i].localScale[2] = jointI.scale[2];
+            // The TinyGltf Mat's ele are double, but we want float, so we cannot directly memcpy.
+            float tmpTransformMat[16] = {};
+            for (int eleIdx = 0; eleIdx < 16; eleIdx++)
+            {
+                tmpTransformMat[eleIdx] = jointI.matrix[eleIdx];
+            }
+
+            SharedLib::MatTranspose(tmpTransformMat, 4);
+
+            memcpy(m_skeletalMesh.skeleton.joints[i].localTransformation, tmpTransformMat, sizeof(tmpTransformMat));
         }
         else
         {
-            m_skeletalMesh.skeleton.joints[i].localScale[0] = 1.f;
-            m_skeletalMesh.skeleton.joints[i].localScale[1] = 1.f;
-            m_skeletalMesh.skeleton.joints[i].localScale[2] = 1.f;
+            m_skeletalMesh.skeleton.joints[i].isTransformationMat = false;
+            
+            // Set joint translation from the gltf
+            if (jointI.translation.size() != 0)
+            {
+                m_skeletalMesh.skeleton.joints[i].localTranslation[0] = jointI.translation[0];
+                m_skeletalMesh.skeleton.joints[i].localTranslation[1] = jointI.translation[1];
+                m_skeletalMesh.skeleton.joints[i].localTranslation[2] = jointI.translation[2];
+            }
+            else
+            {
+                m_skeletalMesh.skeleton.joints[i].localTranslation[0] = 0.f;
+                m_skeletalMesh.skeleton.joints[i].localTranslation[1] = 0.f;
+                m_skeletalMesh.skeleton.joints[i].localTranslation[2] = 0.f;
+            }
+
+            // Set joint rotation from the gltf
+            if (jointI.rotation.size() != 0)
+            {
+                m_skeletalMesh.skeleton.joints[i].localRotation[0] = jointI.rotation[0];
+                m_skeletalMesh.skeleton.joints[i].localRotation[1] = jointI.rotation[1];
+                m_skeletalMesh.skeleton.joints[i].localRotation[2] = jointI.rotation[2];
+                m_skeletalMesh.skeleton.joints[i].localRotation[3] = jointI.rotation[3];
+
+            }
+            else
+            {
+                m_skeletalMesh.skeleton.joints[i].localRotation[0] = 0.f;
+                m_skeletalMesh.skeleton.joints[i].localRotation[1] = 0.f;
+                m_skeletalMesh.skeleton.joints[i].localRotation[2] = 0.f;
+                m_skeletalMesh.skeleton.joints[i].localRotation[3] = 1.f;
+            }
+
+            // Set joint scaling from the gltf
+            if (jointI.scale.size() != 0)
+            {
+                m_skeletalMesh.skeleton.joints[i].localScale[0] = jointI.scale[0];
+                m_skeletalMesh.skeleton.joints[i].localScale[1] = jointI.scale[1];
+                m_skeletalMesh.skeleton.joints[i].localScale[2] = jointI.scale[2];
+            }
+            else
+            {
+                m_skeletalMesh.skeleton.joints[i].localScale[0] = 1.f;
+                m_skeletalMesh.skeleton.joints[i].localScale[1] = 1.f;
+                m_skeletalMesh.skeleton.joints[i].localScale[2] = 1.f;
+            }
         }
 
         // Set joint inverse bind matrix data
@@ -843,11 +892,14 @@ void SkinAnimGltfApp::ReadInInitGltf()
         // Set children
         for (uint32_t childIdx = 0; childIdx < jointI.children.size(); childIdx++)
         {
-            uint32_t childJointIdx = jointI.children[childIdx] - 1; // Assume that the first node is always the mesh+skeleton.
+            uint32_t childJointIdx = jointNodeIdSkeletonJointIdMap[jointI.children[childIdx]];
             m_skeletalMesh.skeleton.joints[i].children.push_back(childJointIdx);
         }
     }
 
+    // Load the global transformation of the armeture in the scene.
+    std::vector<float> nodesModelMats;
+    SharedLib::GetNodesModelMats(model, nodesModelMats);
 
     // Create Gpu buffer for the skeleton
     m_skeletalMesh.skeleton.jointsMatsBuffers.resize(m_swapchainImgCnt);
@@ -858,6 +910,28 @@ void SkinAnimGltfApp::ReadInInitGltf()
                                                                        m_skeletalMesh.skeleton.joints.size() * 16 * sizeof(float));
     }
     
+    m_skeletalMesh.isMatTransformation = true;
+
+    int armatureNodeIdx = SharedLib::GetArmatureNodeIdx(model);
+    if (armatureNodeIdx != -1)
+    {
+        memcpy(m_skeletalMesh.transformationMat, 
+               &nodesModelMats[armatureNodeIdx * 16],
+               sizeof(float) * 16);
+    }
+    else
+    {
+        // If the armatureNodeIdx is -1, then it means that the armature is just the root node.
+        float identityMat[16] = {
+                1.f, 0.f, 0.f, 0.f,
+                0.f, 1.f, 0.f, 0.f,
+                0.f, 0.f, 1.f, 0.f,
+                0.f, 0.f, 0.f, 1.f
+        };
+        memcpy(m_skeletalMesh.transformationMat,
+               identityMat, sizeof(float) * 16);
+    }
+
 
     // Read in animation
     const auto& animation = model.animations[0];
@@ -866,86 +940,52 @@ void SkinAnimGltfApp::ReadInInitGltf()
         const auto& sampler = animation.samplers[channel.sampler];
         const auto& target = channel.target_path;
 
-        // We always assume that the first node is a skeletonal mesh node and the subsequent nodes are joints nodes.
-        uint32_t jointId = channel.target_node - 1; 
+        uint32_t jointId = jointNodeIdSkeletonJointIdMap[channel.target_node];
 
         const auto& timeAccessor = model.accessors[sampler.input];
         
         assert(timeAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT, "The time accessor component type should be float.");
         assert(timeAccessor.type == TINYGLTF_TYPE_SCALAR, "The time accessor type should be SCALAR.");
 
-        int timeAccessorByteOffset = timeAccessor.byteOffset;
-        int timeAccessorEleCnt = timeAccessor.count;
-        const auto& timeBufferView = model.bufferViews[timeAccessor.bufferView];
-
-        int timeBufferOffset = timeAccessorByteOffset + timeBufferView.byteOffset;
-        int timeBufferByteCnt = sizeof(float) * timeAccessorEleCnt;
-
-        const unsigned char* pTimeBufferData = model.buffers[timeBufferView.buffer].data.data();
+        std::vector<float> timeData(timeAccessor.count);
+        int timeBufferByteCnt = SharedLib::GetAccessorDataBytes(timeAccessor);
+        SharedLib::ReadOutAccessorData(timeData.data(), timeAccessor, model.bufferViews, model.buffers);
+        m_maxAnimTime = std::max(m_maxAnimTime, timeData[timeAccessor.count - 1]);
 
         if (target.compare("translation") == 0)
         {
-            m_skeletalMesh.skeleton.joints[jointId].translationAnimation.keyframeTimes.resize(timeAccessorEleCnt);
-
-            memcpy(m_skeletalMesh.skeleton.joints[jointId].translationAnimation.keyframeTimes.data(),
-                   &pTimeBufferData[timeBufferOffset],
-                   timeBufferByteCnt);
-
-            m_maxAnimTime = std::max(m_maxAnimTime,
-                                     m_skeletalMesh.skeleton.joints[jointId].translationAnimation.keyframeTimes[timeAccessorEleCnt - 1]);
-
+            m_skeletalMesh.skeleton.joints[jointId].translationAnimation.keyframeTimes = timeData;
             const auto& translationAccessor = model.accessors[sampler.output];
 
             assert(translationAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT, "The translation accessor component type should be float.");
             assert(translationAccessor.type == TINYGLTF_TYPE_VEC3, "The translation accessor type should be VEC3.");
 
-            int translationAccessorByteOffset = translationAccessor.byteOffset;
-            int translationAccessorEleCnt = translationAccessor.count;
-            const auto& translationBufferView = model.bufferViews[translationAccessor.bufferView];
-
-            int translationBufferOffset = translationAccessorByteOffset + translationBufferView.byteOffset;
-            int translationBufferByteCnt = sizeof(float) * translationAccessorEleCnt * 3;
-
-            m_skeletalMesh.skeleton.joints[jointId].translationAnimation.keyframeTransformationsData.resize(translationAccessorEleCnt * 3);
-
-            const unsigned char* pTranslationBufferData = model.buffers[translationBufferView.buffer].data.data();
-            memcpy(m_skeletalMesh.skeleton.joints[jointId].translationAnimation.keyframeTransformationsData.data(),
-                   &pTranslationBufferData[translationBufferOffset], translationBufferByteCnt);
+            m_skeletalMesh.skeleton.joints[jointId].translationAnimation.keyframeTransformationsData.resize(translationAccessor.count * 3);
+            SharedLib::ReadOutAccessorData(m_skeletalMesh.skeleton.joints[jointId].translationAnimation.keyframeTransformationsData.data(),
+                                           translationAccessor, model.bufferViews, model.buffers);
         }
         else if (target.compare("rotation") == 0)
         {
-            m_skeletalMesh.skeleton.joints[jointId].rotationAnimation.keyframeTimes.resize(timeAccessorEleCnt);
-
-            memcpy(m_skeletalMesh.skeleton.joints[jointId].rotationAnimation.keyframeTimes.data(),
-                   &pTimeBufferData[timeBufferOffset],
-                   timeBufferByteCnt);
-
-            m_maxAnimTime = std::max(m_maxAnimTime,
-                                     m_skeletalMesh.skeleton.joints[jointId].rotationAnimation.keyframeTimes[timeAccessorEleCnt - 1]);
-
+            m_skeletalMesh.skeleton.joints[jointId].rotationAnimation.keyframeTimes = timeData;
             const auto& rotationAccessor = model.accessors[sampler.output];
 
             assert(rotationAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT, "The rotation accessor component type should be float.");
             assert(rotationAccessor.type == TINYGLTF_TYPE_VEC4, "The rotation accessor type should be VEC4.");
 
-            int rotationAccessorByteOffset = rotationAccessor.byteOffset;
-            int rotationAccessorEleCnt = rotationAccessor.count;
-            const auto& rotationBufferView = model.bufferViews[rotationAccessor.bufferView];
-
-            int rotationBufferOffset = rotationAccessorByteOffset + rotationBufferView.byteOffset;
-            int rotationBufferByteCnt = sizeof(float) * rotationAccessorEleCnt * 4;
-
-            m_skeletalMesh.skeleton.joints[jointId].rotationAnimation.keyframeTransformationsData.resize(rotationAccessorEleCnt * 4);
-
-            const unsigned char* pRotationBufferData = model.buffers[rotationBufferView.buffer].data.data();
-            memcpy(m_skeletalMesh.skeleton.joints[jointId].rotationAnimation.keyframeTransformationsData.data(),
-                   &pRotationBufferData[rotationBufferOffset],
-                   rotationBufferByteCnt);
+            m_skeletalMesh.skeleton.joints[jointId].rotationAnimation.keyframeTransformationsData.resize(rotationAccessor.count * 4);
+            SharedLib::ReadOutAccessorData(m_skeletalMesh.skeleton.joints[jointId].rotationAnimation.keyframeTransformationsData.data(),
+                                           rotationAccessor, model.bufferViews, model.buffers);
         }
         else
         {
-            std::cerr << "The animation example only supports translation/rotation animation" << std::endl;
-            exit(1);
+            m_skeletalMesh.skeleton.joints[jointId].scalingAnimation.keyframeTimes = timeData;
+            const auto& scaleAccessor = model.accessors[sampler.output];
+            assert(scaleAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT, "The scale accessor component type should be float.");
+            assert(scaleAccessor.type == TINYGLTF_TYPE_VEC3, "The scale accessor type should be VEC2.");
+
+            m_skeletalMesh.skeleton.joints[jointId].scalingAnimation.keyframeTransformationsData.resize(scaleAccessor.count * 3);
+            SharedLib::ReadOutAccessorData(m_skeletalMesh.skeleton.joints[jointId].scalingAnimation.keyframeTransformationsData.data(),
+                                           scaleAccessor, model.bufferViews, model.buffers);
         }
     }
     
@@ -1319,70 +1359,123 @@ void SkinAnimGltfApp::GenJointMatrix(
 {
     const auto& joint = m_skeletalMesh.skeleton.joints[currentJoint];
 
-    float interpolatedTranslation[3];
-    memcpy(interpolatedTranslation, joint.localTranslation, sizeof(interpolatedTranslation));
-
-    glm::quat interpolatedRotQuat(joint.localRotation[3],
-                                  joint.localRotation[0],
-                                  joint.localRotation[1],
-                                  joint.localRotation[2]);
-    
-    if (joint.translationAnimation.keyframeTimes.size() != 0)
+    float localTransformMat[16] = {};
+    if (joint.isTransformationMat)
     {
-        uint32_t preIdx;
-        uint32_t postIdx;
-        float weight = GetInterploationAndInterval(joint.translationAnimation.keyframeTimes,
-                                                   m_currentAnimTime, preIdx, postIdx);
-
-        const std::vector<float>& translationAnimData = joint.translationAnimation.keyframeTransformationsData;
-
-        float preTranslation[3] = { translationAnimData[preIdx * 3],
-                                    translationAnimData[preIdx * 3 + 1],
-                                    translationAnimData[preIdx * 3 + 2] };
-
-        float postTranslation[3] = { translationAnimData[postIdx * 3],
-                                     translationAnimData[postIdx * 3 + 1],
-                                     translationAnimData[postIdx * 3 + 2] };
-
-        // C++ 20
-        interpolatedTranslation[0] = std::lerp(preTranslation[0], postTranslation[0], weight);
-        interpolatedTranslation[1] = std::lerp(preTranslation[1], postTranslation[1], weight);
-        interpolatedTranslation[2] = std::lerp(preTranslation[2], postTranslation[2], weight);
+        // We don't play this joint's animation if it's transformation is represented by a matrix.
+        memcpy(localTransformMat, joint.localTransformation, sizeof(localTransformMat));
     }
-
-    if (joint.rotationAnimation.keyframeTimes.size() != 0)
+    else
     {
-        uint32_t preIdx;
-        uint32_t postIdx;
-        float weight = GetInterploationAndInterval(joint.rotationAnimation.keyframeTimes,
-                                                   m_currentAnimTime, preIdx, postIdx);
+        float interpolatedTranslation[3];
+        memcpy(interpolatedTranslation, joint.localTranslation, sizeof(interpolatedTranslation));
 
-        const std::vector<float>& rotationAnimData = joint.rotationAnimation.keyframeTransformationsData;
+        glm::quat interpolatedRotQuat(joint.localRotation[3],
+                                      joint.localRotation[0],
+                                      joint.localRotation[1],
+                                      joint.localRotation[2]);
 
-        glm::quat preRotQuat(rotationAnimData[preIdx * 4 + 3],
-                             rotationAnimData[preIdx * 4],
-                             rotationAnimData[preIdx * 4 + 1],
-                             rotationAnimData[preIdx * 4 + 2]);
+        float interpolatedScale[3];
+        memcpy(interpolatedScale, joint.localScale, sizeof(interpolatedScale));
 
-        glm::quat postRotQuat(rotationAnimData[postIdx * 4 + 3],
-                              rotationAnimData[postIdx * 4],
-                              rotationAnimData[postIdx * 4 + 1],
-                              rotationAnimData[postIdx * 4 + 2]);
+        if (joint.translationAnimation.keyframeTimes.size() != 0)
+        {
+            uint32_t preIdx;
+            uint32_t postIdx;
+            float weight = GetInterploationAndInterval(joint.translationAnimation.keyframeTimes,
+                m_currentAnimTime, preIdx, postIdx);
 
-        interpolatedRotQuat = glm::slerp(preRotQuat, postRotQuat, weight);
+            const std::vector<float>& translationAnimData = joint.translationAnimation.keyframeTransformationsData;
+
+            float preTranslation[3] = { translationAnimData[preIdx * 3],
+                                        translationAnimData[preIdx * 3 + 1],
+                                        translationAnimData[preIdx * 3 + 2] };
+
+            float postTranslation[3] = { translationAnimData[postIdx * 3],
+                                         translationAnimData[postIdx * 3 + 1],
+                                         translationAnimData[postIdx * 3 + 2] };
+
+            // C++ 20
+            interpolatedTranslation[0] = std::lerp(preTranslation[0], postTranslation[0], weight);
+            interpolatedTranslation[1] = std::lerp(preTranslation[1], postTranslation[1], weight);
+            interpolatedTranslation[2] = std::lerp(preTranslation[2], postTranslation[2], weight);
+        }
+
+        if (joint.rotationAnimation.keyframeTimes.size() != 0)
+        {
+            uint32_t preIdx;
+            uint32_t postIdx;
+            float weight = GetInterploationAndInterval(joint.rotationAnimation.keyframeTimes,
+                m_currentAnimTime, preIdx, postIdx);
+
+            const std::vector<float>& rotationAnimData = joint.rotationAnimation.keyframeTransformationsData;
+
+            glm::quat preRotQuat(rotationAnimData[preIdx * 4 + 3],
+                rotationAnimData[preIdx * 4],
+                rotationAnimData[preIdx * 4 + 1],
+                rotationAnimData[preIdx * 4 + 2]);
+
+            glm::quat postRotQuat(rotationAnimData[postIdx * 4 + 3],
+                rotationAnimData[postIdx * 4],
+                rotationAnimData[postIdx * 4 + 1],
+                rotationAnimData[postIdx * 4 + 2]);
+
+            interpolatedRotQuat = glm::slerp(preRotQuat, postRotQuat, weight);
+        }
+
+        if (joint.scalingAnimation.keyframeTimes.size() != 0)
+        {
+            uint32_t preIdx;
+            uint32_t postIdx;
+            float weight = GetInterploationAndInterval(joint.scalingAnimation.keyframeTimes,
+                                                       m_currentAnimTime, preIdx, postIdx);
+
+            const std::vector<float>& scalingAnimData = joint.scalingAnimation.keyframeTransformationsData;
+
+            float preScale[3] = { scalingAnimData[preIdx * 3],
+                                  scalingAnimData[preIdx * 3 + 1],
+                                  scalingAnimData[preIdx * 3 + 2] };
+
+            float postScale[3] = { scalingAnimData[postIdx * 3],
+                                   scalingAnimData[postIdx * 3 + 1],
+                                   scalingAnimData[postIdx * 3 + 2] };
+
+            // C++ 20
+            interpolatedScale[0] = std::lerp(preScale[0], postScale[0], weight);
+            interpolatedScale[1] = std::lerp(preScale[1], postScale[1], weight);
+            interpolatedScale[2] = std::lerp(preScale[2], postScale[2], weight);
+        }
+
+        glm::mat4 rotationMatrix = glm::toMat4(interpolatedRotQuat);
+        glm::vec4 rotRow0 = glm::row(rotationMatrix, 0);
+        glm::vec4 rotRow1 = glm::row(rotationMatrix, 1);
+        glm::vec4 rotRow2 = glm::row(rotationMatrix, 2);
+
+        float localTranslationMat[16] = {
+            1.f, 0.f, 0.f, interpolatedTranslation[0],
+            0.f, 1.f, 0.f, interpolatedTranslation[1],
+            0.f, 0.f, 1.f, interpolatedTranslation[2],
+            0.f, 0.f, 0.f, 1.f
+        };
+
+        float localRotationMat[16] = {
+            rotRow0[0], rotRow0[1], rotRow0[2], 0.f,
+            rotRow1[0], rotRow1[1], rotRow1[2], 0.f,
+            rotRow2[0], rotRow2[1], rotRow2[2], 0.f,
+            0.f,        0.f,        0.f,        1.f
+        };
+
+        float localScaleMat[16] = {
+            interpolatedScale[0], 0.f,                  0.f,                  0.f,
+            0.f,                  interpolatedScale[1], 0.f,                  0.f,
+            0.f,                  0.f,                  interpolatedScale[2], 0.f,
+            0.f,                  0.f,                  0.f,                  1.f
+        };
+
+        float localRSMat[16] = {};
+        SharedLib::MatrixMul4x4(localRotationMat, localScaleMat, localRSMat);
+        SharedLib::MatrixMul4x4(localTranslationMat, localRSMat, localTransformMat);
     }
-
-    glm::mat4 rotationMatrix = glm::toMat4(interpolatedRotQuat);
-    glm::vec4 rotRow0 = glm::row(rotationMatrix, 0);
-    glm::vec4 rotRow1 = glm::row(rotationMatrix, 1);
-    glm::vec4 rotRow2 = glm::row(rotationMatrix, 2);
-
-    float localTransformMat[16] = {
-        rotRow0[0], rotRow0[1], rotRow0[2], interpolatedTranslation[0],
-        rotRow1[0], rotRow1[1], rotRow1[2], interpolatedTranslation[1],
-        rotRow2[0], rotRow2[1], rotRow2[2], interpolatedTranslation[2],
-        0.f,        0.f,        0.f,        1.f
-    };
 
     float jointModelMat[16] = {};
     SharedLib::MatrixMul4x4(parentChainTransformationMat, localTransformMat, jointModelMat);
@@ -1412,7 +1505,7 @@ void SkinAnimGltfApp::UpdateJointsTransAndMats()
     std::vector<float> jointsMatBuffer(m_skeletalMesh.skeleton.joints.size() * 16);
 
     // Update all joints local transformation and generate the joint matrices for each joints into a RAM buffer.
-    GenJointMatrix(modelMatData, 0, jointsMatBuffer);
+    GenJointMatrix(m_skeletalMesh.transformationMat, 0, jointsMatBuffer);
 
     // Send the joint RAM buffer to the corresponding joint gpu buffer.
     CopyRamDataToGpuBuffer(jointsMatBuffer.data(),
@@ -1425,8 +1518,12 @@ void SkinAnimGltfApp::UpdateJointsTransAndMats()
 void SkinAnimGltfApp::FrameStart()
 {
     GlfwApplication::FrameStart();
-    // UpdateCamera();
 
+    if (m_isCameraRotate)
+    {
+        UpdateCamera();
+    }
+    
     // Update time stamp and the current anim time.
     if (m_currentAnimTime < 0.f)
     {
