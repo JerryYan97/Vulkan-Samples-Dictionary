@@ -1,0 +1,15 @@
+Personal Thoughts:
+The mesh shader can faciliate per-meshlet culling and invisible primitives culling.
+So, when complex geo/obj overlap part of each others, it can cull lots of meshlets. Or, triangles can only be culled during the depth comparsion after rasterization and before the fragment shader if fragment shader doesn't change the depth of the triangles pixels.
+
+References:
+https://www.geeks3d.com/20200519/introduction-to-mesh-shaders-opengl-and-vulkan/
+https://vulkan.org/user/pages/09.events/vulkanised-2023/vulkanised_mesh_best_practices_2023.02.09-1.pdf
+https://www.pcgamer.com/mesh-shaders-explained/
+https://www.geeks3d.com/hacklab/20200515/demo-rgb-triangle-with-mesh-shaders-in-vulkan/
+* https://developer.nvidia.com/blog/introduction-turing-mesh-shaders/
+https://github.com/nvpro-samples/gl_vk_meshlet_cadscene
+* https://github.com/KhronosGroup/Vulkan-Samples/tree/main/samples#mesh-shader-culling
+* https://github.com/KhronosGroup/Vulkan-Samples/blob/main/samples/extensions/mesh_shader_culling/README.adoc
+https://www.youtube.com/watch?v=n3cnUHYGbpw
+https://github.com/SaschaWillems/Vulkan/tree/master/examples/meshshader

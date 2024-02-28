@@ -32,7 +32,8 @@ else()
             ${CMAKE_CURRENT_SOURCE_DIR}/Application/GlfwApplication.h
         )
 
-        target_link_libraries(SharedLibrary glfw3)
+        target_include_directories(SharedLibrary PUBLIC ${GLFW_HEADER_DIR})
+        target_link_libraries(SharedLibrary glfw)
 
     elseif(DEFINED SHARED_LIB_IMGUI)
         target_sources(
@@ -45,7 +46,8 @@ else()
             ${CMAKE_CURRENT_SOURCE_DIR}/Application/DearImGuiApplication.h
         )
 
-        target_link_libraries(SharedLibrary glfw3)
+        target_include_directories(SharedLibrary ${GLFW_HEADER_DIR})
+        target_link_libraries(SharedLibrary glfw)
 
     else()
         message(FATAL_ERROR "Application must defines one of SHARED_LIB_APP, SHARED_LIB_GLFW and SHARED_LIB_IMGUI.")
