@@ -9,14 +9,11 @@ include_directories("$ENV{VULKAN_SDK}/Include" "../../../ThirdPartyLibs/VMA")
 
 set(GLFW_HEADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../ThirdPartyLibs/glfw/include/GLFW)
 include_directories(${GLFW_HEADER_DIR})
-# include_directories(../../../ThirdPartyLibs/glfw/include)
 
 set(TinyObjPath ../../../ThirdPartyLibs/TinyObj)
 include_directories(${TinyObjPath})
 
 link_directories("$ENV{VULKAN_SDK}/lib")
-# link_directories("../../../ThirdPartyLibs/glfw/build/src/Debug/")
-
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../ThirdPartyLibs/glfw
                  ${CMAKE_CURRENT_BINARY_DIR}/glfw)
 
@@ -35,9 +32,6 @@ source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/../../../ FILES ${APP_SRC_LIST})
 
 target_compile_features(${MY_APP_NAME} PRIVATE cxx_std_17)
 
-# target_link_libraries(${MY_APP_NAME} vulkan-1)
-# target_link_libraries(${MY_APP_NAME} glfw3)
-# target_link_libraries(${MY_APP_NAME} glfw)
 target_link_libraries(${MY_APP_NAME} SharedLibrary vulkan-1 glfw)
 
 add_dependencies(${MY_APP_NAME} glfw)
