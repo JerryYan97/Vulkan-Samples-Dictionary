@@ -25,28 +25,18 @@ int main()
     while (!app.WindowShouldClose())
     {
         VkDevice device = app.GetVkDevice();
-        VkFence inFlightFence = app.GetCurrentFrameFence();
-        VkCommandBuffer currentCmdBuffer = app.GetCurrentFrameGfxCmdBuffer();
 
-        VkExtent2D swapchainImageExtent = app.GetSwapchainImageExtent();
-
+        // Poll Event, update camera data.
         app.FrameStart();
 
-        // Wait for the resources from the possible on flight frame
-        vkWaitForFences(device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
-
         // Get next available image from the swapchain
-        uint32_t imageIndex;
-        if (app.NextImgIdxOrNewSwapchain(imageIndex) == false)
+        if (app.WaitNextImgIdxOrNewSwapchain() == false)
         {
             continue;
         }
 
-        // Reset unused previous frame's resource
-        vkResetFences(device, 1, &inFlightFence);
-        vkResetCommandBuffer(currentCmdBuffer, 0);
-
-        app.UpdateCameraAndGpuBuffer();
+        VkCommandBuffer currentCmdBuffer = app.GetCurrentFrameGfxCmdBuffer();
+        VkExtent2D swapchainImageExtent  = app.GetSwapchainImageExtent();
 
         // Fill the command buffer
         VkCommandBufferBeginInfo beginInfo{};
@@ -71,7 +61,7 @@ int main()
         VkRenderingAttachmentInfoKHR geoPassDepthAttachmentInfo{};
         {
             geoPassDepthAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-            geoPassDepthAttachmentInfo.imageView = app.GetSwapchainDepthImageView(imageIndex);
+            geoPassDepthAttachmentInfo.imageView = app.GetSwapchainDepthImageView();
             geoPassDepthAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
             geoPassDepthAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             geoPassDepthAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -135,7 +125,7 @@ int main()
 
         /* ----------------------------------------- */
 
-        GpuImg deferredLightingGpuImg = app.GetDeferredLightingRadianceTexture(imageIndex);
+        GpuImg deferredLightingGpuImg = app.GetDeferredLightingRadianceTexture();
 
         app.CmdGBufferLayoutTrans(currentCmdBuffer,
                                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -169,7 +159,7 @@ int main()
         VkRenderingAttachmentInfoKHR deferredLightingPassDepthAttachmentInfo{};
         {
             deferredLightingPassDepthAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-            deferredLightingPassDepthAttachmentInfo.imageView = app.GetSwapchainDepthImageView(imageIndex);
+            deferredLightingPassDepthAttachmentInfo.imageView = app.GetSwapchainDepthImageView();
             deferredLightingPassDepthAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
             deferredLightingPassDepthAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             deferredLightingPassDepthAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;

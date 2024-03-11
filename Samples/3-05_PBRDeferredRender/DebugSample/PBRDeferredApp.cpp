@@ -461,6 +461,13 @@ float PBRDeferredApp::PtLightVolumeRadius(
 }
 
 // ================================================================================================================
+void PBRDeferredApp::FrameStart()
+{
+    GlfwApplication::FrameStart();
+    UpdateCameraAndGpuBuffer();
+}
+
+// ================================================================================================================
 void PBRDeferredApp::SendCameraDataToBuffer(
     uint32_t i)
 {
@@ -493,7 +500,7 @@ void PBRDeferredApp::UpdateCameraAndGpuBuffer()
     SharedLib::HEvent keySDownEvent = CreateKeyboardEvent(g_isSDown, "KEY_S");
     m_pCamera->OnEvent(keySDownEvent);
 
-    SendCameraDataToBuffer(m_currentFrame);
+    SendCameraDataToBuffer(m_acqSwapchainImgIdx);
 }
 
 // ================================================================================================================
@@ -536,16 +543,16 @@ void PBRDeferredApp::CmdGBufferLayoutTrans(
         gBufferRenderTargetTransBarrierTemplate.subresourceRange = colorOneMipOneLevelSubResRange;
     }
 
-    gBufferRenderTargetTransBarrierTemplate.image = m_worldPosTextures[m_currentFrame].image;
+    gBufferRenderTargetTransBarrierTemplate.image = m_worldPosTextures[m_acqSwapchainImgIdx].image;
     gBufferToRenderTargetBarriers.push_back(gBufferRenderTargetTransBarrierTemplate);
 
-    gBufferRenderTargetTransBarrierTemplate.image = m_normalTextures[m_currentFrame].image;
+    gBufferRenderTargetTransBarrierTemplate.image = m_normalTextures[m_acqSwapchainImgIdx].image;
     gBufferToRenderTargetBarriers.push_back(gBufferRenderTargetTransBarrierTemplate);
 
-    gBufferRenderTargetTransBarrierTemplate.image = m_albedoTextures[m_currentFrame].image;
+    gBufferRenderTargetTransBarrierTemplate.image = m_albedoTextures[m_acqSwapchainImgIdx].image;
     gBufferToRenderTargetBarriers.push_back(gBufferRenderTargetTransBarrierTemplate);
 
-    gBufferRenderTargetTransBarrierTemplate.image = m_metallicRoughnessTextures[m_currentFrame].image;
+    gBufferRenderTargetTransBarrierTemplate.image = m_metallicRoughnessTextures[m_acqSwapchainImgIdx].image;
     gBufferToRenderTargetBarriers.push_back(gBufferRenderTargetTransBarrierTemplate);
 
     vkCmdPipelineBarrier(
@@ -575,16 +582,16 @@ std::vector<VkRenderingAttachmentInfoKHR> PBRDeferredApp::GetGBufferAttachments(
         attachmentInfo.clearValue = clearColor;
     }
 
-    attachmentInfo.imageView = m_worldPosTextures[m_currentFrame].imageView;
+    attachmentInfo.imageView = m_worldPosTextures[m_acqSwapchainImgIdx].imageView;
     attachmentsInfos.push_back(attachmentInfo);
 
-    attachmentInfo.imageView = m_normalTextures[m_currentFrame].imageView;
+    attachmentInfo.imageView = m_normalTextures[m_acqSwapchainImgIdx].imageView;
     attachmentsInfos.push_back(attachmentInfo);
 
-    attachmentInfo.imageView = m_albedoTextures[m_currentFrame].imageView;
+    attachmentInfo.imageView = m_albedoTextures[m_acqSwapchainImgIdx].imageView;
     attachmentsInfos.push_back(attachmentInfo);
 
-    attachmentInfo.imageView = m_metallicRoughnessTextures[m_currentFrame].imageView;
+    attachmentInfo.imageView = m_metallicRoughnessTextures[m_acqSwapchainImgIdx].imageView;
     attachmentsInfos.push_back(attachmentInfo);
 
     return attachmentsInfos;
@@ -601,7 +608,7 @@ std::vector<VkWriteDescriptorSet> PBRDeferredApp::GetGeoPassWriteDescriptorSets(
         writeVpUboDesc.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         writeVpUboDesc.descriptorCount = 1;
         writeVpUboDesc.dstBinding = 0;        
-        writeVpUboDesc.pBufferInfo = &m_vpUboBuffers[m_currentFrame].bufferDescInfo;
+        writeVpUboDesc.pBufferInfo = &m_vpUboBuffers[m_acqSwapchainImgIdx].bufferDescInfo;
     }
     geoPassWriteDescSet.push_back(writeVpUboDesc);
 
@@ -649,7 +656,7 @@ std::vector<VkWriteDescriptorSet> PBRDeferredApp::GetDeferredLightingWriteDescri
         writeVpUboDesc.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         writeVpUboDesc.descriptorCount = 1;
         writeVpUboDesc.dstBinding = 0;
-        writeVpUboDesc.pBufferInfo = &m_vpUboBuffers[m_currentFrame].bufferDescInfo;
+        writeVpUboDesc.pBufferInfo = &m_vpUboBuffers[m_acqSwapchainImgIdx].bufferDescInfo;
     }
     writeDescriptorSet0.push_back(writeVpUboDesc);
 
@@ -689,7 +696,7 @@ std::vector<VkWriteDescriptorSet> PBRDeferredApp::GetDeferredLightingWriteDescri
         writeWorldPosTexDesc.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         writeWorldPosTexDesc.descriptorCount = 1;
         writeWorldPosTexDesc.dstBinding = 4;
-        writeWorldPosTexDesc.pImageInfo = &m_worldPosTextures[m_currentFrame].imageDescInfo;
+        writeWorldPosTexDesc.pImageInfo = &m_worldPosTextures[m_acqSwapchainImgIdx].imageDescInfo;
     }
     writeDescriptorSet0.push_back(writeWorldPosTexDesc);
 
@@ -699,7 +706,7 @@ std::vector<VkWriteDescriptorSet> PBRDeferredApp::GetDeferredLightingWriteDescri
         writeNormalTexDesc.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         writeNormalTexDesc.descriptorCount = 1;
         writeNormalTexDesc.dstBinding = 5;
-        writeNormalTexDesc.pImageInfo = &m_normalTextures[m_currentFrame].imageDescInfo;
+        writeNormalTexDesc.pImageInfo = &m_normalTextures[m_acqSwapchainImgIdx].imageDescInfo;
     }
     writeDescriptorSet0.push_back(writeNormalTexDesc);
 
@@ -709,7 +716,7 @@ std::vector<VkWriteDescriptorSet> PBRDeferredApp::GetDeferredLightingWriteDescri
         writeAlbedoTexDesc.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         writeAlbedoTexDesc.descriptorCount = 1;
         writeAlbedoTexDesc.dstBinding = 6;
-        writeAlbedoTexDesc.pImageInfo = &m_albedoTextures[m_currentFrame].imageDescInfo;
+        writeAlbedoTexDesc.pImageInfo = &m_albedoTextures[m_acqSwapchainImgIdx].imageDescInfo;
     }
     writeDescriptorSet0.push_back(writeAlbedoTexDesc);  
 
@@ -719,7 +726,7 @@ std::vector<VkWriteDescriptorSet> PBRDeferredApp::GetDeferredLightingWriteDescri
         writeMetallicRoughnessTexDesc.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         writeMetallicRoughnessTexDesc.descriptorCount = 1;
         writeMetallicRoughnessTexDesc.dstBinding = 7;
-        writeMetallicRoughnessTexDesc.pImageInfo = &m_metallicRoughnessTextures[m_currentFrame].imageDescInfo;
+        writeMetallicRoughnessTexDesc.pImageInfo = &m_metallicRoughnessTextures[m_acqSwapchainImgIdx].imageDescInfo;
     }
     writeDescriptorSet0.push_back(writeMetallicRoughnessTexDesc);
 
@@ -1712,12 +1719,11 @@ void PBRDeferredApp::AppInit()
     InitVmaAllocator();
     InitGraphicsQueue();
     InitPresentQueue();
-
-    InitGfxCommandPool();
-    InitGfxCommandBuffers(SharedLib::MAX_FRAMES_IN_FLIGHT);
-
+    InitKHRFuncPtrs();
     InitSwapchain();
-    
+    InitGfxCommandPool();
+    InitGfxCommandBuffers(m_swapchainImgCnt);
+
     // Create the graphics pipeline
     ReadInSphereData();
     InitSphereVertexIndexBuffers();

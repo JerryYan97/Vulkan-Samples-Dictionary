@@ -13,7 +13,8 @@ set(TinyObjPath ../../../ThirdPartyLibs/TinyObj)
 include_directories(${TinyObjPath})
 
 link_directories("$ENV{VULKAN_SDK}/lib")
-link_directories("../../../ThirdPartyLibs/glfw/build/src/Debug/")
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../ThirdPartyLibs/glfw
+                 ${CMAKE_CURRENT_BINARY_DIR}/glfw)
 
 add_definitions(-DSOURCE_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}\")
 add_executable(${MY_APP_NAME} "main.cpp"
@@ -22,7 +23,8 @@ add_executable(${MY_APP_NAME} "main.cpp"
 
 # Load the shared library.
 set(SHARED_LIB_GLFW TRUE)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../SharedLibrary ${CMAKE_CURRENT_BINARY_DIR}/SharedLibrary)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../SharedLibrary
+                 ${CMAKE_CURRENT_BINARY_DIR}/SharedLibrary)
 
 get_target_property(APP_SRC_LIST ${MY_APP_NAME} SOURCES)
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/../../../ FILES ${APP_SRC_LIST})
@@ -30,9 +32,10 @@ source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/../../../ FILES ${APP_SRC_LIST})
 target_compile_features(${MY_APP_NAME} PRIVATE cxx_std_17)
 
 target_link_libraries(${MY_APP_NAME} vulkan-1)
-target_link_libraries(${MY_APP_NAME} glfw3)
+target_link_libraries(${MY_APP_NAME} glfw)
 target_link_libraries(${MY_APP_NAME} SharedLibrary)
 
+add_dependencies(${MY_APP_NAME} glfw)
 add_dependencies(${MY_APP_NAME} SharedLibrary)
 
 set(SHARED_LIB_HLSL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../SharedLibrary/HLSL")

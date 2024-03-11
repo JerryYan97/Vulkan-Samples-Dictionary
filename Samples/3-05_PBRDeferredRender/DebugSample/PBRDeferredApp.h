@@ -36,8 +36,7 @@ public:
     ~PBRDeferredApp();
 
     virtual void AppInit() override;
-
-    VkFence GetFence(uint32_t i) { return m_inFlightFences[i]; }
+    virtual void FrameStart() override;
 
     VkPipelineLayout GetGeoPassPipelineLayout() { return m_geoPassPipelineLayout; }
     VkPipelineLayout GetDeferredLightingPassPipelineLayout() { return m_deferredLightingPassPipelineLayout; }
@@ -57,7 +56,7 @@ public:
     VkBuffer GetIdxBuffer() { return m_idxBuffer.buffer; }
     VkBuffer GetVertBuffer() { return m_vertBuffer.buffer; }
 
-    GpuImg GetDeferredLightingRadianceTexture(uint32_t i) { return m_lightingPassRadianceTextures[i]; }
+    GpuImg GetDeferredLightingRadianceTexture() { return m_lightingPassRadianceTextures[m_acqSwapchainImgIdx]; }
 
     void CmdGBufferLayoutTrans(VkCommandBuffer      cmdBuffer,
                                VkImageLayout        oldLayout,
