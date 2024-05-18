@@ -10,6 +10,16 @@ https://www.geeks3d.com/hacklab/20200515/demo-rgb-triangle-with-mesh-shaders-in-
 * https://developer.nvidia.com/blog/introduction-turing-mesh-shaders/
 https://github.com/nvpro-samples/gl_vk_meshlet_cadscene
 * https://github.com/KhronosGroup/Vulkan-Samples/tree/main/samples#mesh-shader-culling
+* https://github.com/KhronosGroup/Vulkan-Samples/tree/main/samples/extensions/mesh_shading
+* https://github.com/KhronosGroup/Vulkan-Samples/tree/main/shaders/mesh_shading
+* https://github.com/KhronosGroup/Vulkan-Docs/blob/main/proposals/VK_EXT_mesh_shader.adoc
+* https://www.khronos.org/assets/uploads/developers/presentations/how-to-use-mesh-shaders.pdf
 * https://github.com/KhronosGroup/Vulkan-Samples/blob/main/samples/extensions/mesh_shader_culling/README.adoc
 https://www.youtube.com/watch?v=n3cnUHYGbpw
 https://github.com/SaschaWillems/Vulkan/tree/master/examples/meshshader
+
+GLSL include:
+https://stackoverflow.com/questions/10754437/how-to-using-the-include-in-glsl-support-arb-shading-language-include
+
+It looks like GLSLC automatically enables the #include extension:
+https://www.reddit.com/r/vulkan/comments/6b293k/include_not_supported_in_shaders/
