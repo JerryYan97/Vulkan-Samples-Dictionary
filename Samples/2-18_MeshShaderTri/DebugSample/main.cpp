@@ -214,10 +214,17 @@ void main()
 
     // Maintain 4 is enabled for the mesh shader (local size ID SPIRV)/
     // NOTE: It also has a dynamic rendering option that can replace the VkPhysicalDeviceDynamicRenderingFeaturesKHR.
+    VkPhysicalDeviceMeshShaderFeaturesEXT enabledMeshShaderFeatures{};
+    {
+        enabledMeshShaderFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT;
+        enabledMeshShaderFeatures.taskShader = VK_TRUE;
+        enabledMeshShaderFeatures.meshShader = VK_TRUE;
+    }
+
     VkPhysicalDeviceVulkan13Features vulkan13Features{};
     {
         vulkan13Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-        vulkan13Features.pNext = nullptr;
+        vulkan13Features.pNext = &enabledMeshShaderFeatures;
         vulkan13Features.dynamicRendering = VK_TRUE;
         vulkan13Features.maintenance4 = VK_TRUE;
     }
@@ -370,6 +377,236 @@ void main()
         meshStgInfo.module = meshShaderModule;
     }
 
+    // Create Frag Shader Module -- SOURCE_PATH is a MACRO definition passed in during compilation, which is specified in
+    //                              the CMakeLists.txt file in the same level of repository.
+    std::string shaderFragPath = std::string(SOURCE_PATH) + std::string("/glsl/tri.frag.spv");
+    std::ifstream inputFragShader(shaderFragPath.c_str(), std::ios::binary | std::ios::in);
+    std::vector<unsigned char> inputFragShaderStr(std::istreambuf_iterator<char>(inputFragShader), {});
+    inputFragShader.close();
+    VkShaderModuleCreateInfo shaderFragModuleCreateInfo{};
+    {
+        shaderFragModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        shaderFragModuleCreateInfo.codeSize = inputFragShaderStr.size();
+        shaderFragModuleCreateInfo.pCode = (uint32_t*)inputFragShaderStr.data();
+    }
+    VkShaderModule shaderFragModule;
+    VK_CHECK(vkCreateShaderModule(device, &shaderFragModuleCreateInfo, nullptr, &shaderFragModule));
+
+    // Create frag shader stage create info
+    VkPipelineShaderStageCreateInfo fragStgInfo{};
+    {
+        fragStgInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        fragStgInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+        fragStgInfo.pName = "main";
+        fragStgInfo.module = shaderFragModule;
+    }
+
+    // Combine shader stages info into an array
+    VkPipelineShaderStageCreateInfo stgArray[] = { meshStgInfo, fragStgInfo };
+
+    // Specifying all kinds of pipeline states
+    // Vertex input state
+    /* NOTE: Mesh shader doesn't have input assembly state, vertex input state, ... etc.
+    VkVertexInputBindingDescription vertBindingDesc = {};
+    {
+        vertBindingDesc.binding = 0;
+        // vertBindingDesc.stride = 3 * sizeof(float);
+        vertBindingDesc.stride = 4 * sizeof(float);
+        vertBindingDesc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    }
+    
+
+    VkVertexInputAttributeDescription vertAttrDesc;
+    {
+        // Position
+        vertAttrDesc.location = 0;
+        vertAttrDesc.binding = 0;
+        // vertAttrDesc.format = VK_FORMAT_R32G32B32_SFLOAT;
+        vertAttrDesc.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        vertAttrDesc.offset = 0;
+    }
+    VkPipelineVertexInputStateCreateInfo vertInputInfo{};
+    {
+        vertInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        vertInputInfo.pNext = nullptr;
+        vertInputInfo.vertexBindingDescriptionCount = 1;
+        vertInputInfo.pVertexBindingDescriptions = &vertBindingDesc;
+        vertInputInfo.vertexAttributeDescriptionCount = 1;
+        vertInputInfo.pVertexAttributeDescriptions = &vertAttrDesc;
+    }
+
+    // Vertex assembly state
+    VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo{};
+    {
+        inputAssemblyInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+        inputAssemblyInfo.primitiveRestartEnable = VK_FALSE;
+        inputAssemblyInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    }
+    */
+
+    // Rasterization state
+    VkPipelineRasterizationStateCreateInfo rasterizationInfo{};
+    {
+        rasterizationInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+        rasterizationInfo.polygonMode = VK_POLYGON_MODE_FILL;
+        rasterizationInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
+        rasterizationInfo.depthClampEnable = VK_FALSE;
+        rasterizationInfo.rasterizerDiscardEnable = VK_FALSE;
+        rasterizationInfo.depthBiasEnable = VK_FALSE;
+        rasterizationInfo.depthBiasClamp = 0;
+        rasterizationInfo.depthBiasSlopeFactor = 0;
+        rasterizationInfo.lineWidth = 1.f;
+    }
+
+    // Color blend state
+    VkPipelineColorBlendAttachmentState cbAttState{};
+    {
+        cbAttState.colorWriteMask = 0xf;
+        cbAttState.blendEnable = VK_FALSE;
+        cbAttState.alphaBlendOp = VK_BLEND_OP_ADD;
+        cbAttState.colorBlendOp = VK_BLEND_OP_ADD;
+        cbAttState.srcColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+        cbAttState.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+        cbAttState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+        cbAttState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    }
+    VkPipelineColorBlendStateCreateInfo colorBlendInfo{};
+    {
+        colorBlendInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+        colorBlendInfo.attachmentCount = 1;
+        colorBlendInfo.pAttachments = &cbAttState;
+        colorBlendInfo.logicOpEnable = VK_FALSE;
+        colorBlendInfo.blendConstants[0] = 1.f;
+        colorBlendInfo.blendConstants[1] = 1.f;
+        colorBlendInfo.blendConstants[2] = 1.f;
+        colorBlendInfo.blendConstants[3] = 1.f;
+    }
+
+    // Viewport state
+    VkViewport vp{};
+    {
+        vp.width = 960;
+        vp.height = 680;
+        vp.maxDepth = 1.f;
+        vp.minDepth = 0.f;
+        vp.x = 0;
+        vp.y = 0;
+    }
+    VkRect2D scissor{};
+    {
+        scissor.extent.width = 960;
+        scissor.extent.height = 680;
+        scissor.offset.x = 0;
+        scissor.offset.y = 0;
+    }
+    VkPipelineViewportStateCreateInfo vpStateInfo{};
+    {
+        vpStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+        vpStateInfo.viewportCount = 1;
+        vpStateInfo.pViewports = &vp;
+        vpStateInfo.scissorCount = 1;
+        vpStateInfo.pScissors = &scissor;
+    }
+
+    // Depth stencil state
+    VkPipelineDepthStencilStateCreateInfo depthStencilInfo{};
+    {
+        depthStencilInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+        depthStencilInfo.depthTestEnable = VK_TRUE;
+        depthStencilInfo.depthWriteEnable = VK_TRUE;
+        depthStencilInfo.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+        depthStencilInfo.depthBoundsTestEnable = VK_FALSE;
+        depthStencilInfo.stencilTestEnable = VK_FALSE;
+    }
+
+    // Multisample state
+    VkPipelineMultisampleStateCreateInfo multiSampleInfo{};
+    {
+        multiSampleInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+        multiSampleInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+        multiSampleInfo.sampleShadingEnable = VK_FALSE;
+        multiSampleInfo.alphaToCoverageEnable = VK_FALSE;
+        multiSampleInfo.alphaToOneEnable = VK_FALSE;
+    }
+
+    /*
+    VkDescriptorSetLayoutBinding offsetsSSBOBinding{};
+    {
+        offsetsSSBOBinding.binding = 0;
+        offsetsSSBOBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        offsetsSSBOBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        offsetsSSBOBinding.descriptorCount = 1;
+    }
+
+    VkDescriptorSetLayoutBinding colorSSBOBinding{};
+    {
+        colorSSBOBinding.binding = 1;
+        colorSSBOBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        colorSSBOBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        colorSSBOBinding.descriptorCount = 1;
+    }
+    
+
+    VkDescriptorSetLayoutBinding pipelineDesSetLayoutBindings[2] = { offsetsSSBOBinding, colorSSBOBinding };
+    VkDescriptorSetLayoutCreateInfo pipelineDesSetLayoutInfo{};
+    {
+        pipelineDesSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        // Setting this flag tells the descriptor set layouts that no actual descriptor sets are allocated but instead pushed at command buffer creation time
+        pipelineDesSetLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
+        pipelineDesSetLayoutInfo.bindingCount = 2;
+        pipelineDesSetLayoutInfo.pBindings = pipelineDesSetLayoutBindings;
+    }
+
+    VkDescriptorSetLayout descSetLayout;
+    VK_CHECK(vkCreateDescriptorSetLayout(device,
+        &pipelineDesSetLayoutInfo,
+        nullptr,
+        &descSetLayout));
+     */
+
+    // Create a pipeline layout
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+    {
+        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        pipelineLayoutInfo.setLayoutCount = 0;
+        pipelineLayoutInfo.pSetLayouts    = nullptr;
+        // pipelineLayoutInfo.setLayoutCount = 1;
+        // pipelineLayoutInfo.pSetLayouts = &descSetLayout;
+    }
+    VkPipelineLayout pipelineLayout{};
+    VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout));
+
+    VkPipelineRenderingCreateInfoKHR pipelineRenderCreateInfo{};
+    {
+        pipelineRenderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+        pipelineRenderCreateInfo.colorAttachmentCount = 1;
+        pipelineRenderCreateInfo.pColorAttachmentFormats = &colorImgFormat;
+    }
+
+    // Create the graphics pipeline
+    VkGraphicsPipelineCreateInfo pipelineInfo{};
+    {
+        pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+        pipelineInfo.pNext = &pipelineRenderCreateInfo;
+        pipelineInfo.layout = pipelineLayout;
+        // pipelineInfo.pVertexInputState = &vertInputInfo;
+        // pipelineInfo.pInputAssemblyState = &inputAssemblyInfo;
+        pipelineInfo.pVertexInputState = nullptr;
+        pipelineInfo.pInputAssemblyState = nullptr;
+        pipelineInfo.pRasterizationState = &rasterizationInfo;
+        pipelineInfo.pColorBlendState = &colorBlendInfo;
+        pipelineInfo.pTessellationState = nullptr;
+        pipelineInfo.pMultisampleState = &multiSampleInfo;
+        pipelineInfo.pViewportState = &vpStateInfo;
+        pipelineInfo.pDepthStencilState = &depthStencilInfo;
+        pipelineInfo.pStages = stgArray;
+        pipelineInfo.stageCount = 2;
+        pipelineInfo.renderPass = nullptr;
+        pipelineInfo.subpass = 0;
+    }
+    VkPipeline pipeline;
+    VK_CHECK(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline));
+
     // Prepare synchronization primitives
     VkFenceCreateInfo fenceCreateInfo{};
     {
@@ -402,6 +639,7 @@ void main()
 
     // Destroy shader modules
     vkDestroyShaderModule(device, meshShaderModule, nullptr);
+    vkDestroyShaderModule(device, shaderFragModule, nullptr);
 
     // Destroy the fence
     vkDestroyFence(device, fence, nullptr);
@@ -411,6 +649,10 @@ void main()
 
     // Destroy the Command Pool
     vkDestroyCommandPool(device, cmdPool, nullptr);
+
+    // Destroy Pipeline
+    vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+    vkDestroyPipeline(device, pipeline, nullptr);
 
     // Destroy the image view
     vkDestroyImageView(device, colorImgView, nullptr);

@@ -26,3 +26,7 @@ https://www.reddit.com/r/vulkan/comments/6b293k/include_not_supported_in_shaders
 
 SPIRV Visualizer:
 https://www.khronos.org/spir/visualizer/
+
+GLSL Compile Command:
+PS:
+glslc --target-env=vulkan1.3 -fshader-stage=frag -o ./tri.frag.spv ./tri.frag
