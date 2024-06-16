@@ -212,20 +212,25 @@ void main()
         queueInfo.pQueuePriorities = queue_priorities;
     }
 
-    VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeature{};
+    // Maintain 4 is enabled for the mesh shader (local size ID SPIRV)/
+    // NOTE: It also has a dynamic rendering option that can replace the VkPhysicalDeviceDynamicRenderingFeaturesKHR.
+    VkPhysicalDeviceVulkan13Features vulkan13Features{};
     {
-        dynamicRenderingFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
-        dynamicRenderingFeature.dynamicRendering = VK_TRUE;
+        vulkan13Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+        vulkan13Features.pNext = nullptr;
+        vulkan13Features.dynamicRendering = VK_TRUE;
+        vulkan13Features.maintenance4 = VK_TRUE;
     }
 
     std::vector<const char*> allDeviceExtensions;
     allDeviceExtensions.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+    allDeviceExtensions.push_back(VK_EXT_MESH_SHADER_EXTENSION_NAME);
     // allDeviceExtensions.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
 
     VkDeviceCreateInfo deviceInfo{};
     {
         deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        deviceInfo.pNext = &dynamicRenderingFeature;
+        deviceInfo.pNext = &vulkan13Features;
         deviceInfo.queueCreateInfoCount = 1;
         deviceInfo.pQueueCreateInfos = &queueInfo;
         deviceInfo.enabledExtensionCount = allDeviceExtensions.size();
@@ -343,18 +348,18 @@ void main()
     //                              the CMakeLists.txt file in the same level of repository.
     // std::string shaderVertPath = std::string(SOURCE_PATH) + std::string("/DumpQuad.vert.spv");
     // std::string shaderVertPath = std::string(SOURCE_PATH) + std::string("/DumpQuadVert.spv");
-    std::string shaderMeshPath = std::string(SOURCE_PATH) + std::string("/tri.mesh.spv");
+    std::string shaderMeshPath = std::string(SOURCE_PATH) + std::string("/glsl/tri.mesh.spv");
     std::ifstream inputMeshShader(shaderMeshPath.c_str(), std::ios::binary | std::ios::in);
     std::vector<unsigned char> inputMeshShaderStr(std::istreambuf_iterator<char>(inputMeshShader), {});
     inputMeshShader.close();
-    VkShaderModuleCreateInfo shaderMeshModuleCreateInfo{};
+    VkShaderModuleCreateInfo meshShaderModuleCreateInfo{};
     {
-        shaderMeshModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-        shaderMeshModuleCreateInfo.codeSize = inputMeshShaderStr.size();
-        shaderMeshModuleCreateInfo.pCode = (uint32_t*)inputMeshShaderStr.data();
+        meshShaderModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        meshShaderModuleCreateInfo.codeSize = inputMeshShaderStr.size();
+        meshShaderModuleCreateInfo.pCode = (uint32_t*)inputMeshShaderStr.data();
     }
-    VkShaderModule shaderMeshModule;
-    VK_CHECK(vkCreateShaderModule(device, &shaderMeshModuleCreateInfo, nullptr, &shaderMeshModule));
+    VkShaderModule meshShaderModule;
+    VK_CHECK(vkCreateShaderModule(device, &meshShaderModuleCreateInfo, nullptr, &meshShaderModule));
     
     // Create Mesh Shader Stage create info
     VkPipelineShaderStageCreateInfo meshStgInfo{};
@@ -362,7 +367,7 @@ void main()
         meshStgInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         meshStgInfo.stage = VK_SHADER_STAGE_MESH_BIT_EXT;
         meshStgInfo.pName = "main";
-        meshStgInfo.module = shaderMeshModule;
+        meshStgInfo.module = meshShaderModule;
     }
 
     // Prepare synchronization primitives
@@ -394,6 +399,9 @@ void main()
     }
     VkCommandBuffer cmdBuffer;
     VK_CHECK(vkAllocateCommandBuffers(device, &cmdBufferAllocInfo, &cmdBuffer));
+
+    // Destroy shader modules
+    vkDestroyShaderModule(device, meshShaderModule, nullptr);
 
     // Destroy the fence
     vkDestroyFence(device, fence, nullptr);

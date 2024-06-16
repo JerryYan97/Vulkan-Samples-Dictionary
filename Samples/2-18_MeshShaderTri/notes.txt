@@ -23,3 +23,6 @@ https://stackoverflow.com/questions/10754437/how-to-using-the-include-in-glsl-su
 
 It looks like GLSLC automatically enables the #include extension:
 https://www.reddit.com/r/vulkan/comments/6b293k/include_not_supported_in_shaders/
+
+SPIRV Visualizer:
+https://www.khronos.org/spir/visualizer/
