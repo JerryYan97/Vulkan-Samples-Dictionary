@@ -3,6 +3,8 @@
 #include <fstream>
 #include <cassert>
 #include <vulkan/vulkan.h>
+#include "renderdoc_app.h"
+#include <Windows.h>
 
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
@@ -86,6 +88,20 @@ float g_MeshShaderData[] = {
 
 void main() 
 {
+    // RenderDoc debug starts
+    RENDERDOC_API_1_6_0* rdoc_api = NULL;
+    if (HMODULE mod = GetModuleHandleA("renderdoc.dll"))
+    {
+        pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
+        int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_6_0, (void**)&rdoc_api);
+        assert(ret == 1);
+    }
+
+    if (rdoc_api)
+    {
+        rdoc_api->StartFrameCapture(NULL, NULL);
+    }
+
     // Verify that the debug extension for the callback messenger is supported.
     uint32_t propNum;
     VK_CHECK(vkEnumerateInstanceExtensionProperties(nullptr, &propNum, nullptr));
@@ -322,7 +338,7 @@ void main()
         imageInfo.arrayLayers = 1;
         imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
         imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        imageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        imageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
         imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
         imageInfo.tiling = colorBufTiling;
     }
@@ -332,6 +348,15 @@ void main()
     vmaCreateImage(vmaAllocator, &imageInfo, &mappableBufCreateInfo, &colorImage, &imgAlloc, nullptr);
 
     // Create the image view
+    VkImageSubresourceRange colorTargetSubRsrcRange{};
+    {
+        colorTargetSubRsrcRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        colorTargetSubRsrcRange.baseMipLevel = 0;
+        colorTargetSubRsrcRange.levelCount = 1;
+        colorTargetSubRsrcRange.baseArrayLayer = 0;
+        colorTargetSubRsrcRange.layerCount = 1;
+    }
+
     VkImageViewCreateInfo imageViewInfo{};
     {
         imageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -342,11 +367,7 @@ void main()
         imageViewInfo.components.g = VK_COMPONENT_SWIZZLE_G;
         imageViewInfo.components.b = VK_COMPONENT_SWIZZLE_B;
         imageViewInfo.components.a = VK_COMPONENT_SWIZZLE_A;
-        imageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        imageViewInfo.subresourceRange.baseMipLevel = 0;
-        imageViewInfo.subresourceRange.levelCount = 1;
-        imageViewInfo.subresourceRange.baseArrayLayer = 0;
-        imageViewInfo.subresourceRange.layerCount = 1;
+        imageViewInfo.subresourceRange = colorTargetSubRsrcRange;
     }
     VkImageView colorImgView;
     VK_CHECK(vkCreateImageView(device, &imageViewInfo, nullptr, &colorImgView));
@@ -615,6 +636,16 @@ void main()
     VkFence fence;
     VK_CHECK(vkCreateFence(device, &fenceCreateInfo, nullptr, &fence));
 
+    VkBufferCreateInfo colorImgStagingBufferInfo = {};
+    {
+        colorImgStagingBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        colorImgStagingBufferInfo.size = imgAlloc->GetSize();
+        colorImgStagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    }
+    VkBuffer colorImgStagingBuffer;
+    VmaAllocation colorImgStagingBufferAlloc;
+    VK_CHECK(vmaCreateBuffer(vmaAllocator, &colorImgStagingBufferInfo, &mappableBufCreateInfo, &colorImgStagingBuffer, &colorImgStagingBufferAlloc, nullptr));
+
     // Create command buffers and command pool for subsequent rendering.
     // Create a command pool to allocate our command buffer from
     VkCommandPoolCreateInfo cmdPoolInfo{};
@@ -636,6 +667,182 @@ void main()
     }
     VkCommandBuffer cmdBuffer;
     VK_CHECK(vkAllocateCommandBuffers(device, &cmdBufferAllocInfo, &cmdBuffer));
+
+    // Fill the command buffer
+    VkCommandBufferBeginInfo cmdBufInfo{};
+    {
+        cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    }
+
+    VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &cmdBufInfo));
+
+    VkClearValue clearVal{};
+    {
+        clearVal.color = { {0.f, 0.f, 0.f, 1.f} };
+    }
+
+    VkRenderingAttachmentInfoKHR colorAttachmentInfo{};
+    {
+        colorAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+        colorAttachmentInfo.imageView = colorImgView;
+        colorAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
+        colorAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        colorAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        colorAttachmentInfo.clearValue = clearVal;
+    }
+
+    VkRenderingInfoKHR renderInfo{};
+    {
+        renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+        renderInfo.renderArea.offset = { 0, 0 };
+        renderInfo.renderArea.extent = { 960, 680 };
+        renderInfo.layerCount = 1;
+        renderInfo.colorAttachmentCount = 1;
+        renderInfo.pColorAttachments = &colorAttachmentInfo;
+    }
+
+    // Transfer the color image to color attachment
+    VkImageMemoryBarrier undefToColorAttachmentBarrier{};
+    {
+        undefToColorAttachmentBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        undefToColorAttachmentBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        undefToColorAttachmentBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        undefToColorAttachmentBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        undefToColorAttachmentBarrier.image = colorImage;
+        undefToColorAttachmentBarrier.subresourceRange = colorTargetSubRsrcRange;
+    }
+
+    vkCmdPipelineBarrier(
+        cmdBuffer,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        0,
+        0, nullptr,
+        0, nullptr,
+        1, &undefToColorAttachmentBarrier);
+
+    vkCmdBeginRendering(cmdBuffer, &renderInfo);
+
+    vkCmdSetViewport(cmdBuffer, 0, 1, &vp);
+
+    vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
+
+    /*
+    std::vector<VkWriteDescriptorSet> writeDescriptorSet0;
+    VkWriteDescriptorSet writeOffsetSSBODescSet{};
+    {
+        writeOffsetSSBODescSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeOffsetSSBODescSet.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        writeOffsetSSBODescSet.dstBinding = 0;
+        writeOffsetSSBODescSet.descriptorCount = 1;
+        writeOffsetSSBODescSet.pBufferInfo = &offsetSSBODescInfo;
+    }
+    writeDescriptorSet0.push_back(writeOffsetSSBODescSet);
+
+    VkWriteDescriptorSet writeColorSSBODescSet{};
+    {
+        writeColorSSBODescSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeColorSSBODescSet.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        writeColorSSBODescSet.dstBinding = 1;
+        writeColorSSBODescSet.descriptorCount = 1;
+        writeColorSSBODescSet.pBufferInfo = &colorSSBODescInfo;
+    }
+    writeDescriptorSet0.push_back(writeColorSSBODescSet);
+
+    vkCmdPushDescriptorSetKHR(cmdBuffer,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        pipelineLayout,
+        0, writeDescriptorSet0.size(), writeDescriptorSet0.data());
+    */
+
+    vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
+    // VkDeviceSize vbOffset = 0;
+    // vkCmdBindVertexBuffers(cmdBuffer, 0, 1, &vertBuf, &vbOffset);
+    // vkCmdBindIndexBuffer(cmdBuffer, idxBuf, 0, VK_INDEX_TYPE_UINT32);
+    // vkCmdDrawIndexedIndirect(cmdBuffer, indirectDrawCmdBuffer, 0, 1, sizeof(indirectDrawIdxCmd));
+
+    // Get the function pointer of the mesh shader drawing funtion
+    PFN_vkCmdDrawMeshTasksEXT vkCmdDrawMeshTasksEXT = reinterpret_cast<PFN_vkCmdDrawMeshTasksEXT>(vkGetDeviceProcAddr(device, "vkCmdDrawMeshTasksEXT"));
+    vkCmdDrawMeshTasksEXT(cmdBuffer, 1, 1, 1);
+
+    vkCmdEndRendering(cmdBuffer);
+
+    // Transfer the color image to general
+    VkImageMemoryBarrier colorAttachmentToGeneralBarrier{};
+    {
+        colorAttachmentToGeneralBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        colorAttachmentToGeneralBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        colorAttachmentToGeneralBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        colorAttachmentToGeneralBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        colorAttachmentToGeneralBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        colorAttachmentToGeneralBarrier.image = colorImage;
+        colorAttachmentToGeneralBarrier.subresourceRange = colorTargetSubRsrcRange;
+    }
+
+    vkCmdPipelineBarrier(
+        cmdBuffer,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        0,
+        0, nullptr,
+        0, nullptr,
+        1, &colorAttachmentToGeneralBarrier);
+
+    VkBufferImageCopy imgToBufferCopyInfo{};
+    {
+        imgToBufferCopyInfo.bufferRowLength = 960;
+        imgToBufferCopyInfo.imageSubresource.aspectMask = colorTargetSubRsrcRange.aspectMask;
+        imgToBufferCopyInfo.imageSubresource.baseArrayLayer = colorTargetSubRsrcRange.baseArrayLayer;
+        imgToBufferCopyInfo.imageSubresource.layerCount = colorTargetSubRsrcRange.layerCount;
+        imgToBufferCopyInfo.imageSubresource.mipLevel = colorTargetSubRsrcRange.baseMipLevel;
+        imgToBufferCopyInfo.imageExtent = { 960, 680, 1 };
+    }
+
+    vkCmdCopyImageToBuffer(cmdBuffer,
+        colorImage,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        colorImgStagingBuffer,
+        1, &imgToBufferCopyInfo);
+    VK_CHECK(vkEndCommandBuffer(cmdBuffer));
+
+    // Command buffer submit info
+    VkPipelineStageFlags waitStageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+
+    VkSubmitInfo submitInfo{};
+    {
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.pWaitDstStageMask = &waitStageMask;
+        submitInfo.pCommandBuffers = &cmdBuffer;
+        submitInfo.commandBufferCount = 1;
+    }
+    VK_CHECK(vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence));
+
+    // Wait for the fence to signal that command buffer has finished executing
+    VK_CHECK(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX));
+    VK_CHECK(vkQueueWaitIdle(graphicsQueue));
+
+    if (rdoc_api)
+    {
+        rdoc_api->EndFrameCapture(NULL, NULL);
+    }
+
+    // Copy the color image to a staging buffer and save it to a PNG file
+    // Make rendered image visible to the host
+    void* mapped = nullptr;
+    vmaMapMemory(vmaAllocator, colorImgStagingBufferAlloc, &mapped);
+
+    // Copy to RAM
+    std::vector<unsigned char> imageRAM(imgAlloc->GetSize());
+    memcpy(imageRAM.data(), mapped, imgAlloc->GetSize());
+    vmaUnmapMemory(vmaAllocator, colorImgStagingBufferAlloc);
+
+    std::string pathName = std::string(SOURCE_PATH) + std::string("/test.png");
+    std::cout << pathName << std::endl;
+    unsigned int error = lodepng::encode(pathName, imageRAM, 960, 680);
+    if (error) { std::cout << "encoder error " << error << ": " << lodepng_error_text(error) << std::endl; }
+
+    vmaDestroyBuffer(vmaAllocator, colorImgStagingBuffer, colorImgStagingBufferAlloc);
 
     // Destroy shader modules
     vkDestroyShaderModule(device, meshShaderModule, nullptr);
