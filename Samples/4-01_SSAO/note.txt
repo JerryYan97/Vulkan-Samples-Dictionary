@@ -1,0 +1,4 @@
+Use deferred rendering.
+
+First App that uses the DearImGUI application template.
+First App that needs to load a relatively large scene.

@@ -8,7 +8,9 @@ project(SSAO VERSION 0.1 LANGUAGES CXX)
 include_directories("$ENV{VULKAN_SDK}/Include" "../../../ThirdPartyLibs/VMA")
 
 set(GLFW_HEADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../ThirdPartyLibs/glfw/include/GLFW)
-include_directories(${GLFW_HEADER_DIR})
+set(IMGUI_HEADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../ThirdPartyLibs/DearImGUI)
+include_directories(${IMGUI_HEADER_DIR}
+                    ${GLFW_HEADER_DIR})
 
 set(TinyObjPath ../../../ThirdPartyLibs/TinyObj)
 include_directories(${TinyObjPath})
@@ -23,7 +25,7 @@ add_executable(${MY_APP_NAME} "main.cpp"
                               ${CMAKE_CURRENT_SOURCE_DIR}/SSAOApp.cpp)
 
 # Load the shared library.
-set(SHARED_LIB_GLFW TRUE)
+set(SHARED_LIB_IMGUI TRUE)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../SharedLibrary
                  ${CMAKE_CURRENT_BINARY_DIR}/SharedLibrary)
 
