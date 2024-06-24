@@ -28,5 +28,8 @@ SPIRV Visualizer:
 https://www.khronos.org/spir/visualizer/
 
 GLSL Compile Command:
+MeshShader:
+glslc --target-env=vulkan1.3 -fshader-stage=comp -o ./tri.mesh.spv ./tri.mesh
+
 PS:
 glslc --target-env=vulkan1.3 -fshader-stage=frag -o ./tri.frag.spv ./tri.frag

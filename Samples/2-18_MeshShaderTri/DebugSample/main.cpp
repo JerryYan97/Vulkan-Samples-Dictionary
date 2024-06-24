@@ -425,46 +425,6 @@ void main()
     // Combine shader stages info into an array
     VkPipelineShaderStageCreateInfo stgArray[] = { meshStgInfo, fragStgInfo };
 
-    // Specifying all kinds of pipeline states
-    // Vertex input state
-    /* NOTE: Mesh shader doesn't have input assembly state, vertex input state, ... etc.
-    VkVertexInputBindingDescription vertBindingDesc = {};
-    {
-        vertBindingDesc.binding = 0;
-        // vertBindingDesc.stride = 3 * sizeof(float);
-        vertBindingDesc.stride = 4 * sizeof(float);
-        vertBindingDesc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-    }
-    
-
-    VkVertexInputAttributeDescription vertAttrDesc;
-    {
-        // Position
-        vertAttrDesc.location = 0;
-        vertAttrDesc.binding = 0;
-        // vertAttrDesc.format = VK_FORMAT_R32G32B32_SFLOAT;
-        vertAttrDesc.format = VK_FORMAT_R32G32B32A32_SFLOAT;
-        vertAttrDesc.offset = 0;
-    }
-    VkPipelineVertexInputStateCreateInfo vertInputInfo{};
-    {
-        vertInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-        vertInputInfo.pNext = nullptr;
-        vertInputInfo.vertexBindingDescriptionCount = 1;
-        vertInputInfo.pVertexBindingDescriptions = &vertBindingDesc;
-        vertInputInfo.vertexAttributeDescriptionCount = 1;
-        vertInputInfo.pVertexAttributeDescriptions = &vertAttrDesc;
-    }
-
-    // Vertex assembly state
-    VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo{};
-    {
-        inputAssemblyInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-        inputAssemblyInfo.primitiveRestartEnable = VK_FALSE;
-        inputAssemblyInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    }
-    */
-
     // Rasterization state
     VkPipelineRasterizationStateCreateInfo rasterizationInfo{};
     {
@@ -549,41 +509,6 @@ void main()
         multiSampleInfo.alphaToCoverageEnable = VK_FALSE;
         multiSampleInfo.alphaToOneEnable = VK_FALSE;
     }
-
-    /*
-    VkDescriptorSetLayoutBinding offsetsSSBOBinding{};
-    {
-        offsetsSSBOBinding.binding = 0;
-        offsetsSSBOBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-        offsetsSSBOBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        offsetsSSBOBinding.descriptorCount = 1;
-    }
-
-    VkDescriptorSetLayoutBinding colorSSBOBinding{};
-    {
-        colorSSBOBinding.binding = 1;
-        colorSSBOBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        colorSSBOBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        colorSSBOBinding.descriptorCount = 1;
-    }
-    
-
-    VkDescriptorSetLayoutBinding pipelineDesSetLayoutBindings[2] = { offsetsSSBOBinding, colorSSBOBinding };
-    VkDescriptorSetLayoutCreateInfo pipelineDesSetLayoutInfo{};
-    {
-        pipelineDesSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        // Setting this flag tells the descriptor set layouts that no actual descriptor sets are allocated but instead pushed at command buffer creation time
-        pipelineDesSetLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
-        pipelineDesSetLayoutInfo.bindingCount = 2;
-        pipelineDesSetLayoutInfo.pBindings = pipelineDesSetLayoutBindings;
-    }
-
-    VkDescriptorSetLayout descSetLayout;
-    VK_CHECK(vkCreateDescriptorSetLayout(device,
-        &pipelineDesSetLayoutInfo,
-        nullptr,
-        &descSetLayout));
-     */
 
     // Create a pipeline layout
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
@@ -727,40 +652,7 @@ void main()
 
     vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
 
-    /*
-    std::vector<VkWriteDescriptorSet> writeDescriptorSet0;
-    VkWriteDescriptorSet writeOffsetSSBODescSet{};
-    {
-        writeOffsetSSBODescSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeOffsetSSBODescSet.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        writeOffsetSSBODescSet.dstBinding = 0;
-        writeOffsetSSBODescSet.descriptorCount = 1;
-        writeOffsetSSBODescSet.pBufferInfo = &offsetSSBODescInfo;
-    }
-    writeDescriptorSet0.push_back(writeOffsetSSBODescSet);
-
-    VkWriteDescriptorSet writeColorSSBODescSet{};
-    {
-        writeColorSSBODescSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeColorSSBODescSet.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        writeColorSSBODescSet.dstBinding = 1;
-        writeColorSSBODescSet.descriptorCount = 1;
-        writeColorSSBODescSet.pBufferInfo = &colorSSBODescInfo;
-    }
-    writeDescriptorSet0.push_back(writeColorSSBODescSet);
-
-    vkCmdPushDescriptorSetKHR(cmdBuffer,
-        VK_PIPELINE_BIND_POINT_GRAPHICS,
-        pipelineLayout,
-        0, writeDescriptorSet0.size(), writeDescriptorSet0.data());
-    */
-
     vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-
-    // VkDeviceSize vbOffset = 0;
-    // vkCmdBindVertexBuffers(cmdBuffer, 0, 1, &vertBuf, &vbOffset);
-    // vkCmdBindIndexBuffer(cmdBuffer, idxBuf, 0, VK_INDEX_TYPE_UINT32);
-    // vkCmdDrawIndexedIndirect(cmdBuffer, indirectDrawCmdBuffer, 0, 1, sizeof(indirectDrawIdxCmd));
 
     // Get the function pointer of the mesh shader drawing funtion
     PFN_vkCmdDrawMeshTasksEXT vkCmdDrawMeshTasksEXT = reinterpret_cast<PFN_vkCmdDrawMeshTasksEXT>(vkGetDeviceProcAddr(device, "vkCmdDrawMeshTasksEXT"));
