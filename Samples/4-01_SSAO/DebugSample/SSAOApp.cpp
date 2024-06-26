@@ -76,8 +76,8 @@ static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, i
 }
 
 // ================================================================================================================
-PBRDeferredApp::PBRDeferredApp() :
-    GlfwApplication(),
+SSAOApp::SSAOApp() :
+    ImGuiApplication(),
     m_geoPassVsShaderModule(VK_NULL_HANDLE),
     m_geoPassPsShaderModule(VK_NULL_HANDLE),
     m_geoPassPipelineDesSetLayout(VK_NULL_HANDLE),
@@ -103,7 +103,7 @@ PBRDeferredApp::PBRDeferredApp() :
 }
 
 // ================================================================================================================
-PBRDeferredApp::~PBRDeferredApp()
+SSAOApp::~SSAOApp()
 {
     vkDeviceWaitIdle(m_device);
     delete m_pCamera;
@@ -132,7 +132,7 @@ PBRDeferredApp::~PBRDeferredApp()
 }
 
 // ================================================================================================================
-void PBRDeferredApp::DestroyVpUboObjects()
+void SSAOApp::DestroyVpUboObjects()
 {
     for (auto buffer : m_vpUboBuffers)
     {
@@ -141,7 +141,7 @@ void PBRDeferredApp::DestroyVpUboObjects()
 }
 
 // ================================================================================================================
-void PBRDeferredApp::InitVpUboObjects()
+void SSAOApp::InitVpUboObjects()
 {
     float defaultPos[] = {-12.f, 0.f, 0.f};
     m_pCamera->SetPos(defaultPos);
@@ -196,7 +196,7 @@ void PBRDeferredApp::InitVpUboObjects()
 
 // ================================================================================================================
 // NOTE: A vert = pos + normal + uv.
-void PBRDeferredApp::ReadInSphereData()
+void SSAOApp::ReadInSphereData()
 {
     std::string inputfile = SOURCE_PATH;
     inputfile += "/../data/uvNormalSphere.obj";
@@ -258,7 +258,7 @@ void PBRDeferredApp::ReadInSphereData()
 }
 
 // ================================================================================================================
-void PBRDeferredApp::InitSphereVertexIndexBuffers()
+void SSAOApp::InitSphereVertexIndexBuffers()
 {
     // Create sphere data GPU buffers
     VkBufferCreateInfo vertBufferInfo{};
@@ -311,14 +311,14 @@ void PBRDeferredApp::InitSphereVertexIndexBuffers()
 }
 
 // ================================================================================================================
-void PBRDeferredApp::DestroySphereVertexIndexBuffers()
+void SSAOApp::DestroySphereVertexIndexBuffers()
 {
     vmaDestroyBuffer(*m_pAllocator, m_vertBuffer.buffer, m_vertBuffer.bufferAlloc);
     vmaDestroyBuffer(*m_pAllocator, m_idxBuffer.buffer, m_idxBuffer.bufferAlloc);
 }
 
 // ================================================================================================================
-void PBRDeferredApp::InitLightPosRadianceSSBOs()
+void SSAOApp::InitLightPosRadianceSSBOs()
 {
     std::vector<float> lightsPos;
     std::vector<float> lightsRadiance;
@@ -441,7 +441,7 @@ void PBRDeferredApp::InitLightPosRadianceSSBOs()
 }
 
 // ================================================================================================================
-float PBRDeferredApp::PtLightVolumeRadius(
+float SSAOApp::PtLightVolumeRadius(
     const std::array<float, 3>& radiance)
 {
     // Ref: https://learnopengl.com/Lighting/Light-casters
@@ -461,7 +461,7 @@ float PBRDeferredApp::PtLightVolumeRadius(
 }
 
 // ================================================================================================================
-void PBRDeferredApp::SendCameraDataToBuffer(
+void SSAOApp::SendCameraDataToBuffer(
     uint32_t i)
 {
     float vpMat[16] = {};
@@ -476,7 +476,7 @@ void PBRDeferredApp::SendCameraDataToBuffer(
 }
 
 // ================================================================================================================
-void PBRDeferredApp::UpdateCameraAndGpuBuffer()
+void SSAOApp::UpdateCameraAndGpuBuffer()
 {
     SharedLib::HEvent midMouseDownEvent = CreateMiddleMouseEvent(g_isMiddleDown);
     m_pCamera->OnEvent(midMouseDownEvent);
@@ -497,7 +497,7 @@ void PBRDeferredApp::UpdateCameraAndGpuBuffer()
 }
 
 // ================================================================================================================
-void PBRDeferredApp::DestroyLightPosRadianceSSBOs()
+void SSAOApp::DestroyLightPosRadianceSSBOs()
 {
     vmaDestroyBuffer(*m_pAllocator, m_lightPosStorageBuffer.buffer, m_lightPosStorageBuffer.bufferAlloc);
     vmaDestroyBuffer(*m_pAllocator, m_lightRadianceStorageBuffer.buffer, m_lightRadianceStorageBuffer.bufferAlloc);
@@ -505,7 +505,7 @@ void PBRDeferredApp::DestroyLightPosRadianceSSBOs()
 }
 
 // ================================================================================================================
-void PBRDeferredApp::CmdGBufferLayoutTrans(
+void SSAOApp::CmdGBufferLayoutTrans(
     VkCommandBuffer      cmdBuffer,
     VkImageLayout        oldLayout,
     VkImageLayout        newLayout,
@@ -562,7 +562,7 @@ void PBRDeferredApp::CmdGBufferLayoutTrans(
 }
 
 // ================================================================================================================
-std::vector<VkRenderingAttachmentInfoKHR> PBRDeferredApp::GetGBufferAttachments()
+std::vector<VkRenderingAttachmentInfoKHR> SSAOApp::GetGBufferAttachments()
 {
     VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
 
@@ -593,7 +593,7 @@ std::vector<VkRenderingAttachmentInfoKHR> PBRDeferredApp::GetGBufferAttachments(
 }
 
 // ================================================================================================================
-std::vector<VkWriteDescriptorSet> PBRDeferredApp::GetGeoPassWriteDescriptorSets()
+std::vector<VkWriteDescriptorSet> SSAOApp::GetGeoPassWriteDescriptorSets()
 {
     std::vector<VkWriteDescriptorSet> geoPassWriteDescSet;
 
@@ -641,7 +641,7 @@ std::vector<VkWriteDescriptorSet> PBRDeferredApp::GetGeoPassWriteDescriptorSets(
 }
 
 // ================================================================================================================
-std::vector<VkWriteDescriptorSet> PBRDeferredApp::GetDeferredLightingWriteDescriptorSets()
+std::vector<VkWriteDescriptorSet> SSAOApp::GetDeferredLightingWriteDescriptorSets()
 {
     std::vector<VkWriteDescriptorSet> writeDescriptorSet0;
 
@@ -729,7 +729,7 @@ std::vector<VkWriteDescriptorSet> PBRDeferredApp::GetDeferredLightingWriteDescri
 }
 
 // ================================================================================================================
-SharedLib::PipelineColorBlendInfo PBRDeferredApp::CreateDeferredLightingPassPipelineColorBlendAttachmentStates()
+SharedLib::PipelineColorBlendInfo SSAOApp::CreateDeferredLightingPassPipelineColorBlendAttachmentStates()
 {
     SharedLib::PipelineColorBlendInfo pipelineColorBlendInfo{};
 
@@ -756,7 +756,7 @@ SharedLib::PipelineColorBlendInfo PBRDeferredApp::CreateDeferredLightingPassPipe
 }
 
 // ================================================================================================================
-void PBRDeferredApp::InitGeoPassPipelineLayout()
+void SSAOApp::InitGeoPassPipelineLayout()
 {
     // Create pipeline layout
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
@@ -771,7 +771,7 @@ void PBRDeferredApp::InitGeoPassPipelineLayout()
 }
 
 // ================================================================================================================
-void PBRDeferredApp::InitGeoPassShaderModules()
+void SSAOApp::InitGeoPassShaderModules()
 {
     // Create Shader Modules.
     m_geoPassVsShaderModule = CreateShaderModule("/hlsl/geo_vert.spv");
@@ -779,7 +779,7 @@ void PBRDeferredApp::InitGeoPassShaderModules()
 }
 
 // ================================================================================================================
-void PBRDeferredApp::InitGeoPassPipelineDescriptorSetLayout()
+void SSAOApp::InitGeoPassPipelineDescriptorSetLayout()
 {
     std::vector<VkDescriptorSetLayoutBinding> bindings;
 
@@ -843,7 +843,7 @@ void PBRDeferredApp::InitGeoPassPipelineDescriptorSetLayout()
 }
 
 // ================================================================================================================
-VkPipelineVertexInputStateCreateInfo PBRDeferredApp::CreateGeoPassPipelineVertexInputInfo()
+VkPipelineVertexInputStateCreateInfo SSAOApp::CreateGeoPassPipelineVertexInputInfo()
 {
     // Specifying all kinds of pipeline states
     // Vertex input state
@@ -887,7 +887,7 @@ VkPipelineVertexInputStateCreateInfo PBRDeferredApp::CreateGeoPassPipelineVertex
 
 // ================================================================================================================
 // In the deferred lighting pass, we don't need the light volumes' normals.
-VkPipelineVertexInputStateCreateInfo PBRDeferredApp::CreateDeferredLightingPassPipelineVertexInputInfo()
+VkPipelineVertexInputStateCreateInfo SSAOApp::CreateDeferredLightingPassPipelineVertexInputInfo()
 {
     // Specifying all kinds of pipeline states
     // Vertex input state
@@ -925,7 +925,7 @@ VkPipelineVertexInputStateCreateInfo PBRDeferredApp::CreateDeferredLightingPassP
 }
 
 // ================================================================================================================
-VkPipelineDepthStencilStateCreateInfo PBRDeferredApp::CreateGeoPassDepthStencilStateInfo()
+VkPipelineDepthStencilStateCreateInfo SSAOApp::CreateGeoPassDepthStencilStateInfo()
 {
     VkPipelineDepthStencilStateCreateInfo depthStencilInfo{};
     {
@@ -941,7 +941,7 @@ VkPipelineDepthStencilStateCreateInfo PBRDeferredApp::CreateGeoPassDepthStencilS
 }
 
 // ================================================================================================================
-VkPipelineDepthStencilStateCreateInfo PBRDeferredApp::CreateDeferredLightingPassDepthStencilStateInfo()
+VkPipelineDepthStencilStateCreateInfo SSAOApp::CreateDeferredLightingPassDepthStencilStateInfo()
 {
     VkPipelineDepthStencilStateCreateInfo depthStencilInfo{};
     {
@@ -957,7 +957,7 @@ VkPipelineDepthStencilStateCreateInfo PBRDeferredApp::CreateDeferredLightingPass
 }
 
 // ================================================================================================================
-SharedLib::PipelineColorBlendInfo PBRDeferredApp::CreateGeoPassPipelineColorBlendAttachmentStates()
+SharedLib::PipelineColorBlendInfo SSAOApp::CreateGeoPassPipelineColorBlendAttachmentStates()
 {
     SharedLib::PipelineColorBlendInfo pipelineColorBlendInfo{};
 
@@ -982,7 +982,7 @@ SharedLib::PipelineColorBlendInfo PBRDeferredApp::CreateGeoPassPipelineColorBlen
 }
 
 // ================================================================================================================
-void PBRDeferredApp::InitGeoPassPipeline()
+void SSAOApp::InitGeoPassPipeline()
 {
     VkPipelineRenderingCreateInfoKHR pipelineRenderCreateInfo{};
     {
@@ -1013,7 +1013,7 @@ void PBRDeferredApp::InitGeoPassPipeline()
 }
 
 // ================================================================================================================
-void PBRDeferredApp::InitOffsetSSBO()
+void SSAOApp::InitOffsetSSBO()
 {
     std::vector<float> offsets;
     constexpr float XBase = -4.5f;
@@ -1072,7 +1072,7 @@ void PBRDeferredApp::InitOffsetSSBO()
 }
 
 // ================================================================================================================
-void PBRDeferredApp::DestroyGeoPassSSBOs()
+void SSAOApp::DestroyGeoPassSSBOs()
 {
     vmaDestroyBuffer(*m_pAllocator, m_offsetStorageBuffer.buffer, m_offsetStorageBuffer.bufferAlloc);
     vmaDestroyBuffer(*m_pAllocator, m_albedoStorageBuffer.buffer, m_albedoStorageBuffer.bufferAlloc);
@@ -1082,7 +1082,7 @@ void PBRDeferredApp::DestroyGeoPassSSBOs()
 }
 
 // ================================================================================================================
-void PBRDeferredApp::InitAlbedoSSBO()
+void SSAOApp::InitAlbedoSSBO()
 {
     // Just all white
     std::vector<float> albedos;
@@ -1133,7 +1133,7 @@ void PBRDeferredApp::InitAlbedoSSBO()
 }
 
 // ================================================================================================================
-void PBRDeferredApp::InitMetallicRoughnessSSBO()
+void SSAOApp::InitMetallicRoughnessSSBO()
 {
     std::vector<float> metallicRoughness;
     for (uint32_t i = 0; i < SphereCounts; i++)
@@ -1184,7 +1184,7 @@ void PBRDeferredApp::InitMetallicRoughnessSSBO()
 }
 
 // ================================================================================================================
-std::vector<float> PBRDeferredApp::GetDeferredLightingPushConstantData()
+std::vector<float> SSAOApp::GetDeferredLightingPushConstantData()
 {
     std::vector<float> data;
 
@@ -1204,7 +1204,7 @@ std::vector<float> PBRDeferredApp::GetDeferredLightingPushConstantData()
 }
 
 // ================================================================================================================
-void PBRDeferredApp::InitGBuffer()
+void SSAOApp::InitGBuffer()
 {
     // It looks like AMD doesn't support the R32G32B32_SFLOAT image format.
     const VkFormat PosNormalAlbedoImgFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
@@ -1347,7 +1347,7 @@ void PBRDeferredApp::InitGBuffer()
 }
 
 // ================================================================================================================
-void PBRDeferredApp::DestroyGBuffer()
+void SSAOApp::DestroyGBuffer()
 {
     for (uint32_t i = 0; i < m_swapchainImgCnt; i++)
     {
@@ -1369,7 +1369,7 @@ void PBRDeferredApp::DestroyGBuffer()
 }
 
 // ================================================================================================================
-VkPipelineRasterizationStateCreateInfo PBRDeferredApp::CreateDeferredLightingPassDisableCullingRasterizationInfoStateInfo()
+VkPipelineRasterizationStateCreateInfo SSAOApp::CreateDeferredLightingPassDisableCullingRasterizationInfoStateInfo()
 {
     VkPipelineRasterizationStateCreateInfo rasterizationStateInfo{};
     {
@@ -1387,7 +1387,7 @@ VkPipelineRasterizationStateCreateInfo PBRDeferredApp::CreateDeferredLightingPas
 }
 
 // ================================================================================================================
-void PBRDeferredApp::InitDeferredLightingPassPipeline()
+void SSAOApp::InitDeferredLightingPassPipeline()
 {
     VkPipelineRenderingCreateInfoKHR pipelineRenderCreateInfo{};
     {
@@ -1431,7 +1431,7 @@ void PBRDeferredApp::InitDeferredLightingPassPipeline()
 }
 
 // ================================================================================================================
-void PBRDeferredApp::InitDeferredLightingPassPipelineDescriptorSetLayout()
+void SSAOApp::InitDeferredLightingPassPipelineDescriptorSetLayout()
 {
     std::vector<VkDescriptorSetLayoutBinding> bindings;
 
@@ -1531,7 +1531,7 @@ void PBRDeferredApp::InitDeferredLightingPassPipelineDescriptorSetLayout()
 }
 
 // ================================================================================================================
-void PBRDeferredApp::InitDeferredLightingPassPipelineLayout()
+void SSAOApp::InitDeferredLightingPassPipelineLayout()
 {
     // Create pipeline layout
     std::vector<float> pushConstantData = GetDeferredLightingPushConstantData();
@@ -1556,7 +1556,7 @@ void PBRDeferredApp::InitDeferredLightingPassPipelineLayout()
 }
 
 // ================================================================================================================
-bool PBRDeferredApp::IsCameraInThisLight(
+bool SSAOApp::IsCameraInThisLight(
     uint32_t lightIdx)
 {
     float cameraPos[3] = {};
@@ -1579,7 +1579,7 @@ bool PBRDeferredApp::IsCameraInThisLight(
 }
 
 // ================================================================================================================
-void PBRDeferredApp::InitDeferredLightingPassShaderModules()
+void SSAOApp::InitDeferredLightingPassShaderModules()
 {
     // Create Shader Modules.
     m_deferredLightingPassVsShaderModule = CreateShaderModule("/hlsl/lighting_vert.spv");
@@ -1587,7 +1587,7 @@ void PBRDeferredApp::InitDeferredLightingPassShaderModules()
 }
 
 // ================================================================================================================
-void PBRDeferredApp::InitDeferredLightingPassRadianceTextures()
+void SSAOApp::InitDeferredLightingPassRadianceTextures()
 {
     m_lightingPassRadianceTextures.resize(m_swapchainImgCnt);
     
@@ -1666,7 +1666,7 @@ void PBRDeferredApp::InitDeferredLightingPassRadianceTextures()
 }
 
 // ================================================================================================================
-void PBRDeferredApp::DestroyDeferredLightingPassRadianceTextures()
+void SSAOApp::DestroyDeferredLightingPassRadianceTextures()
 {
     for (uint32_t i = 0; i < m_swapchainImgCnt; i++)
     {
@@ -1680,7 +1680,7 @@ void PBRDeferredApp::DestroyDeferredLightingPassRadianceTextures()
 }
 
 // ================================================================================================================
-void PBRDeferredApp::AppInit()
+void SSAOApp::AppInit()
 {
     glfwInit();
     uint32_t glfwExtensionCount = 0;

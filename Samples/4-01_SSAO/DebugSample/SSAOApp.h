@@ -1,5 +1,5 @@
 #pragma once
-#include "../../../SharedLibrary/Application/GlfwApplication.h"
+#include "../../../SharedLibrary/Application/DearImGuiApplication.h"
 #include "../../../SharedLibrary/Pipeline/Pipeline.h"
 #include <array>
 
@@ -29,11 +29,11 @@ struct GpuImg
     VkSampler             imageSampler;
 };
 
-class PBRDeferredApp : public SharedLib::GlfwApplication
+class SSAOApp : public SharedLib::ImGuiApplication
 {
 public:
-    PBRDeferredApp();
-    ~PBRDeferredApp();
+    SSAOApp();
+    ~SSAOApp();
 
     virtual void AppInit() override;
 

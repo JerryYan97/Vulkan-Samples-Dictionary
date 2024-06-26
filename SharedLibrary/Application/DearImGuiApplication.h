@@ -27,5 +27,7 @@ namespace SharedLib
     private:
         VkDescriptorPool m_descriptorPool; // It's only used for ImGui.
         VkRenderPass     m_guiRenderPass;  // It's only used for ImGui.
+
+        std::vector<VkFramebuffer> m_imGuiFramebuffers; // They are only used for ImGui.
     };
 }
