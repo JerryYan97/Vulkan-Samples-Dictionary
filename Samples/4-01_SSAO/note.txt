@@ -3,4 +3,19 @@ Use deferred rendering.
 First App that uses the DearImGUI application template.
 First App that needs to load a relatively large scene.
 
+I may want to design a materialized input system.
+
 Deploy enough point lights in the scene.
+--- Ambient Occlusion only affects ambient light. I may don't need the point lights.
+
+Step 1:
+Render out Scene's Diffuse Color.
+
+Step 2:
+Add ImGUI on Top of it.
+
+Step 3:
+Switch between Diffuse Color and Normal Color
+
+Step 4 ~:
+Include SSAO.

@@ -75,6 +75,8 @@ public:
 
     bool IsCameraInThisLight(uint32_t lightIdx);
 
+    void ImGuiFrame() override;
+
 private:
     void InitGeoPassPipeline();
     void InitGeoPassPipelineDescriptorSetLayout();

@@ -3,6 +3,32 @@
 
 namespace SharedLib
 {
+    class ImGuiInputCommand
+    {
+    public:
+        ImGuiInputCommand();
+        ~ImGuiInputCommand();
+
+        virtual void Execute(class ImGuiApplication* pImGuiApp) {}
+    protected:
+
+    private:
+    };
+
+    class ImGuiInputHandler
+    {
+    public:
+        ImGuiInputHandler();
+        ~ImGuiInputHandler();
+
+        ImGuiInputCommand* HandleInput();
+    protected:
+        
+
+    private:
+    }
+
+
     // Vulkan application with a swapchain, glfwWindow and customizable DearImGui interface.
     // - Hide swapchain/glfw/ImGui operations.
     // - There is a func that holds the ImGui code.
@@ -23,6 +49,7 @@ namespace SharedLib
     protected:
         void InitImGui();
 
+        ImGuiInputHandler inputHandler;
 
     private:
         VkDescriptorPool m_descriptorPool; // It's only used for ImGui.
