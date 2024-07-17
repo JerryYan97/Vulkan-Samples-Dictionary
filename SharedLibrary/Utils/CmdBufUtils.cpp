@@ -93,7 +93,8 @@ namespace SharedLib
         VkImageMemoryBarrier cpDstToRdOpt = undefToDstBarrier;
         {
             cpDstToRdOpt.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-            cpDstToRdOpt.newLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL;
+            // cpDstToRdOpt.newLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL; -- This needs the sync 2 extensions.
+            cpDstToRdOpt.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         }
 
         vkCmdPipelineBarrier(
