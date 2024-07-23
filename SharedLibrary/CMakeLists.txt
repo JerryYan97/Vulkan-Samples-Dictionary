@@ -36,6 +36,14 @@ else()
         target_link_libraries(SharedLibrary glfw)
 
     elseif(DEFINED SHARED_LIB_IMGUI)
+        set(IMGUI_FILES_LIST ${CMAKE_CURRENT_SOURCE_DIR}/../ThirdPartyLibs/DearImGUI/imgui.cpp
+                             ${CMAKE_CURRENT_SOURCE_DIR}/../ThirdPartyLibs/DearImGUI/imgui_draw.cpp
+                             ${CMAKE_CURRENT_SOURCE_DIR}/../ThirdPartyLibs/DearImGUI/imgui_demo.cpp
+                             ${CMAKE_CURRENT_SOURCE_DIR}/../ThirdPartyLibs/DearImGUI/imgui_tables.cpp
+                             ${CMAKE_CURRENT_SOURCE_DIR}/../ThirdPartyLibs/DearImGUI/imgui_widgets.cpp
+                             ${CMAKE_CURRENT_SOURCE_DIR}/../ThirdPartyLibs/DearImGUI/backends/imgui_impl_vulkan.cpp
+                             ${CMAKE_CURRENT_SOURCE_DIR}/../ThirdPartyLibs/DearImGUI/backends/imgui_impl_glfw.cpp)
+
         target_sources(
             SharedLibrary PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/Application/Application.cpp
@@ -44,7 +52,14 @@ else()
             ${CMAKE_CURRENT_SOURCE_DIR}/Application/GlfwApplication.h
             ${CMAKE_CURRENT_SOURCE_DIR}/Application/DearImGuiApplication.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/Application/DearImGuiApplication.h
-        )
+            ${IMGUI_FILES_LIST})
+
+        include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../ThirdPartyLibs/DearImGUI
+                            ${CMAKE_CURRENT_SOURCE_DIR}/../ThirdPartyLibs/DearImGUI/backends
+                            ${GLFW_HEADER_DIR})
+
+        # Category the source files
+        source_group(ImGUI FILES ${IMGUI_FILES_LIST})
 
         target_include_directories(SharedLibrary PUBLIC ${IMGUI_HEADER_DIR})
         target_link_libraries(SharedLibrary glfw)
@@ -59,6 +74,7 @@ else()
                          ${CMAKE_CURRENT_BINARY_DIR}/SharedLibrary)
         target_link_libraries(SharedLibrary glm::glm)
         add_dependencies(SharedLibrary glm::glm)
+        add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/AssetsLoader)
     endif()
 
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../ThirdPartyLibs/stb)
@@ -77,6 +93,7 @@ else()
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/Pipeline)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/Utils)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/AnimLogger)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/Actor)
 
     target_compile_features(SharedLibrary PRIVATE cxx_std_17)
 

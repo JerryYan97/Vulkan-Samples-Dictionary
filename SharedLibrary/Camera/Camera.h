@@ -1,11 +1,12 @@
 #pragma once
 #include "../Utils/MathUtils.h"
+#include "../Actor/Actor.h"
 
 namespace SharedLib
 {
     class HEvent;
 
-    class Camera
+    class Camera : Actor
     {
     public:
         Camera();

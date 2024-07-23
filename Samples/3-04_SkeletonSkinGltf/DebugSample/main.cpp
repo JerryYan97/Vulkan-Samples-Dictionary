@@ -15,9 +15,9 @@ int main()
     std::string iblPath = sourcePath + "/../data/ibl";
     // std::string gltfPath = sourcePath + "/../data/QuadSkin/QuadSkin.gltf";
     // std::string gltfPath = sourcePath + "/../data/SimpleSkin/SimpleSkin.gltf";
-    // std::string gltfPath = sourcePath + "/../data/CesiumMan/CesiumMan.gltf";
+    std::string gltfPath = sourcePath + "/../data/CesiumMan/CesiumMan.gltf";
     // std::string gltfPath = sourcePath + "/../data/RiggedSimple/RiggedSimple.gltf";
-    std::string gltfPath = sourcePath + "/../data/RiggedFigure/RiggedFigure.gltf";
+    // std::string gltfPath = sourcePath + "/../data/RiggedFigure/RiggedFigure.gltf";
 
     SkinAnimGltfApp app(iblPath, gltfPath, true, 2.f, 2.f, 1.f);
     app.AppInit();

@@ -10,6 +10,8 @@ Deploy enough point lights in the scene.
 
 Step 1:
 Render out Scene's Diffuse Color.
+In this step, we only need one pipeline (geo_vert.hlsl + geo_frag.hlsl)
+Besides, I need to make the basic ImGui framework works. 
 
 Step 2:
 Add ImGUI on Top of it.
@@ -19,3 +21,11 @@ Switch between Diffuse Color and Normal Color
 
 Step 4 ~:
 Include SSAO.
+
+
+I want to put two lighting types:
+Ambient and Direct Lights.
+The Direct Light needs a shadow pass:
+I am thinking that we can use the RT feature to do the shadow pass to get rid of implementing BVH/AABB spatial accerleration structure.
+https://www.willusher.io/graphics/2019/09/06/faster-shadow-rays-on-rtx/
+Ray Trace Ambient Occlusion: https://intro-to-dxr.cwyman.org/presentations/IntroDXR_ShaderTutorial.pdf

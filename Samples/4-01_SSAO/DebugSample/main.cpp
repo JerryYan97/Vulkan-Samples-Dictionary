@@ -12,15 +12,6 @@ int main()
 
     app.GpuWaitForIdle();
 
-    VkImageSubresourceRange swapchainPresentSubResRange{};
-    {
-        swapchainPresentSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        swapchainPresentSubResRange.baseMipLevel = 0;
-        swapchainPresentSubResRange.levelCount = 1;
-        swapchainPresentSubResRange.baseArrayLayer = 0;
-        swapchainPresentSubResRange.layerCount = 1;
-    }
-
     // Main Loop
     while (!app.WindowShouldClose())
     {
@@ -134,8 +125,8 @@ int main()
         vkCmdEndRendering(currentCmdBuffer);
 
         /* ----------------------------------------- */
-
-        GpuImg deferredLightingGpuImg = app.GetDeferredLightingRadianceTexture(imageIndex);
+        /*
+        SharedLib::GpuImg deferredLightingGpuImg = app.GetDeferredLightingRadianceTexture(imageIndex);
 
         app.CmdGBufferLayoutTrans(currentCmdBuffer,
                                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -164,8 +155,9 @@ int main()
                               VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                               VK_PIPELINE_STAGE_TRANSFER_BIT,
                               VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
-
+        */
         /* -------- Deferred Lighting Pass (Point light volumes) --------- */
+        /*
         VkRenderingAttachmentInfoKHR deferredLightingPassDepthAttachmentInfo{};
         {
             deferredLightingPassDepthAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
@@ -236,9 +228,9 @@ int main()
         }
 
         vkCmdEndRendering(currentCmdBuffer);
-
+        */
         /* ----------------------------------------- */
-
+        /*
         app.CmdSwapchainColorImgLayoutTrans(currentCmdBuffer,
                                             VK_IMAGE_LAYOUT_UNDEFINED,
                                             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -259,9 +251,12 @@ int main()
         // NOTE: The final radiance are additive and gamma correction is non-linear. So we cannot do the gamma in the
         //       lighting pass.
         app.CmdSwapchainColorImgGammaCorrect(currentCmdBuffer, deferredLightingGpuImg.imageView, deferredLightingGpuImg.imageSampler);
+        */
+
+        app.CmdSSAOAppMultiTypeRendering(currentCmdBuffer);
 
         app.CmdSwapchainColorImgToPresent(currentCmdBuffer);
-
+        
         VK_CHECK(vkEndCommandBuffer(currentCmdBuffer));
 
         app.GfxCmdBufferFrameSubmitAndPresent();

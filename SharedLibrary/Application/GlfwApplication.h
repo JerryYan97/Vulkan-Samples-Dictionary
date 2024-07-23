@@ -65,6 +65,8 @@ namespace SharedLib
                                               VkImageView     srcImgView,
                                               VkSampler       srcImgSampler);
 
+        VkImageSubresourceRange GetSwapchainPresentSubResRange();
+
     protected:
         void InitSwapchain();
         void InitPresentQueueFamilyIdx();
@@ -113,13 +115,5 @@ namespace SharedLib
         void RecreateSwapchain();
         
         void CleanupGammaCorrectionPipelineAndRsrc();
-    };
-
-    // Vulkan application draws DearImGui's Guis and uses the glfw backend.
-    class DearImGuiApplication : public GlfwApplication
-    {
-    public:
-        DearImGuiApplication();
-        ~DearImGuiApplication();
     };
 }

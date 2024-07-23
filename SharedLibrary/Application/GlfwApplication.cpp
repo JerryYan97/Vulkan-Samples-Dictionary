@@ -851,11 +851,17 @@ namespace SharedLib
     }
 
     // ================================================================================================================
-    DearImGuiApplication::DearImGuiApplication()
-        : GlfwApplication()
-    {}
+    VkImageSubresourceRange GlfwApplication::GetSwapchainPresentSubResRange()
+    {
+        VkImageSubresourceRange swapchainPresentSubResRange{};
+        {
+            swapchainPresentSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            swapchainPresentSubResRange.baseMipLevel = 0;
+            swapchainPresentSubResRange.levelCount = 1;
+            swapchainPresentSubResRange.baseArrayLayer = 0;
+            swapchainPresentSubResRange.layerCount = 1;
+        }
 
-    // ================================================================================================================
-    DearImGuiApplication::~DearImGuiApplication()
-    {}
+        return swapchainPresentSubResRange;
+    }
 }

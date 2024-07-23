@@ -83,19 +83,13 @@ SSAOApp::SSAOApp() :
     m_geoPassPipelineDesSetLayout(VK_NULL_HANDLE),
     m_geoPassPipelineLayout(VK_NULL_HANDLE),
     m_geoPassPipeline(),
-    m_deferredLightingPassVsShaderModule(VK_NULL_HANDLE),
-    m_deferredLightingPassPsShaderModule(VK_NULL_HANDLE),
-    m_deferredLightingPassPipelineDesSetLayout(VK_NULL_HANDLE),
-    m_deferredLightingPassPipelineLayout(VK_NULL_HANDLE),
-    m_deferredLightingPassPipeline(),
-    m_lightPosStorageBuffer(),
-    m_lightRadianceStorageBuffer(),
-    m_lightVolumeRadiusStorageBuffer(),
+    // m_deferredLightingPassVsShaderModule(VK_NULL_HANDLE),
+    // m_deferredLightingPassPsShaderModule(VK_NULL_HANDLE),
+    // m_deferredLightingPassPipelineDesSetLayout(VK_NULL_HANDLE),
+    // m_deferredLightingPassPipelineLayout(VK_NULL_HANDLE),
+    // m_deferredLightingPassPipeline(),
     m_idxBuffer(),
     m_vertBuffer(),
-    m_offsetStorageBuffer(),
-    m_albedoStorageBuffer(),
-    m_metallicRoughnessStorageBuffer(),
     m_vertBufferByteCnt(0),
     m_idxBufferByteCnt(0)
 {
@@ -108,27 +102,25 @@ SSAOApp::~SSAOApp()
     vkDeviceWaitIdle(m_device);
     delete m_pCamera;
 
-    DestroyDeferredLightingPassRadianceTextures();
+    // DestroyDeferredLightingPassRadianceTextures();
     DestroySphereVertexIndexBuffers();
 
     DestroyVpUboObjects();
     DestroyGBuffer();
-    DestroyGeoPassSSBOs();
-    DestroyLightPosRadianceSSBOs();
 
     // Destroy shader modules
     vkDestroyShaderModule(m_device, m_geoPassVsShaderModule, nullptr);
     vkDestroyShaderModule(m_device, m_geoPassPsShaderModule, nullptr);
-    vkDestroyShaderModule(m_device, m_deferredLightingPassVsShaderModule, nullptr);
-    vkDestroyShaderModule(m_device, m_deferredLightingPassPsShaderModule, nullptr);
+    // vkDestroyShaderModule(m_device, m_deferredLightingPassVsShaderModule, nullptr);
+    // vkDestroyShaderModule(m_device, m_deferredLightingPassPsShaderModule, nullptr);
 
     // Destroy the pipeline layout
     vkDestroyPipelineLayout(m_device, m_geoPassPipelineLayout, nullptr);
-    vkDestroyPipelineLayout(m_device, m_deferredLightingPassPipelineLayout, nullptr);
+    // vkDestroyPipelineLayout(m_device, m_deferredLightingPassPipelineLayout, nullptr);
 
     // Destroy the descriptor set layout
     vkDestroyDescriptorSetLayout(m_device, m_geoPassPipelineDesSetLayout, nullptr);
-    vkDestroyDescriptorSetLayout(m_device, m_deferredLightingPassPipelineDesSetLayout, nullptr);
+    // vkDestroyDescriptorSetLayout(m_device, m_deferredLightingPassPipelineDesSetLayout, nullptr);
 }
 
 // ================================================================================================================
@@ -318,129 +310,6 @@ void SSAOApp::DestroySphereVertexIndexBuffers()
 }
 
 // ================================================================================================================
-void SSAOApp::InitLightPosRadianceSSBOs()
-{
-    std::vector<float> lightsPos;
-    std::vector<float> lightsRadiance;
-    std::vector<float> lightsVolumeRadius;
-
-    constexpr float PtLightsXZBase = -7.5f;
-
-    for (uint32_t layer = 0; layer < 2; layer++)
-    {
-        for (uint32_t row = 0; row < 6; row++)
-        {
-            for (uint32_t col = 0; col < 6; col++)
-            {
-                float r = ((float)rand()) / ((float)RAND_MAX) * 0.5f;
-                float g = ((float)rand()) / ((float)RAND_MAX) * 0.5f;
-                float b = ((float)rand()) / ((float)RAND_MAX) * 0.5f;
-
-                lightsRadiance.push_back(r);
-                lightsRadiance.push_back(g);
-                lightsRadiance.push_back(b);
-                lightsRadiance.push_back(1.f);
-
-                std::array<float, 3> radiance = { r, g, b };
-
-                float radius = PtLightVolumeRadius(radiance);
-
-                lightsVolumeRadius.push_back(radius);
-
-                float xPos = PtLightsXZBase + row * 3.f;
-                float yPos = (layer == 0) ? 1.5f : -1.5f;
-                float zPos = PtLightsXZBase + col * 3.f;
-
-                lightsPos.push_back(xPos);
-                lightsPos.push_back(yPos);
-                lightsPos.push_back(zPos);
-                lightsPos.push_back(1.f);
-            }
-        }
-    }
-
-    VkBufferCreateInfo bufferInfoTemplate{};
-    {
-        bufferInfoTemplate.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfoTemplate.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-        bufferInfoTemplate.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    }
-
-    VmaAllocationCreateInfo bufferAllocInfo{};
-    {
-        bufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        bufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
-                                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    }
-
-    bufferInfoTemplate.size = sizeof(float) * lightsPos.size();
-    vmaCreateBuffer(*m_pAllocator,
-                    &bufferInfoTemplate,
-                    &bufferAllocInfo,
-                    &m_lightPosStorageBuffer.buffer,
-                    &m_lightPosStorageBuffer.bufferAlloc,
-                    nullptr);
-
-    bufferInfoTemplate.size = sizeof(float) * lightsRadiance.size();
-    vmaCreateBuffer(*m_pAllocator,
-                    &bufferInfoTemplate,
-                    &bufferAllocInfo,
-                    &m_lightRadianceStorageBuffer.buffer,
-                    &m_lightRadianceStorageBuffer.bufferAlloc,
-                    nullptr);
-
-    bufferInfoTemplate.size = sizeof(float) * lightsVolumeRadius.size();
-    vmaCreateBuffer(*m_pAllocator,
-                    &bufferInfoTemplate,
-                    &bufferAllocInfo,
-                    &m_lightVolumeRadiusStorageBuffer.buffer,
-                    &m_lightVolumeRadiusStorageBuffer.bufferAlloc,
-                    nullptr);
-
-    CopyRamDataToGpuBuffer(lightsPos.data(),
-                           m_lightPosStorageBuffer.buffer,
-                           m_lightPosStorageBuffer.bufferAlloc,
-                           sizeof(float) * lightsPos.size());
-
-    CopyRamDataToGpuBuffer(lightsRadiance.data(),
-                           m_lightRadianceStorageBuffer.buffer,
-                           m_lightRadianceStorageBuffer.bufferAlloc,
-                           sizeof(float) * lightsRadiance.size());
-
-    CopyRamDataToGpuBuffer(lightsVolumeRadius.data(),
-                           m_lightVolumeRadiusStorageBuffer.buffer,
-                           m_lightVolumeRadiusStorageBuffer.bufferAlloc,
-                           sizeof(float) * lightsVolumeRadius.size());
-
-    VkDescriptorBufferInfo lightsPosSSBODescInfo{};
-    {
-        lightsPosSSBODescInfo.buffer = m_lightPosStorageBuffer.buffer;
-        lightsPosSSBODescInfo.offset = 0;
-        lightsPosSSBODescInfo.range = sizeof(float) * lightsPos.size();
-    }
-    m_lightPosStorageBuffer.bufferDescInfo = lightsPosSSBODescInfo;
-
-    VkDescriptorBufferInfo lightsRadianceSSBODescInfo{};
-    {
-        lightsRadianceSSBODescInfo.buffer = m_lightRadianceStorageBuffer.buffer;
-        lightsRadianceSSBODescInfo.offset = 0;
-        lightsRadianceSSBODescInfo.range = sizeof(float) * lightsRadiance.size();
-    }
-    m_lightRadianceStorageBuffer.bufferDescInfo = lightsRadianceSSBODescInfo;
-
-    VkDescriptorBufferInfo lightsVolumeRadiusSSBODescInfo{};
-    {
-        lightsVolumeRadiusSSBODescInfo.buffer = m_lightVolumeRadiusStorageBuffer.buffer;
-        lightsVolumeRadiusSSBODescInfo.offset = 0;
-        lightsVolumeRadiusSSBODescInfo.range = sizeof(float) * lightsVolumeRadius.size();
-    }
-    m_lightVolumeRadiusStorageBuffer.bufferDescInfo = lightsVolumeRadiusSSBODescInfo;
-
-    m_lightsPos = lightsPos;
-    m_lightsRadius = lightsVolumeRadius;
-}
-
-// ================================================================================================================
 float SSAOApp::PtLightVolumeRadius(
     const std::array<float, 3>& radiance)
 {
@@ -494,14 +363,6 @@ void SSAOApp::UpdateCameraAndGpuBuffer()
     m_pCamera->OnEvent(keySDownEvent);
 
     // SendCameraDataToBuffer(m_currentFrame);
-}
-
-// ================================================================================================================
-void SSAOApp::DestroyLightPosRadianceSSBOs()
-{
-    vmaDestroyBuffer(*m_pAllocator, m_lightPosStorageBuffer.buffer, m_lightPosStorageBuffer.bufferAlloc);
-    vmaDestroyBuffer(*m_pAllocator, m_lightRadianceStorageBuffer.buffer, m_lightRadianceStorageBuffer.bufferAlloc);
-    vmaDestroyBuffer(*m_pAllocator, m_lightVolumeRadiusStorageBuffer.buffer, m_lightVolumeRadiusStorageBuffer.bufferAlloc);
 }
 
 // ================================================================================================================
@@ -607,36 +468,6 @@ std::vector<VkWriteDescriptorSet> SSAOApp::GetGeoPassWriteDescriptorSets()
     }
     geoPassWriteDescSet.push_back(writeVpUboDesc);
 
-    VkWriteDescriptorSet writeOffsetSSBODesc{};
-    {
-        writeOffsetSSBODesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeOffsetSSBODesc.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        writeOffsetSSBODesc.descriptorCount = 1;
-        writeOffsetSSBODesc.dstBinding = 1;
-        writeOffsetSSBODesc.pBufferInfo = &m_offsetStorageBuffer.bufferDescInfo;
-    }
-    geoPassWriteDescSet.push_back(writeOffsetSSBODesc);
-
-    VkWriteDescriptorSet writeAlbedoSSBODesc{};
-    {
-        writeAlbedoSSBODesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeAlbedoSSBODesc.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        writeAlbedoSSBODesc.descriptorCount = 1;
-        writeAlbedoSSBODesc.dstBinding = 2;
-        writeAlbedoSSBODesc.pBufferInfo = &m_albedoStorageBuffer.bufferDescInfo;
-    }
-    geoPassWriteDescSet.push_back(writeAlbedoSSBODesc);
-
-    VkWriteDescriptorSet writeMetallicRoughnessSSBODesc{};
-    {
-        writeMetallicRoughnessSSBODesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeMetallicRoughnessSSBODesc.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        writeMetallicRoughnessSSBODesc.descriptorCount = 1;
-        writeMetallicRoughnessSSBODesc.dstBinding = 3;
-        writeMetallicRoughnessSSBODesc.pBufferInfo = &m_metallicRoughnessStorageBuffer.bufferDescInfo;
-    }
-    geoPassWriteDescSet.push_back(writeMetallicRoughnessSSBODesc);
-
     return geoPassWriteDescSet;
 }
 
@@ -654,36 +485,6 @@ std::vector<VkWriteDescriptorSet> SSAOApp::GetDeferredLightingWriteDescriptorSet
         // writeVpUboDesc.pBufferInfo = &m_vpUboBuffers[m_currentFrame].bufferDescInfo;
     }
     writeDescriptorSet0.push_back(writeVpUboDesc);
-
-    VkWriteDescriptorSet writeLightsPosSSBODesc{};
-    {
-        writeLightsPosSSBODesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeLightsPosSSBODesc.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        writeLightsPosSSBODesc.descriptorCount = 1;
-        writeLightsPosSSBODesc.dstBinding = 1;
-        writeLightsPosSSBODesc.pBufferInfo = &m_lightPosStorageBuffer.bufferDescInfo;
-    }
-    writeDescriptorSet0.push_back(writeLightsPosSSBODesc);
-
-    VkWriteDescriptorSet writeLightsVolumeRadiusSSBODesc{};
-    {
-        writeLightsVolumeRadiusSSBODesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeLightsVolumeRadiusSSBODesc.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        writeLightsVolumeRadiusSSBODesc.descriptorCount = 1;
-        writeLightsVolumeRadiusSSBODesc.dstBinding = 2;
-        writeLightsVolumeRadiusSSBODesc.pBufferInfo = &m_lightVolumeRadiusStorageBuffer.bufferDescInfo;
-    }
-    writeDescriptorSet0.push_back(writeLightsVolumeRadiusSSBODesc);
-
-    VkWriteDescriptorSet writeLightsRadianceSSBODesc{};
-    {
-        writeLightsRadianceSSBODesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeLightsRadianceSSBODesc.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        writeLightsRadianceSSBODesc.descriptorCount = 1;
-        writeLightsRadianceSSBODesc.dstBinding = 3;
-        writeLightsRadianceSSBODesc.pBufferInfo = &m_lightRadianceStorageBuffer.bufferDescInfo;
-    }
-    writeDescriptorSet0.push_back(writeLightsRadianceSSBODesc);
 
     VkWriteDescriptorSet writeWorldPosTexDesc{};
     {
@@ -1013,177 +814,6 @@ void SSAOApp::InitGeoPassPipeline()
 }
 
 // ================================================================================================================
-void SSAOApp::InitOffsetSSBO()
-{
-    std::vector<float> offsets;
-    constexpr float XBase = -4.5f;
-    constexpr float ZBase = -4.5f;
-    constexpr float YBase =  0.f;
-
-    for (uint32_t row = 0; row < 4; row++)
-    {
-        for (uint32_t col = 0; col < 4; col++)
-        {
-            float xOffset = XBase + row * 3.f;
-            float zOffset = ZBase + col * 3.f;
-            offsets.push_back(xOffset);
-            offsets.push_back(YBase);
-            offsets.push_back(zOffset);
-            offsets.push_back(1.f);
-        }
-    }
-
-    const uint32_t bufferBytesCnt = offsets.size() * sizeof(float);
-    VkBufferCreateInfo bufferInfo{};
-    {
-        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = bufferBytesCnt;
-        bufferInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    }
-
-    VmaAllocationCreateInfo bufferAllocInfo{};
-    {
-        bufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        bufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
-                                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    }
-
-    vmaCreateBuffer(
-        *m_pAllocator,
-        &bufferInfo,
-        &bufferAllocInfo,
-        &m_offsetStorageBuffer.buffer,
-        &m_offsetStorageBuffer.bufferAlloc,
-        nullptr);
-
-    CopyRamDataToGpuBuffer(offsets.data(),
-                           m_offsetStorageBuffer.buffer,
-                           m_offsetStorageBuffer.bufferAlloc,
-                           bufferBytesCnt);
-
-    VkDescriptorBufferInfo offsetSSBODescInfo{};
-    {
-        offsetSSBODescInfo.buffer = m_offsetStorageBuffer.buffer;
-        offsetSSBODescInfo.offset = 0;
-        offsetSSBODescInfo.range = bufferBytesCnt;
-    }
-    m_offsetStorageBuffer.bufferDescInfo = offsetSSBODescInfo;
-}
-
-// ================================================================================================================
-void SSAOApp::DestroyGeoPassSSBOs()
-{
-    vmaDestroyBuffer(*m_pAllocator, m_offsetStorageBuffer.buffer, m_offsetStorageBuffer.bufferAlloc);
-    vmaDestroyBuffer(*m_pAllocator, m_albedoStorageBuffer.buffer, m_albedoStorageBuffer.bufferAlloc);
-    vmaDestroyBuffer(*m_pAllocator,
-                     m_metallicRoughnessStorageBuffer.buffer,
-                     m_metallicRoughnessStorageBuffer.bufferAlloc);
-}
-
-// ================================================================================================================
-void SSAOApp::InitAlbedoSSBO()
-{
-    // Just all white
-    std::vector<float> albedos;
-    for (uint32_t i = 0; i < SphereCounts; i++)
-    {
-        albedos.push_back(1.f);
-        albedos.push_back(1.f);
-        albedos.push_back(1.f);
-        albedos.push_back(1.f);
-    }
-
-    const uint32_t bufferBytesCnt = albedos.size() * sizeof(float);
-    VkBufferCreateInfo bufferInfo{};
-    {
-        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = bufferBytesCnt;
-        bufferInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    }
-
-    VmaAllocationCreateInfo bufferAllocInfo{};
-    {
-        bufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        bufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
-            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    }
-
-    vmaCreateBuffer(
-        *m_pAllocator,
-        &bufferInfo,
-        &bufferAllocInfo,
-        &m_albedoStorageBuffer.buffer,
-        &m_albedoStorageBuffer.bufferAlloc,
-        nullptr);
-
-    CopyRamDataToGpuBuffer(albedos.data(),
-        m_albedoStorageBuffer.buffer,
-        m_albedoStorageBuffer.bufferAlloc,
-        bufferBytesCnt);
-
-    VkDescriptorBufferInfo albedoSSBODescInfo{};
-    {
-        albedoSSBODescInfo.buffer = m_albedoStorageBuffer.buffer;
-        albedoSSBODescInfo.offset = 0;
-        albedoSSBODescInfo.range = bufferBytesCnt;
-    }
-    m_albedoStorageBuffer.bufferDescInfo = albedoSSBODescInfo;
-}
-
-// ================================================================================================================
-void SSAOApp::InitMetallicRoughnessSSBO()
-{
-    std::vector<float> metallicRoughness;
-    for (uint32_t i = 0; i < SphereCounts; i++)
-    {
-        float metallic = ((float)rand()) / ((float)RAND_MAX);
-        float roughness = ((float)rand()) / ((float)RAND_MAX);
-
-        metallicRoughness.push_back(metallic);
-        metallicRoughness.push_back(roughness);
-    }
-
-    const uint32_t bufferBytesCnt = metallicRoughness.size() * sizeof(float);
-    VkBufferCreateInfo bufferInfo{};
-    {
-        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = bufferBytesCnt;
-        bufferInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    }
-
-    VmaAllocationCreateInfo bufferAllocInfo{};
-    {
-        bufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        bufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
-                                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    }
-
-    vmaCreateBuffer(
-        *m_pAllocator,
-        &bufferInfo,
-        &bufferAllocInfo,
-        &m_metallicRoughnessStorageBuffer.buffer,
-        &m_metallicRoughnessStorageBuffer.bufferAlloc,
-        nullptr);
-
-    CopyRamDataToGpuBuffer(metallicRoughness.data(),
-        m_metallicRoughnessStorageBuffer.buffer,
-        m_metallicRoughnessStorageBuffer.bufferAlloc,
-        bufferBytesCnt);
-
-    VkDescriptorBufferInfo metallicRoughnessSSBODescInfo{};
-    {
-        metallicRoughnessSSBODescInfo.buffer = m_metallicRoughnessStorageBuffer.buffer;
-        metallicRoughnessSSBODescInfo.offset = 0;
-        metallicRoughnessSSBODescInfo.range = bufferBytesCnt;
-    }
-    m_metallicRoughnessStorageBuffer.bufferDescInfo = metallicRoughnessSSBODescInfo;
-}
-
-// ================================================================================================================
 std::vector<float> SSAOApp::GetDeferredLightingPushConstantData()
 {
     std::vector<float> data;
@@ -1386,6 +1016,7 @@ VkPipelineRasterizationStateCreateInfo SSAOApp::CreateDeferredLightingPassDisabl
     return rasterizationStateInfo;
 }
 
+/*
 // ================================================================================================================
 void SSAOApp::InitDeferredLightingPassPipeline()
 {
@@ -1678,6 +1309,13 @@ void SSAOApp::DestroyDeferredLightingPassRadianceTextures()
                         m_lightingPassRadianceTextures[i].imageAllocation);
     }
 }
+*/
+
+// ================================================================================================================
+void SSAOApp::CmdSSAOAppMultiTypeRendering(VkCommandBuffer cmdBuffer)
+{
+
+}
 
 // ================================================================================================================
 void SSAOApp::ImGuiFrame()
@@ -1731,22 +1369,24 @@ void SSAOApp::AppInit()
     InitSphereVertexIndexBuffers();
 
     InitVpUboObjects();
-    InitOffsetSSBO();
-    InitAlbedoSSBO();
-    InitMetallicRoughnessSSBO();
+    
+    // InitAlbedoSSBO();
+    // InitMetallicRoughnessSSBO();
     InitGBuffer();
-    InitLightPosRadianceSSBOs();
+    // InitLightPosRadianceSSBOs();
 
     InitGeoPassShaderModules();
     InitGeoPassPipelineDescriptorSetLayout();
     InitGeoPassPipelineLayout();
     InitGeoPassPipeline();
 
+    /*
     InitDeferredLightingPassShaderModules();
     InitDeferredLightingPassPipelineDescriptorSetLayout();
     InitDeferredLightingPassPipelineLayout();
     InitDeferredLightingPassPipeline();
     InitDeferredLightingPassRadianceTextures();
+    */
 
     InitSwapchainSyncObjects();
     InitGammaCorrectionPipelineAndRsrc();

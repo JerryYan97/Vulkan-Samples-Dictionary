@@ -6,8 +6,8 @@ namespace SharedLib
     class ImGuiInputCommand
     {
     public:
-        ImGuiInputCommand();
-        ~ImGuiInputCommand();
+        ImGuiInputCommand() {}
+        ~ImGuiInputCommand() {}
 
         virtual void Execute(class ImGuiApplication* pImGuiApp) {}
     protected:
@@ -18,15 +18,18 @@ namespace SharedLib
     class ImGuiInputHandler
     {
     public:
-        ImGuiInputHandler();
-        ~ImGuiInputHandler();
+        ImGuiInputHandler() {}
+        ~ImGuiInputHandler() {}
 
-        ImGuiInputCommand* HandleInput();
+        ImGuiInputCommand* HandleInput() {}
     protected:
-        
 
     private:
-    }
+        ImGuiInputCommand* m_pPressW;
+        ImGuiInputCommand* m_pPressS;
+        ImGuiInputCommand* m_pPressA;
+        ImGuiInputCommand* m_pPressD;
+    };
 
 
     // Vulkan application with a swapchain, glfwWindow and customizable DearImGui interface.
