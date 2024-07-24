@@ -27,6 +27,7 @@ add_executable(${MY_APP_NAME} "main.cpp"
 
 # Load the shared library.
 set(SHARED_LIB_IMGUI TRUE)
+set(SHARED_LIB_SCENE_ASSETS_UTILS TRUE)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../SharedLibrary
                  ${CMAKE_CURRENT_BINARY_DIR}/SharedLibrary)
 

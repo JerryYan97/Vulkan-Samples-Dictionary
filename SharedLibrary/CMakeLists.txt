@@ -77,6 +77,11 @@ else()
         add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/AssetsLoader)
     endif()
 
+    if(DEFINED SHARED_LIB_SCENE_ASSETS_UTILS)
+        add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/AssetsLoader)
+        add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/Scene)
+    endif()
+
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../ThirdPartyLibs/stb)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/Application)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/Camera)
