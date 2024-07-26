@@ -2,6 +2,7 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
+#include "GpuRsrc.h"
 
 namespace SharedLib
 {
@@ -27,12 +28,37 @@ namespace SharedLib
         ~MeshEntity() {}
 
     private:
+        ImgInfo baseColorTex;
+        ImgInfo metallicRoughnessTex;
+        ImgInfo normalTex;
+        ImgInfo occlusionTex;
+        ImgInfo emissiveTex;
 
+        GpuBuffer vertBuffer;
+        GpuBuffer indexBuffer;
+
+        GpuImage baseColorGpuImg;
+        GpuImage metallicRoughnessGpuImg;
+        GpuImage normalGpuImg;
+        GpuImage occlusionGpuImg;
+        GpuImage emissiveGpuImg;
+    };
+
+    enum LightType
+    {
+        POINT_LIGHT,
+        DIRECTIONAL_LIGHT,
+        MESH_LIGHT
     };
 
     class LightEntity : public Entity
     {
+    public:
+        LightEntity() {}
+        ~LightEntity() {}
 
+    private:
+        LightType m_lightType;
     };
 
     class Level
@@ -41,12 +67,13 @@ namespace SharedLib
         Level() {}
         ~Level() {}
 
-        void Finalize();
+        void Finalize() {}
 
-        void AddEntity(Entity* entity);
-        void RemoveEntity(Entity* entity);
+        bool AddMshEntity(const std::string& name, MeshEntity* entity);
+        bool AddLightEntity(const std::string& name, LightEntity* entity);
 
     private:
-        std::unordered_map<std::string, Entity*> m_mshEntities;
+        std::unordered_map<std::string, MeshEntity*>  m_meshEntities;
+        std::unordered_map<std::string, LightEntity*> m_lightEntities;
     };
 }
