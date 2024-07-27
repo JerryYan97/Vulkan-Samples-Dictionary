@@ -8,6 +8,8 @@ VK_DEFINE_HANDLE(VmaAllocation);
 namespace SharedLib
 {
     class Camera;
+    class GltfLoaderManager;
+    class Level;
 }
 
 constexpr uint32_t SphereCounts = 4 * 4;
@@ -67,8 +69,6 @@ public:
     std::vector<float> GetDeferredLightingPushConstantData();
 
     void UpdateCameraAndGpuBuffer();
-
-    bool IsCameraInThisLight(uint32_t lightIdx);
 
     void ImGuiFrame() override;
 
@@ -163,4 +163,7 @@ private:
     // Geo pass Gpu Rsrc inputs
     // NOTE: SSBO's entry needs to have size of the multiple of 2. HLSL always takes 4 or 2 elements per entry.
     std::vector<SharedLib::GpuBuffer> m_vpUboBuffers;
+
+    SharedLib::GltfLoaderManager* m_pGltfLoaderManager;
+    SharedLib::Level*             m_pLevel;
 };

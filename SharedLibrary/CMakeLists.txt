@@ -75,6 +75,7 @@ else()
         target_link_libraries(SharedLibrary glm::glm)
         add_dependencies(SharedLibrary glm::glm)
         add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/AssetsLoader)
+        include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../ThirdPartyLibs/TinyGltf)
     endif()
 
     if(DEFINED SHARED_LIB_SCENE_ASSETS_UTILS)

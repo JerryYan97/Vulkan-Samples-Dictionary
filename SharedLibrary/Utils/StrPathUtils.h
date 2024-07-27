@@ -13,4 +13,6 @@ namespace SharedLib
     void CleanOrCreateDir(const std::string& dir); // The input should be an absolute path.
 
     void GetAllFileNames(const std::string& dir, std::vector<std::string>& outputVec);
+
+    bool GetFilePostfix(const std::string& pathName, std::string& postfix);
 }

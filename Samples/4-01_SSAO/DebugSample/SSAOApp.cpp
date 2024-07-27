@@ -6,6 +6,8 @@
 #include "../../../SharedLibrary/Utils/VulkanDbgUtils.h"
 #include "../../../SharedLibrary/Camera/Camera.h"
 #include "../../../SharedLibrary/Event/Event.h"
+#include "../../../SharedLibrary/AssetsLoader/AssetsLoader.h"
+#include "../../../SharedLibrary/Scene/Level.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
@@ -101,6 +103,8 @@ SSAOApp::~SSAOApp()
 {
     vkDeviceWaitIdle(m_device);
     delete m_pCamera;
+    delete m_pLevel;
+    delete m_pGltfLoaderManager;
 
     // DestroyDeferredLightingPassRadianceTextures();
     DestroySphereVertexIndexBuffers();
@@ -1390,4 +1394,12 @@ void SSAOApp::AppInit()
 
     InitSwapchainSyncObjects();
     InitGammaCorrectionPipelineAndRsrc();
+
+    m_pGltfLoaderManager = new SharedLib::GltfLoaderManager();
+    m_pLevel = new SharedLib::Level();
+
+    std::string sceneLoadPathAbs = SOURCE_PATH;
+    sceneLoadPathAbs += +"/../data/Sponza/Sponza.gltf";
+
+    m_pGltfLoaderManager->Load(sceneLoadPathAbs, *m_pLevel);
 }

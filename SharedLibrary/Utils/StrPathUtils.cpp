@@ -79,4 +79,20 @@ namespace SharedLib
             outputVec.push_back(entry.path().filename().string());
         }
     }
+
+    bool GetFilePostfix(
+        const std::string& pathName,
+        std::string&       postfix)
+    {
+        size_t found = pathName.find_last_of(".");
+        if (found != std::string::npos)
+        {
+            postfix = pathName.substr(found + 1);
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
 }

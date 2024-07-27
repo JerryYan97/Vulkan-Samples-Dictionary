@@ -7,6 +7,8 @@ namespace SharedLib
     class Level;
     class Entity;
 
+    // AssetsLoaderManager is responsible for loading assets from disk, populating the Level object and manage the
+    // entities' release.
     class AssetsLoaderManager
     {
     public:

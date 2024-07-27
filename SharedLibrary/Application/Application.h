@@ -11,6 +11,11 @@ VK_DEFINE_HANDLE(VmaAllocation)
 enum VmaMemoryUsage;
 typedef VkFlags VmaAllocationCreateFlags;
 
+#define ASSERT(condition, message) \
+do { \
+      assert(condition && message); \
+} while (0)
+
 // The design philosophy of the SharedLib is to reuse code as much as possible and writing new code in examples as less as possible.
 // This would lead to:
 // - Small granular functions and versatile input arguments.
@@ -55,6 +60,21 @@ namespace SharedLib
 
         bool                hasSampler;
         VkSamplerCreateInfo samplerInfo;
+    };
+
+    struct ImgInfo
+    {
+        uint32_t             pixWidth;
+        uint32_t             pixHeight;
+        uint32_t             componentCnt;
+        std::vector<uint8_t> dataVec;
+        float*               pData;
+    };
+
+    struct BinBufferInfo
+    {
+        uint32_t byteCnt;
+        float*   pData;
     };
 
     // Used as a temporary command buffer in a function.

@@ -13,7 +13,6 @@ target_sources(
     ${CMAKE_CURRENT_SOURCE_DIR}/AppUtils.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/DiskOpsUtils.h
     ${CMAKE_CURRENT_SOURCE_DIR}/DiskOpsUtils.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/GpuRsrc.h
 )
 
 if(DEFINED SHARED_LIB_GLTF_GLM)

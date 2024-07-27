@@ -2,7 +2,7 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
-#include "GpuRsrc.h"
+#include "../Application/Application.h"
 
 namespace SharedLib
 {
@@ -37,11 +37,11 @@ namespace SharedLib
         GpuBuffer vertBuffer;
         GpuBuffer indexBuffer;
 
-        GpuImage baseColorGpuImg;
-        GpuImage metallicRoughnessGpuImg;
-        GpuImage normalGpuImg;
-        GpuImage occlusionGpuImg;
-        GpuImage emissiveGpuImg;
+        GpuImg baseColorGpuImg;
+        GpuImg metallicRoughnessGpuImg;
+        GpuImg normalGpuImg;
+        GpuImg occlusionGpuImg;
+        GpuImg emissiveGpuImg;
     };
 
     enum LightType
