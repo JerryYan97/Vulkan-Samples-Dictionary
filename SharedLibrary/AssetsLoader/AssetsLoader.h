@@ -13,7 +13,7 @@ namespace SharedLib
     {
     public:
         AssetsLoaderManager() {}
-        ~AssetsLoaderManager() {}
+        ~AssetsLoaderManager();
 
         virtual void Load(const std::string& absPath, Level& oLevel) = 0;
 

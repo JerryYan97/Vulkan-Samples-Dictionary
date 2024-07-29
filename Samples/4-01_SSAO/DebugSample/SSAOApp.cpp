@@ -9,9 +9,6 @@
 #include "../../../SharedLibrary/AssetsLoader/AssetsLoader.h"
 #include "../../../SharedLibrary/Scene/Level.h"
 
-#define TINYOBJLOADER_IMPLEMENTATION
-#include "tiny_obj_loader.h"
-
 #include "vk_mem_alloc.h"
 
 // TODO: These static variables and functions can be put into a header file so that other projects can reuse them.
@@ -107,7 +104,6 @@ SSAOApp::~SSAOApp()
     delete m_pGltfLoaderManager;
 
     // DestroyDeferredLightingPassRadianceTextures();
-    DestroySphereVertexIndexBuffers();
 
     DestroyVpUboObjects();
     DestroyGBuffer();
@@ -188,149 +184,6 @@ void SSAOApp::InitVpUboObjects()
             m_vpUboBuffers[i].bufferDescInfo.range = sizeof(float) * 16;
         }
     }
-}
-
-// ================================================================================================================
-// NOTE: A vert = pos + normal + uv.
-void SSAOApp::ReadInSphereData()
-{
-    std::string inputfile = SOURCE_PATH;
-    inputfile += "/../data/uvNormalSphere.obj";
-    
-    tinyobj::ObjReaderConfig readerConfig;
-    tinyobj::ObjReader sphereObjReader;
-
-    sphereObjReader.ParseFromFile(inputfile, readerConfig);
-
-    auto& shapes = sphereObjReader.GetShapes();
-    auto& attrib = sphereObjReader.GetAttrib();
-
-    // We assume that this test only has one shape
-    assert(shapes.size() == 1, "This application only accepts one shape!");
-
-    for (uint32_t s = 0; s < shapes.size(); s++)
-    {
-        // Loop over faces(polygon)
-        uint32_t index_offset = 0;
-        uint32_t idxBufIdx = 0;
-        for (uint32_t f = 0; f < shapes[s].mesh.num_face_vertices.size(); f++)
-        {
-            uint32_t fv = shapes[s].mesh.num_face_vertices[f];
-
-            // Loop over vertices in the face.
-            for (uint32_t v = 0; v < fv; v++)
-            {
-                // Access to vertex
-                tinyobj::index_t idx = shapes[s].mesh.indices[index_offset + v];
-
-                float vx = attrib.vertices[3 * size_t(idx.vertex_index) + 0];
-                float vy = attrib.vertices[3 * size_t(idx.vertex_index) + 1];
-                float vz = attrib.vertices[3 * size_t(idx.vertex_index) + 2];
-
-                // Transfer the vertex buffer's vertex index to the element index -- 6 * vertex index + xxx;
-                m_vertData.push_back(vx);
-                m_vertData.push_back(vy);
-                m_vertData.push_back(vz);
-
-                // Check if `normal_index` is zero or positive. negative = no normal data
-                assert(idx.normal_index >= 0, "The model doesn't have normal information but it is necessary.");
-                float nx = attrib.normals[3 * size_t(idx.normal_index) + 0];
-                float ny = attrib.normals[3 * size_t(idx.normal_index) + 1];
-                float nz = attrib.normals[3 * size_t(idx.normal_index) + 2];
-
-                m_vertData.push_back(nx);
-                m_vertData.push_back(ny);
-                m_vertData.push_back(nz);
-
-                m_idxData.push_back(idxBufIdx);
-                idxBufIdx++;
-            }
-            index_offset += fv;
-        }
-    }
-
-    m_vertBufferByteCnt = m_vertData.size() * sizeof(float);
-    m_idxBufferByteCnt = m_idxData.size() * sizeof(uint32_t);
-}
-
-// ================================================================================================================
-void SSAOApp::InitSphereVertexIndexBuffers()
-{
-    // Create sphere data GPU buffers
-    VkBufferCreateInfo vertBufferInfo{};
-    {
-        vertBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        vertBufferInfo.size = m_vertBufferByteCnt;
-        vertBufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-        vertBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    }
-
-    VmaAllocationCreateInfo vertBufferAllocInfo{};
-    {
-        vertBufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        vertBufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
-                                    VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    }
-
-    vmaCreateBuffer(*m_pAllocator,
-        &vertBufferInfo,
-        &vertBufferAllocInfo,
-        &m_vertBuffer.buffer,
-        &m_vertBuffer.bufferAlloc,
-        nullptr);
-
-    VkBufferCreateInfo idxBufferInfo{};
-    {
-        idxBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        idxBufferInfo.size = m_idxBufferByteCnt;
-        idxBufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-        idxBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    }
-
-    VmaAllocationCreateInfo idxBufferAllocInfo{};
-    {
-        idxBufferAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        idxBufferAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT |
-                                   VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    }
-
-    vmaCreateBuffer(*m_pAllocator,
-        &idxBufferInfo,
-        &idxBufferAllocInfo,
-        &m_idxBuffer.buffer,
-        &m_idxBuffer.bufferAlloc,
-        nullptr);
-
-    // Send sphere data to the GPU buffers
-    CopyRamDataToGpuBuffer(m_vertData.data(), m_vertBuffer.buffer, m_vertBuffer.bufferAlloc, m_vertBufferByteCnt);
-    CopyRamDataToGpuBuffer(m_idxData.data(), m_idxBuffer.buffer, m_idxBuffer.bufferAlloc, m_idxBufferByteCnt);
-}
-
-// ================================================================================================================
-void SSAOApp::DestroySphereVertexIndexBuffers()
-{
-    vmaDestroyBuffer(*m_pAllocator, m_vertBuffer.buffer, m_vertBuffer.bufferAlloc);
-    vmaDestroyBuffer(*m_pAllocator, m_idxBuffer.buffer, m_idxBuffer.bufferAlloc);
-}
-
-// ================================================================================================================
-float SSAOApp::PtLightVolumeRadius(
-    const std::array<float, 3>& radiance)
-{
-    // Ref: https://learnopengl.com/Lighting/Light-casters
-    constexpr float kc = 1.f;
-    // constexpr float kl = 0.14f;
-    constexpr float kl = 1.f;
-    // constexpr float kq = 0.07f;
-    constexpr float kq = 1.f;
-    constexpr float minRadiance = 5.f / 256.f;
-    constexpr float minRadianceInv = 1.f / minRadiance;
-
-    float imax = *std::max_element(radiance.begin(), radiance.end());
-
-    float radius = (-kl + std::sqrtf(kl * kl - 4.f * kq * (kc - imax * minRadianceInv))) / (2 * kq);
-
-    return radius;
 }
 
 // ================================================================================================================
@@ -1367,10 +1220,6 @@ void SSAOApp::AppInit()
     // InitGfxCommandBuffers(SharedLib::MAX_FRAMES_IN_FLIGHT);
 
     InitSwapchain();
-    
-    // Create the graphics pipeline
-    ReadInSphereData();
-    InitSphereVertexIndexBuffers();
 
     InitVpUboObjects();
     
@@ -1379,10 +1228,21 @@ void SSAOApp::AppInit()
     InitGBuffer();
     // InitLightPosRadianceSSBOs();
 
+    // Load in gltf scene.
+    m_pGltfLoaderManager = new SharedLib::GltfLoaderManager();
+    m_pLevel = new SharedLib::Level();
+
+    std::string sceneLoadPathAbs = SOURCE_PATH;
+    sceneLoadPathAbs += +"/../data/Sponza/Sponza.gltf";
+
+    m_pGltfLoaderManager->Load(sceneLoadPathAbs, *m_pLevel);
+
+    /*
     InitGeoPassShaderModules();
     InitGeoPassPipelineDescriptorSetLayout();
     InitGeoPassPipelineLayout();
     InitGeoPassPipeline();
+    */
 
     /*
     InitDeferredLightingPassShaderModules();
@@ -1394,12 +1254,4 @@ void SSAOApp::AppInit()
 
     InitSwapchainSyncObjects();
     InitGammaCorrectionPipelineAndRsrc();
-
-    m_pGltfLoaderManager = new SharedLib::GltfLoaderManager();
-    m_pLevel = new SharedLib::Level();
-
-    std::string sceneLoadPathAbs = SOURCE_PATH;
-    sceneLoadPathAbs += +"/../data/Sponza/Sponza.gltf";
-
-    m_pGltfLoaderManager->Load(sceneLoadPathAbs, *m_pLevel);
 }

@@ -14,20 +14,30 @@ namespace SharedLib
 
         virtual void Finialize() = 0;
 
-    private:
         float m_position[3];
 
-        virtual void Update() = 0;
-        virtual void Render() = 0;
+    private:
+        // virtual void Update() = 0;
+        // virtual void Render() = 0;
     };
 
-    class MeshEntity : public Entity
+    class MeshPrimitive
     {
     public:
-        MeshEntity() {}
-        ~MeshEntity() {}
+        MeshPrimitive() {}
+        ~MeshPrimitive() {}
+        
+        // float m_position[3];
+        std::vector<float>    m_vertData;
+        
+        std::vector<float>    m_posData;
+        std::vector<float>    m_normalData;
+        std::vector<float>    m_tangentData;
+        std::vector<float>    m_texCoordData;
 
-    private:
+        std::vector<uint16_t> m_idxDataUint16;
+
+    protected:
         ImgInfo baseColorTex;
         ImgInfo metallicRoughnessTex;
         ImgInfo normalTex;
@@ -42,6 +52,25 @@ namespace SharedLib
         GpuImg normalGpuImg;
         GpuImg occlusionGpuImg;
         GpuImg emissiveGpuImg;
+    };
+
+    class MeshEntity : public Entity
+    {
+    public:
+        MeshEntity() {}
+        ~MeshEntity() {}
+
+        void Finialize() override {}
+
+    protected:
+        std::vector<MeshPrimitive> m_meshPrimitives;
+    };
+
+    class SkeletalMeshEntity : public MeshEntity
+    {
+    public:
+        SkeletalMeshEntity() {}
+        ~SkeletalMeshEntity() {}
     };
 
     enum LightType

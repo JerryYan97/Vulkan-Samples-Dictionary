@@ -83,15 +83,8 @@ private:
     void InitGBuffer();
     void DestroyGBuffer();
     
-    void InitSphereVertexIndexBuffers(); // Read in sphere data, create Sphere's GPU buffer objects and transfer data 
-                                         // to the GPU buffers.
-    void ReadInSphereData();
-    void DestroySphereVertexIndexBuffers();
-
     void InitVpUboObjects();
     void DestroyVpUboObjects();
-
-    float PtLightVolumeRadius(const std::array<float, 3>& radiance);
 
     /*
     void InitDeferredLightingPassPipeline();

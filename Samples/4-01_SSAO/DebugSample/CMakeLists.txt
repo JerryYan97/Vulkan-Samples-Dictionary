@@ -13,9 +13,6 @@ include_directories(${DearImGUIPath}
                     ${DearImGUIPath}/backends
                     ${GLFW_HEADER_DIR})
 
-set(TinyObjPath ../../../ThirdPartyLibs/TinyObj)
-include_directories(${TinyObjPath})
-
 link_directories("$ENV{VULKAN_SDK}/lib")
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../ThirdPartyLibs/glfw
                  ${CMAKE_CURRENT_BINARY_DIR}/glfw)
@@ -28,6 +25,7 @@ add_executable(${MY_APP_NAME} "main.cpp"
 # Load the shared library.
 set(SHARED_LIB_IMGUI TRUE)
 set(SHARED_LIB_SCENE_ASSETS_UTILS TRUE)
+set(SHARED_LIB_GLTF_GLM TRUE)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../SharedLibrary
                  ${CMAKE_CURRENT_BINARY_DIR}/SharedLibrary)
 
