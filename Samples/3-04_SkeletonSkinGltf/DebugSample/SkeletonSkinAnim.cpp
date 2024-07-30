@@ -565,6 +565,7 @@ void SkinAnimGltfApp::ReadInInitGltf()
     }
     else
     {
+        assert(false, "The loaded mesh doesn't have uv data.");
         vertUv = std::vector<float>(posAccessor.count * 2, 0.f);
     }
 

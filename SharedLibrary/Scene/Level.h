@@ -37,13 +37,13 @@ namespace SharedLib
 
         std::vector<uint16_t> m_idxDataUint16;
 
-    protected:
         ImgInfo baseColorTex;
         ImgInfo metallicRoughnessTex;
         ImgInfo normalTex;
         ImgInfo occlusionTex;
         ImgInfo emissiveTex;
 
+    protected:
         GpuBuffer vertBuffer;
         GpuBuffer indexBuffer;
 

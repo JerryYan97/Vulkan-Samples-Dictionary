@@ -139,7 +139,138 @@ namespace SharedLib
                             meshPrimitive.m_normalData[normalStartingIdx + 2] = autoGenNormal[2];
                         }
                     }
+
+                    // Load uv
+                    int uvIdx = -1;
+                    if (mesh.primitives[0].attributes.count("TEXCOORD_0") > 0)
+                    {
+                        uvIdx = mesh.primitives[0].attributes.at("TEXCOORD_0");
+                        const auto& uvAccessor = model.accessors[uvIdx];
+
+                        assert(uvAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT, "The uv accessor data type should be float.");
+                        assert(uvAccessor.type == TINYGLTF_TYPE_VEC2, "The uv accessor type should be vec2.");
+
+                        meshPrimitive.m_texCoordData.resize(2 * uvAccessor.count);
+                        SharedLib::ReadOutAccessorData(meshPrimitive.m_texCoordData.data(), uvAccessor, model.bufferViews, model.buffers);
+                    }
+                    else
+                    {
+                        assert(false, "The loaded mesh doesn't have uv data.");
+                        meshPrimitive.m_texCoordData = std::vector<float>(posAccessor.count * 2, 0.f);
+                    }
+
+                    // Load the base color texture or create a default pure color texture.
+                    // The baseColorFactor contains the red, green, blue, and alpha components of the main color of the material.
+                    int materialIdx = mesh.primitives[0].material;
+
+                    if (materialIdx != -1)
+                    {
+                        const auto& material = model.materials[materialIdx];
+                        int baseColorTexIdx = material.pbrMetallicRoughness.baseColorTexture.index;
+                        // A texture binding is defined by an index of a texture object and an optional index of texture coordinates.
+                        // Its green channel contains roughness values and its blue channel contains metalness values.
+                        int baseColorTexIdx = material.pbrMetallicRoughness.baseColorTexture.index;
+                        int metallicRoughnessTexIdx = material.pbrMetallicRoughness.metallicRoughnessTexture.index;
+                        int occlusionTexIdx = material.occlusionTexture.index;
+                        int normalTexIdx = material.normalTexture.index;
+                        // material.emissiveTexture -- Let forget emissive. The renderer doesn't support emissive textures.
+
+                        if (baseColorTexIdx == -1)
+                        {
+                            // A pure color model.
+                            float pureColor[3] = { material.pbrMetallicRoughness.baseColorFactor[0],
+                                                   material.pbrMetallicRoughness.baseColorFactor[1],
+                                                   material.pbrMetallicRoughness.baseColorFactor[2] };
+
+                            m_skeletalMesh.mesh.baseColorImg = CreateDummyPureColorImg(pureColor);
+                        }
+                        else
+                        {
+                            // A texture is defined by an image index, denoted by the source property and a sampler index (sampler).
+                            // Assmue that all textures are 8 bits per channel. They are all xxx / 255. They all have 4 components.
+                            const auto& baseColorTex = model.textures[baseColorTexIdx];
+                            int baseColorTexImgIdx = baseColorTex.source;
+
+                            // This model has a base color texture.
+                            const auto& baseColorImg = model.images[baseColorTexImgIdx];
+
+                            VkImageSubresourceRange tex2dSubResRange{};
+                            {
+                                tex2dSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                                tex2dSubResRange.baseMipLevel = 0;
+                                tex2dSubResRange.levelCount = 1;
+                                tex2dSubResRange.baseArrayLayer = 0;
+                                tex2dSubResRange.layerCount = 1;
+                            }
+
+                            VkSamplerCreateInfo samplerInfo{};
+                            {
+                                samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+                                samplerInfo.magFilter = VK_FILTER_LINEAR;
+                                samplerInfo.minFilter = VK_FILTER_LINEAR;
+                                samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+                                samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+                                samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+                                samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+                                samplerInfo.minLod = -1000;
+                                samplerInfo.maxLod = 1000;
+                                samplerInfo.maxAnisotropy = 1.0f;
+                            }
+
+                            SharedLib::GpuImgCreateInfo gpuImgCreateInfo{};
+                            {
+                                gpuImgCreateInfo.allocFlags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+                                gpuImgCreateInfo.hasSampler = true;
+                                gpuImgCreateInfo.imgSubresRange = tex2dSubResRange;
+                                gpuImgCreateInfo.imgUsageFlags = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+                                gpuImgCreateInfo.imgViewType = VK_IMAGE_VIEW_TYPE_2D;
+                                gpuImgCreateInfo.samplerInfo = samplerInfo;
+                                gpuImgCreateInfo.imgExtent = VkExtent3D{ (uint32_t)baseColorImg.width, (uint32_t)baseColorImg.height, 1 };
+                                gpuImgCreateInfo.imgFormat = VK_FORMAT_R8G8B8A8_SRGB;
+                            }
+
+                            m_skeletalMesh.mesh.baseColorImg = CreateGpuImage(gpuImgCreateInfo);
+
+                            VkBufferImageCopy baseColorBufToImgCopy{};
+                            {
+                                VkExtent3D extent{};
+                                {
+                                    extent.width = baseColorImg.width;
+                                    extent.height = baseColorImg.height;
+                                    extent.depth = 1;
+                                }
+
+                                baseColorBufToImgCopy.bufferRowLength = extent.width;
+                                baseColorBufToImgCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                                baseColorBufToImgCopy.imageSubresource.mipLevel = 0;
+                                baseColorBufToImgCopy.imageSubresource.baseArrayLayer = 0;
+                                baseColorBufToImgCopy.imageSubresource.layerCount = 1;
+                                baseColorBufToImgCopy.imageExtent = extent;
+                            }
+
+
+                            SharedLib::RAIICommandBuffer raiiCmdBuffer(m_gfxCmdPool, m_device);
+
+                            SharedLib::SendImgDataToGpu(raiiCmdBuffer.m_cmdBuffer,
+                                m_device,
+                                m_graphicsQueue,
+                                (void*)baseColorImg.image.data(),
+                                baseColorImg.image.size() * sizeof(unsigned char),
+                                m_skeletalMesh.mesh.baseColorImg.image,
+                                tex2dSubResRange,
+                                VK_IMAGE_LAYOUT_UNDEFINED,
+                                baseColorBufToImgCopy,
+                                *m_pAllocator);
+                        }
+                    }
+                    else
+                    {
+                        float white[3] = { 1.f, 1.f, 1.f };
+                        m_skeletalMesh.mesh.baseColorImg = CreateDummyPureColorImg(white);
+                    }
                 }
+
+
             }
             else if(strcmp(filePostfix.c_str(), "glb") == 0)
             {
