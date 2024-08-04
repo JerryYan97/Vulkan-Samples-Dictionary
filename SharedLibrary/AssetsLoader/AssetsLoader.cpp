@@ -63,6 +63,7 @@ namespace SharedLib
                 // TODO: We should support multiple meshes in the future.
                 const auto& mesh = model.meshes[0];
                 MeshEntity* pMeshEntity = new MeshEntity();
+                pMeshEntity->m_meshPrimitives.resize(mesh.primitives.size());
                 m_entities.push_back(pMeshEntity);
 
                 // https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#reference-mesh-primitive
@@ -73,7 +74,7 @@ namespace SharedLib
                 for (uint32_t i = 0; i < mesh.primitives.size(); i++)
                 {
                     const auto& primitive = mesh.primitives[i];
-                    MeshPrimitive meshPrimitive;
+                    MeshPrimitive& meshPrimitive = pMeshEntity->m_meshPrimitives[i];
                     
                     // Load pos
                     int posIdx = mesh.primitives[0].attributes.at("POSITION");
@@ -163,10 +164,44 @@ namespace SharedLib
                     // The baseColorFactor contains the red, green, blue, and alpha components of the main color of the material.
                     int materialIdx = mesh.primitives[0].material;
 
+                    auto& pfnSetDefaultBaseColor = [](MeshPrimitive& meshPrimitive) {
+                        meshPrimitive.baseColorTex.pixHeight = 1;
+                        meshPrimitive.baseColorTex.pixWidth = 1;
+                        meshPrimitive.baseColorTex.componentCnt = 3;
+                        meshPrimitive.baseColorTex.dataVec = std::vector<uint8_t>(3, 255);
+                        };
+
+                    auto& pfnSetDefaultMetallicRoughness = [](MeshPrimitive& meshPrimitive) {
+                        float defaultMetallicRoughness[2] = { 0.f, 1.f };
+                        meshPrimitive.metallicRoughnessTex.pixHeight = 1;
+                        meshPrimitive.metallicRoughnessTex.pixWidth = 1;
+                        meshPrimitive.metallicRoughnessTex.componentCnt = 2;
+                        meshPrimitive.metallicRoughnessTex.dataVec = std::vector<uint8_t>(sizeof(defaultMetallicRoughness), 0);
+                        memcpy(meshPrimitive.metallicRoughnessTex.dataVec.data(), defaultMetallicRoughness, sizeof(defaultMetallicRoughness));
+                        };
+
+                    auto& pfnSetDefaultOcclusion = [](MeshPrimitive& meshPrimitive) {
+                        float defaultOcclusion = 1.f;
+                        meshPrimitive.occlusionTex.pixHeight = 1;
+                        meshPrimitive.occlusionTex.pixWidth = 1;
+                        meshPrimitive.occlusionTex.componentCnt = 1;
+                        meshPrimitive.occlusionTex.dataVec = std::vector<uint8_t>(sizeof(defaultOcclusion), 0);
+                        memcpy(meshPrimitive.occlusionTex.dataVec.data(), &defaultOcclusion, sizeof(defaultOcclusion));
+                        };
+
+                    auto& pfnSetDefaultNormal = [](MeshPrimitive& meshPrimitive) {
+                        float defaultNormal[3] = { 0.f, 0.f, 1.f };
+                        meshPrimitive.normalTex.pixHeight = 1;
+                        meshPrimitive.normalTex.pixWidth = 1;
+                        meshPrimitive.normalTex.componentCnt = 3;
+                        meshPrimitive.normalTex.dataVec = std::vector<uint8_t>(sizeof(defaultNormal), 0);
+                        memcpy(meshPrimitive.normalTex.dataVec.data(), defaultNormal, sizeof(defaultNormal));
+                        };
+
+
                     if (materialIdx != -1)
                     {
                         const auto& material = model.materials[materialIdx];
-                        int baseColorTexIdx = material.pbrMetallicRoughness.baseColorTexture.index;
                         // A texture binding is defined by an index of a texture object and an optional index of texture coordinates.
                         // Its green channel contains roughness values and its blue channel contains metalness values.
                         int baseColorTexIdx = material.pbrMetallicRoughness.baseColorTexture.index;
@@ -177,12 +212,7 @@ namespace SharedLib
 
                         if (baseColorTexIdx == -1)
                         {
-                            // A pure color model.
-                            float pureColor[3] = { material.pbrMetallicRoughness.baseColorFactor[0],
-                                                   material.pbrMetallicRoughness.baseColorFactor[1],
-                                                   material.pbrMetallicRoughness.baseColorFactor[2] };
-
-                            m_skeletalMesh.mesh.baseColorImg = CreateDummyPureColorImg(pureColor);
+                            pfnSetDefaultBaseColor(meshPrimitive);
                         }
                         else
                         {
@@ -194,87 +224,77 @@ namespace SharedLib
                             // This model has a base color texture.
                             const auto& baseColorImg = model.images[baseColorTexImgIdx];
 
-                            VkImageSubresourceRange tex2dSubResRange{};
-                            {
-                                tex2dSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                                tex2dSubResRange.baseMipLevel = 0;
-                                tex2dSubResRange.levelCount = 1;
-                                tex2dSubResRange.baseArrayLayer = 0;
-                                tex2dSubResRange.layerCount = 1;
-                            }
+                            meshPrimitive.baseColorTex.pixWidth     = baseColorImg.width;
+                            meshPrimitive.baseColorTex.pixHeight    = baseColorImg.height;
+                            meshPrimitive.baseColorTex.componentCnt = baseColorImg.component;
+                            meshPrimitive.baseColorTex.dataVec      = baseColorImg.image;
+                        }
 
-                            VkSamplerCreateInfo samplerInfo{};
-                            {
-                                samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-                                samplerInfo.magFilter = VK_FILTER_LINEAR;
-                                samplerInfo.minFilter = VK_FILTER_LINEAR;
-                                samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-                                samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-                                samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-                                samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-                                samplerInfo.minLod = -1000;
-                                samplerInfo.maxLod = 1000;
-                                samplerInfo.maxAnisotropy = 1.0f;
-                            }
+                        if (metallicRoughnessTexIdx == -1)
+                        {
+                            pfnSetDefaultMetallicRoughness(meshPrimitive);
+                        }
+                        else
+                        {
+                            const auto& metallicRoughnessTex = model.textures[metallicRoughnessTexIdx];
+                            int metallicRoughnessTexImgIdx = metallicRoughnessTex.source;
 
-                            SharedLib::GpuImgCreateInfo gpuImgCreateInfo{};
-                            {
-                                gpuImgCreateInfo.allocFlags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
-                                gpuImgCreateInfo.hasSampler = true;
-                                gpuImgCreateInfo.imgSubresRange = tex2dSubResRange;
-                                gpuImgCreateInfo.imgUsageFlags = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-                                gpuImgCreateInfo.imgViewType = VK_IMAGE_VIEW_TYPE_2D;
-                                gpuImgCreateInfo.samplerInfo = samplerInfo;
-                                gpuImgCreateInfo.imgExtent = VkExtent3D{ (uint32_t)baseColorImg.width, (uint32_t)baseColorImg.height, 1 };
-                                gpuImgCreateInfo.imgFormat = VK_FORMAT_R8G8B8A8_SRGB;
-                            }
+                            const auto& metallicRoughnessImg = model.images[metallicRoughnessTexImgIdx];
 
-                            m_skeletalMesh.mesh.baseColorImg = CreateGpuImage(gpuImgCreateInfo);
+                            meshPrimitive.metallicRoughnessTex.pixWidth = metallicRoughnessImg.width;
+                            meshPrimitive.metallicRoughnessTex.pixHeight = metallicRoughnessImg.height;
+                            meshPrimitive.metallicRoughnessTex.componentCnt = metallicRoughnessImg.component;
+                            meshPrimitive.metallicRoughnessTex.dataVec = metallicRoughnessImg.image;
+                        }
 
-                            VkBufferImageCopy baseColorBufToImgCopy{};
-                            {
-                                VkExtent3D extent{};
-                                {
-                                    extent.width = baseColorImg.width;
-                                    extent.height = baseColorImg.height;
-                                    extent.depth = 1;
-                                }
+                        if (normalIdx == -1)
+                        {
+                            pfnSetDefaultNormal(meshPrimitive);
+                        }
+                        else
+                        {
+                            const auto& normalTex = model.textures[normalTexIdx];
+                            int normalTexImgIdx = normalTex.source;
 
-                                baseColorBufToImgCopy.bufferRowLength = extent.width;
-                                baseColorBufToImgCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                                baseColorBufToImgCopy.imageSubresource.mipLevel = 0;
-                                baseColorBufToImgCopy.imageSubresource.baseArrayLayer = 0;
-                                baseColorBufToImgCopy.imageSubresource.layerCount = 1;
-                                baseColorBufToImgCopy.imageExtent = extent;
-                            }
+                            const auto& normalImg = model.images[normalTexImgIdx];
 
+                            meshPrimitive.normalTex.pixWidth = normalImg.width;
+                            meshPrimitive.normalTex.pixHeight = normalImg.height;
+                            meshPrimitive.normalTex.componentCnt = normalImg.component;
+                            meshPrimitive.normalTex.dataVec = normalImg.image;
+                        }
 
-                            SharedLib::RAIICommandBuffer raiiCmdBuffer(m_gfxCmdPool, m_device);
+                        if (occlusionTexIdx == -1)
+                        {
+                            pfnSetDefaultOcclusion(meshPrimitive);
+                        }
+                        else
+                        {
+                            const auto& occlusionTex = model.textures[occlusionTexIdx];
+                            int occlusionTexImgIdx = occlusionTex.source;
 
-                            SharedLib::SendImgDataToGpu(raiiCmdBuffer.m_cmdBuffer,
-                                m_device,
-                                m_graphicsQueue,
-                                (void*)baseColorImg.image.data(),
-                                baseColorImg.image.size() * sizeof(unsigned char),
-                                m_skeletalMesh.mesh.baseColorImg.image,
-                                tex2dSubResRange,
-                                VK_IMAGE_LAYOUT_UNDEFINED,
-                                baseColorBufToImgCopy,
-                                *m_pAllocator);
+                            const auto& occlusionImg = model.images[occlusionTexImgIdx];
+
+                            meshPrimitive.occlusionTex.pixWidth = occlusionImg.width;
+                            meshPrimitive.occlusionTex.pixHeight = occlusionImg.height;
+                            meshPrimitive.occlusionTex.componentCnt = occlusionImg.component;
+                            meshPrimitive.occlusionTex.dataVec = occlusionImg.image;
                         }
                     }
                     else
                     {
-                        float white[3] = { 1.f, 1.f, 1.f };
-                        m_skeletalMesh.mesh.baseColorImg = CreateDummyPureColorImg(white);
+                        // No material, then we will create a pure white model.
+                        pfnSetDefaultBaseColor(meshPrimitive);
+                        pfnSetDefaultMetallicRoughness(meshPrimitive);
+                        pfnSetDefaultOcclusion(meshPrimitive);
+                        pfnSetDefaultNormal(meshPrimitive);
                     }
                 }
-
-
             }
             else if(strcmp(filePostfix.c_str(), "glb") == 0)
             {
                 //bool ret = loader.LoadBinaryFromFile(&model, &err, &warn, argv[1]); // for binary glTF(.glb)
+                ASSERT(false, "Currently don't support the glb file format.");
             }
             else
             {

@@ -37,11 +37,11 @@ namespace SharedLib
 
         std::vector<uint16_t> m_idxDataUint16;
 
-        ImgInfo baseColorTex;
-        ImgInfo metallicRoughnessTex;
-        ImgInfo normalTex;
-        ImgInfo occlusionTex;
-        ImgInfo emissiveTex;
+        ImgInfo baseColorTex;         // R8G8B8_SRGB
+        ImgInfo metallicRoughnessTex; // R32G32_SFLOAT
+        ImgInfo normalTex;            // R32G32B32_SFLOAT
+        ImgInfo occlusionTex;         // R32_SFLOAT
+        ImgInfo emissiveTex;          // Currently don't support.
 
     protected:
         GpuBuffer vertBuffer;
@@ -62,8 +62,9 @@ namespace SharedLib
 
         void Finialize() override {}
 
-    protected:
         std::vector<MeshPrimitive> m_meshPrimitives;
+    protected:
+        
     };
 
     class SkeletalMeshEntity : public MeshEntity

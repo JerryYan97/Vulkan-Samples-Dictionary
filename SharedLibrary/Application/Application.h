@@ -62,13 +62,24 @@ namespace SharedLib
         VkSamplerCreateInfo samplerInfo;
     };
 
+    // Image component type notes:
+    // #define TINYGLTF_COMPONENT_TYPE_BYTE (5120)
+    // #define TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE (5121)
+    // #define TINYGLTF_COMPONENT_TYPE_SHORT (5122)
+    // #define TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT (5123)
+    // #define TINYGLTF_COMPONENT_TYPE_INT (5124)
+    // #define TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT (5125)
+    // #define TINYGLTF_COMPONENT_TYPE_FLOAT (5126)
+    // #define TINYGLTF_COMPONENT_TYPE_DOUBLE (5130)
+
     struct ImgInfo
     {
         uint32_t             pixWidth;
         uint32_t             pixHeight;
         uint32_t             componentCnt;
         std::vector<uint8_t> dataVec;
-        float*               pData;
+        uint32_t             componentType;
+        // float*               pData;
     };
 
     struct BinBufferInfo
