@@ -37,7 +37,7 @@ namespace SharedLib
 
         std::vector<uint16_t> m_idxDataUint16;
 
-        ImgInfo baseColorTex;         // R8G8B8_SRGB
+        ImgInfo baseColorTex;         // TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE (5121), 4 components.
         ImgInfo metallicRoughnessTex; // R32G32_SFLOAT
         ImgInfo normalTex;            // R32G32B32_SFLOAT
         ImgInfo occlusionTex;         // R32_SFLOAT

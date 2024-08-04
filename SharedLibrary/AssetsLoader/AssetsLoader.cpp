@@ -60,11 +60,13 @@ namespace SharedLib
                 assert(model.skins.size() == 0, "This SharedLib Gltf Loader currently doesn't support the skinning."); // TODO: Support skinning and animation.
 
                 // Load mesh and relevant info
+                // Any node MAY contain one mesh, defined in its mesh property. The mesh MAY be skinned using information provided in a referenced skin object.
                 // TODO: We should support multiple meshes in the future.
                 const auto& mesh = model.meshes[0];
                 MeshEntity* pMeshEntity = new MeshEntity();
                 pMeshEntity->m_meshPrimitives.resize(mesh.primitives.size());
                 m_entities.push_back(pMeshEntity);
+                oLevel.AddMshEntity("MeshEntity", pMeshEntity);
 
                 // https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#reference-mesh-primitive
                 // Meshes are defined as arrays of primitives. Primitives correspond to the data required for GPU draw calls.
@@ -77,7 +79,7 @@ namespace SharedLib
                     MeshPrimitive& meshPrimitive = pMeshEntity->m_meshPrimitives[i];
                     
                     // Load pos
-                    int posIdx = mesh.primitives[0].attributes.at("POSITION");
+                    int posIdx = mesh.primitives[i].attributes.at("POSITION");
                     const auto& posAccessor = model.accessors[posIdx];
 
                     assert(posAccessor.componentType == TINYGLTF_PARAMETER_TYPE_FLOAT, "The pos accessor data type should be float.");
@@ -89,7 +91,7 @@ namespace SharedLib
                     SharedLib::ReadOutAccessorData(meshPrimitive.m_posData.data(), posAccessor, model.bufferViews, model.buffers);
 
                     // Load indices
-                    int indicesIdx = mesh.primitives[0].indices;
+                    int indicesIdx = mesh.primitives[i].indices;
                     const auto& idxAccessor = model.accessors[indicesIdx];
 
                     assert(idxAccessor.componentType == TINYGLTF_PARAMETER_TYPE_UNSIGNED_SHORT, "The idx accessor data type should be uint16.");
@@ -100,9 +102,9 @@ namespace SharedLib
 
                     // Load normal
                     int normalIdx = -1;
-                    if (mesh.primitives[0].attributes.count("NORMAL") > 0)
+                    if (mesh.primitives[i].attributes.count("NORMAL") > 0)
                     {
-                        normalIdx = mesh.primitives[0].attributes.at("NORMAL");
+                        normalIdx = mesh.primitives[i].attributes.at("NORMAL");
                         const auto& normalAccessor = model.accessors[normalIdx];
 
                         assert(normalAccessor.componentType == TINYGLTF_PARAMETER_TYPE_FLOAT, "The normal accessor data type should be float.");
@@ -143,9 +145,9 @@ namespace SharedLib
 
                     // Load uv
                     int uvIdx = -1;
-                    if (mesh.primitives[0].attributes.count("TEXCOORD_0") > 0)
+                    if (mesh.primitives[i].attributes.count("TEXCOORD_0") > 0)
                     {
-                        uvIdx = mesh.primitives[0].attributes.at("TEXCOORD_0");
+                        uvIdx = mesh.primitives[i].attributes.at("TEXCOORD_0");
                         const auto& uvAccessor = model.accessors[uvIdx];
 
                         assert(uvAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT, "The uv accessor data type should be float.");
@@ -162,29 +164,30 @@ namespace SharedLib
 
                     // Load the base color texture or create a default pure color texture.
                     // The baseColorFactor contains the red, green, blue, and alpha components of the main color of the material.
-                    int materialIdx = mesh.primitives[0].material;
+                    int materialIdx = mesh.primitives[i].material;
 
+                    // All the textures are 4 components R8G8B8A8 textures.
                     auto& pfnSetDefaultBaseColor = [](MeshPrimitive& meshPrimitive) {
                         meshPrimitive.baseColorTex.pixHeight = 1;
                         meshPrimitive.baseColorTex.pixWidth = 1;
-                        meshPrimitive.baseColorTex.componentCnt = 3;
-                        meshPrimitive.baseColorTex.dataVec = std::vector<uint8_t>(3, 255);
+                        meshPrimitive.baseColorTex.componentCnt = 4;
+                        meshPrimitive.baseColorTex.dataVec = std::vector<uint8_t>(4, 255);
                         };
 
                     auto& pfnSetDefaultMetallicRoughness = [](MeshPrimitive& meshPrimitive) {
-                        float defaultMetallicRoughness[2] = { 0.f, 1.f };
+                        float defaultMetallicRoughness[4] = { 0.f, 1.f, 0.f, 0.f };
                         meshPrimitive.metallicRoughnessTex.pixHeight = 1;
                         meshPrimitive.metallicRoughnessTex.pixWidth = 1;
-                        meshPrimitive.metallicRoughnessTex.componentCnt = 2;
+                        meshPrimitive.metallicRoughnessTex.componentCnt = 4;
                         meshPrimitive.metallicRoughnessTex.dataVec = std::vector<uint8_t>(sizeof(defaultMetallicRoughness), 0);
                         memcpy(meshPrimitive.metallicRoughnessTex.dataVec.data(), defaultMetallicRoughness, sizeof(defaultMetallicRoughness));
                         };
 
                     auto& pfnSetDefaultOcclusion = [](MeshPrimitive& meshPrimitive) {
-                        float defaultOcclusion = 1.f;
+                        float defaultOcclusion[4] = { 1.f, 0.f, 0.f, 0.f };
                         meshPrimitive.occlusionTex.pixHeight = 1;
                         meshPrimitive.occlusionTex.pixWidth = 1;
-                        meshPrimitive.occlusionTex.componentCnt = 1;
+                        meshPrimitive.occlusionTex.componentCnt = 4;
                         meshPrimitive.occlusionTex.dataVec = std::vector<uint8_t>(sizeof(defaultOcclusion), 0);
                         memcpy(meshPrimitive.occlusionTex.dataVec.data(), &defaultOcclusion, sizeof(defaultOcclusion));
                         };
@@ -228,8 +231,14 @@ namespace SharedLib
                             meshPrimitive.baseColorTex.pixHeight    = baseColorImg.height;
                             meshPrimitive.baseColorTex.componentCnt = baseColorImg.component;
                             meshPrimitive.baseColorTex.dataVec      = baseColorImg.image;
+
+                            assert(baseColorImg.component == 4, "All textures should have 4 components.");
+                            assert(baseColorImg.pixel_type == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE, "All textures' each component should be a byte.");
                         }
 
+                        // The textures for metalness and roughness properties are packed together in a single texture called metallicRoughnessTexture.Its green
+                        // channel contains roughness values and its blue channel contains metalness values.This texture MUST be encoded with linear transfer function
+                        // and MAY use more than 8 bits per channel.
                         if (metallicRoughnessTexIdx == -1)
                         {
                             pfnSetDefaultMetallicRoughness(meshPrimitive);
@@ -245,9 +254,12 @@ namespace SharedLib
                             meshPrimitive.metallicRoughnessTex.pixHeight = metallicRoughnessImg.height;
                             meshPrimitive.metallicRoughnessTex.componentCnt = metallicRoughnessImg.component;
                             meshPrimitive.metallicRoughnessTex.dataVec = metallicRoughnessImg.image;
+
+                            assert(metallicRoughnessImg.component == 4, "All textures should have 4 components.");
+                            assert(metallicRoughnessImg.pixel_type == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE, "All textures' each component should be a byte.");
                         }
 
-                        if (normalIdx == -1)
+                        if (normalTexIdx == -1)
                         {
                             pfnSetDefaultNormal(meshPrimitive);
                         }
@@ -262,8 +274,14 @@ namespace SharedLib
                             meshPrimitive.normalTex.pixHeight = normalImg.height;
                             meshPrimitive.normalTex.componentCnt = normalImg.component;
                             meshPrimitive.normalTex.dataVec = normalImg.image;
+
+                            assert(normalImg.component == 4, "All textures should have 4 components.");
+                            assert(normalImg.pixel_type == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE, "All textures' each component should be a byte.");
                         }
 
+                        // The occlusion texture; it indicates areas that receive less indirect lighting from ambient sources.
+                        // Direct lighting is not affected.The red channel of the texture encodes the occlusion value,
+                        // where 0.0 means fully - occluded area(no indirect lighting) and 1.0 means not occluded area(full indirect lighting).
                         if (occlusionTexIdx == -1)
                         {
                             pfnSetDefaultOcclusion(meshPrimitive);
@@ -279,6 +297,9 @@ namespace SharedLib
                             meshPrimitive.occlusionTex.pixHeight = occlusionImg.height;
                             meshPrimitive.occlusionTex.componentCnt = occlusionImg.component;
                             meshPrimitive.occlusionTex.dataVec = occlusionImg.image;
+
+                            assert(occlusionImg.component == 4, "All textures should have 4 components.");
+                            assert(occlusionImg.pixel_type == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE, "All textures' each component should be a byte.");
                         }
                     }
                     else
