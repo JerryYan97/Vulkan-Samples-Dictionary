@@ -12,6 +12,20 @@ namespace SharedLib
     // ================================================================================================================
     AssetsLoaderManager::~AssetsLoaderManager()
     {
+        
+    }
+
+    // ================================================================================================================
+    void AssetsLoaderManager::InitEntitesGpuRsrc(VkDevice      device,
+                                                 VmaAllocator* pAllocator)
+    {
+
+    }
+
+    // ================================================================================================================
+    void AssetsLoaderManager::FinializeEntities(VkDevice      device,
+                                                VmaAllocator* pAllocator)
+    {
         for (auto entity : m_entities)
         {
             entity->Finialize();
@@ -168,37 +182,37 @@ namespace SharedLib
 
                     // All the textures are 4 components R8G8B8A8 textures.
                     auto& pfnSetDefaultBaseColor = [](MeshPrimitive& meshPrimitive) {
-                        meshPrimitive.baseColorTex.pixHeight = 1;
-                        meshPrimitive.baseColorTex.pixWidth = 1;
-                        meshPrimitive.baseColorTex.componentCnt = 4;
-                        meshPrimitive.baseColorTex.dataVec = std::vector<uint8_t>(4, 255);
+                        meshPrimitive.m_baseColorTex.pixHeight = 1;
+                        meshPrimitive.m_baseColorTex.pixWidth = 1;
+                        meshPrimitive.m_baseColorTex.componentCnt = 4;
+                        meshPrimitive.m_baseColorTex.dataVec = std::vector<uint8_t>(4, 255);
                         };
 
                     auto& pfnSetDefaultMetallicRoughness = [](MeshPrimitive& meshPrimitive) {
                         float defaultMetallicRoughness[4] = { 0.f, 1.f, 0.f, 0.f };
-                        meshPrimitive.metallicRoughnessTex.pixHeight = 1;
-                        meshPrimitive.metallicRoughnessTex.pixWidth = 1;
-                        meshPrimitive.metallicRoughnessTex.componentCnt = 4;
-                        meshPrimitive.metallicRoughnessTex.dataVec = std::vector<uint8_t>(sizeof(defaultMetallicRoughness), 0);
-                        memcpy(meshPrimitive.metallicRoughnessTex.dataVec.data(), defaultMetallicRoughness, sizeof(defaultMetallicRoughness));
+                        meshPrimitive.m_metallicRoughnessTex.pixHeight = 1;
+                        meshPrimitive.m_metallicRoughnessTex.pixWidth = 1;
+                        meshPrimitive.m_metallicRoughnessTex.componentCnt = 4;
+                        meshPrimitive.m_metallicRoughnessTex.dataVec = std::vector<uint8_t>(sizeof(defaultMetallicRoughness), 0);
+                        memcpy(meshPrimitive.m_metallicRoughnessTex.dataVec.data(), defaultMetallicRoughness, sizeof(defaultMetallicRoughness));
                         };
 
                     auto& pfnSetDefaultOcclusion = [](MeshPrimitive& meshPrimitive) {
                         float defaultOcclusion[4] = { 1.f, 0.f, 0.f, 0.f };
-                        meshPrimitive.occlusionTex.pixHeight = 1;
-                        meshPrimitive.occlusionTex.pixWidth = 1;
-                        meshPrimitive.occlusionTex.componentCnt = 4;
-                        meshPrimitive.occlusionTex.dataVec = std::vector<uint8_t>(sizeof(defaultOcclusion), 0);
-                        memcpy(meshPrimitive.occlusionTex.dataVec.data(), &defaultOcclusion, sizeof(defaultOcclusion));
+                        meshPrimitive.m_occlusionTex.pixHeight = 1;
+                        meshPrimitive.m_occlusionTex.pixWidth = 1;
+                        meshPrimitive.m_occlusionTex.componentCnt = 4;
+                        meshPrimitive.m_occlusionTex.dataVec = std::vector<uint8_t>(sizeof(defaultOcclusion), 0);
+                        memcpy(meshPrimitive.m_occlusionTex.dataVec.data(), &defaultOcclusion, sizeof(defaultOcclusion));
                         };
 
                     auto& pfnSetDefaultNormal = [](MeshPrimitive& meshPrimitive) {
                         float defaultNormal[3] = { 0.f, 0.f, 1.f };
-                        meshPrimitive.normalTex.pixHeight = 1;
-                        meshPrimitive.normalTex.pixWidth = 1;
-                        meshPrimitive.normalTex.componentCnt = 3;
-                        meshPrimitive.normalTex.dataVec = std::vector<uint8_t>(sizeof(defaultNormal), 0);
-                        memcpy(meshPrimitive.normalTex.dataVec.data(), defaultNormal, sizeof(defaultNormal));
+                        meshPrimitive.m_normalTex.pixHeight = 1;
+                        meshPrimitive.m_normalTex.pixWidth = 1;
+                        meshPrimitive.m_normalTex.componentCnt = 3;
+                        meshPrimitive.m_normalTex.dataVec = std::vector<uint8_t>(sizeof(defaultNormal), 0);
+                        memcpy(meshPrimitive.m_normalTex.dataVec.data(), defaultNormal, sizeof(defaultNormal));
                         };
 
 
@@ -227,10 +241,10 @@ namespace SharedLib
                             // This model has a base color texture.
                             const auto& baseColorImg = model.images[baseColorTexImgIdx];
 
-                            meshPrimitive.baseColorTex.pixWidth     = baseColorImg.width;
-                            meshPrimitive.baseColorTex.pixHeight    = baseColorImg.height;
-                            meshPrimitive.baseColorTex.componentCnt = baseColorImg.component;
-                            meshPrimitive.baseColorTex.dataVec      = baseColorImg.image;
+                            meshPrimitive.m_baseColorTex.pixWidth     = baseColorImg.width;
+                            meshPrimitive.m_baseColorTex.pixHeight    = baseColorImg.height;
+                            meshPrimitive.m_baseColorTex.componentCnt = baseColorImg.component;
+                            meshPrimitive.m_baseColorTex.dataVec      = baseColorImg.image;
 
                             assert(baseColorImg.component == 4, "All textures should have 4 components.");
                             assert(baseColorImg.pixel_type == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE, "All textures' each component should be a byte.");
@@ -250,10 +264,10 @@ namespace SharedLib
 
                             const auto& metallicRoughnessImg = model.images[metallicRoughnessTexImgIdx];
 
-                            meshPrimitive.metallicRoughnessTex.pixWidth = metallicRoughnessImg.width;
-                            meshPrimitive.metallicRoughnessTex.pixHeight = metallicRoughnessImg.height;
-                            meshPrimitive.metallicRoughnessTex.componentCnt = metallicRoughnessImg.component;
-                            meshPrimitive.metallicRoughnessTex.dataVec = metallicRoughnessImg.image;
+                            meshPrimitive.m_metallicRoughnessTex.pixWidth = metallicRoughnessImg.width;
+                            meshPrimitive.m_metallicRoughnessTex.pixHeight = metallicRoughnessImg.height;
+                            meshPrimitive.m_metallicRoughnessTex.componentCnt = metallicRoughnessImg.component;
+                            meshPrimitive.m_metallicRoughnessTex.dataVec = metallicRoughnessImg.image;
 
                             assert(metallicRoughnessImg.component == 4, "All textures should have 4 components.");
                             assert(metallicRoughnessImg.pixel_type == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE, "All textures' each component should be a byte.");
@@ -270,10 +284,10 @@ namespace SharedLib
 
                             const auto& normalImg = model.images[normalTexImgIdx];
 
-                            meshPrimitive.normalTex.pixWidth = normalImg.width;
-                            meshPrimitive.normalTex.pixHeight = normalImg.height;
-                            meshPrimitive.normalTex.componentCnt = normalImg.component;
-                            meshPrimitive.normalTex.dataVec = normalImg.image;
+                            meshPrimitive.m_normalTex.pixWidth = normalImg.width;
+                            meshPrimitive.m_normalTex.pixHeight = normalImg.height;
+                            meshPrimitive.m_normalTex.componentCnt = normalImg.component;
+                            meshPrimitive.m_normalTex.dataVec = normalImg.image;
 
                             assert(normalImg.component == 4, "All textures should have 4 components.");
                             assert(normalImg.pixel_type == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE, "All textures' each component should be a byte.");
@@ -293,10 +307,10 @@ namespace SharedLib
 
                             const auto& occlusionImg = model.images[occlusionTexImgIdx];
 
-                            meshPrimitive.occlusionTex.pixWidth = occlusionImg.width;
-                            meshPrimitive.occlusionTex.pixHeight = occlusionImg.height;
-                            meshPrimitive.occlusionTex.componentCnt = occlusionImg.component;
-                            meshPrimitive.occlusionTex.dataVec = occlusionImg.image;
+                            meshPrimitive.m_occlusionTex.pixWidth = occlusionImg.width;
+                            meshPrimitive.m_occlusionTex.pixHeight = occlusionImg.height;
+                            meshPrimitive.m_occlusionTex.componentCnt = occlusionImg.component;
+                            meshPrimitive.m_occlusionTex.dataVec = occlusionImg.image;
 
                             assert(occlusionImg.component == 4, "All textures should have 4 components.");
                             assert(occlusionImg.pixel_type == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE, "All textures' each component should be a byte.");
@@ -327,4 +341,5 @@ namespace SharedLib
             ASSERT(false, "Cannot find a postfix.");
         }
     }
+    
 }

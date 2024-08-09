@@ -101,6 +101,8 @@ SSAOApp::~SSAOApp()
     vkDeviceWaitIdle(m_device);
     delete m_pCamera;
     delete m_pLevel;
+
+    m_pGltfLoaderManager->FinializeEntities(m_device, m_pAllocator);
     delete m_pGltfLoaderManager;
 
     // DestroyDeferredLightingPassRadianceTextures();
@@ -1169,8 +1171,16 @@ void SSAOApp::DestroyDeferredLightingPassRadianceTextures()
 */
 
 // ================================================================================================================
+void SSAOApp::CmdGeoPass(VkCommandBuffer cmdBuffer)
+{
+    // Loop through all the meshes in the scene and render them to G-Buffer.
+    
+}
+
+// ================================================================================================================
 void SSAOApp::CmdSSAOAppMultiTypeRendering(VkCommandBuffer cmdBuffer)
 {
+    // Only direct light and ambient light.
 
 }
 
@@ -1236,6 +1246,7 @@ void SSAOApp::AppInit()
     sceneLoadPathAbs += +"/../data/Sponza/Sponza.gltf";
 
     m_pGltfLoaderManager->Load(sceneLoadPathAbs, *m_pLevel);
+    m_pGltfLoaderManager->InitEntitesGpuRsrc(m_device, m_pAllocator);
 
     /*
     InitGeoPassShaderModules();

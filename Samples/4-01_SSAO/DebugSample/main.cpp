@@ -27,8 +27,7 @@ int main()
         vkWaitForFences(device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
 
         // Get next available image from the swapchain
-        uint32_t imageIndex;
-        // if (app.NextImgIdxOrNewSwapchain(imageIndex) == false)
+        if (app.WaitNextImgIdxOrNewSwapchain() == false)
         {
             continue;
         }
@@ -55,6 +54,8 @@ int main()
                                   VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 
         /* ------------- Geometry Pass ------------- */
+        app.CmdGeoPass(currentCmdBuffer);
+        /*
         std::vector<VkRenderingAttachmentInfoKHR> gBufferAttachmentsInfos = app.GetGBufferAttachments();
 
         VkClearValue depthClearVal{};
@@ -123,6 +124,7 @@ int main()
         vkCmdDrawIndexed(currentCmdBuffer, app.GetIdxCnt(), SphereCounts, 0, 0, 0);
 
         vkCmdEndRendering(currentCmdBuffer);
+        */
 
         /* ----------------------------------------- */
         /*

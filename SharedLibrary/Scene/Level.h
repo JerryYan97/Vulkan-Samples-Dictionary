@@ -37,21 +37,24 @@ namespace SharedLib
 
         std::vector<uint16_t> m_idxDataUint16;
 
-        ImgInfo baseColorTex;         // TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE (5121), 4 components.
-        ImgInfo metallicRoughnessTex; // R32G32_SFLOAT
-        ImgInfo normalTex;            // R32G32B32_SFLOAT
-        ImgInfo occlusionTex;         // R32_SFLOAT
-        ImgInfo emissiveTex;          // Currently don't support.
+        ImgInfo m_baseColorTex;         // TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE (5121), 4 components.
+        ImgInfo m_metallicRoughnessTex; // R32G32_SFLOAT
+        ImgInfo m_normalTex;            // R32G32B32_SFLOAT
+        ImgInfo m_occlusionTex;         // R32_SFLOAT
+        ImgInfo m_emissiveTex;          // Currently don't support.
+
+        void InitGpuRsrc(VkDevice device, VmaAllocator* pAllocator);
+        void FinializeGpuRsrc(VkDevice device, VmaAllocator* pAllocator);
 
     protected:
-        GpuBuffer vertBuffer;
-        GpuBuffer indexBuffer;
+        GpuBuffer m_vertBuffer;
+        GpuBuffer m_indexBuffer;
 
-        GpuImg baseColorGpuImg;
-        GpuImg metallicRoughnessGpuImg;
-        GpuImg normalGpuImg;
-        GpuImg occlusionGpuImg;
-        GpuImg emissiveGpuImg;
+        GpuImg m_baseColorGpuImg;
+        GpuImg m_metallicRoughnessGpuImg;
+        GpuImg m_normalGpuImg;
+        GpuImg m_occlusionGpuImg;
+        GpuImg m_emissiveGpuImg;
     };
 
     class MeshEntity : public Entity
@@ -61,6 +64,9 @@ namespace SharedLib
         ~MeshEntity() {}
 
         void Finialize() override {}
+
+        virtual void InitGpuRsrc(VkDevice device, VmaAllocator* pAllocator);
+        virtual void FinializeGpuRsrc(VkDevice device, VmaAllocator* pAllocator);
 
         std::vector<MeshPrimitive> m_meshPrimitives;
     protected:

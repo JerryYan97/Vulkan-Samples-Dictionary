@@ -72,6 +72,7 @@ public:
 
     void ImGuiFrame() override;
 
+    void CmdGeoPass(VkCommandBuffer cmdBuffer);
     void CmdSSAOAppMultiTypeRendering(VkCommandBuffer cmdBuffer);
 
 private:
@@ -159,4 +160,6 @@ private:
 
     SharedLib::GltfLoaderManager* m_pGltfLoaderManager;
     SharedLib::Level*             m_pLevel;
+
+    PresentType m_presentType = PresentType::DIFFUSE;
 };

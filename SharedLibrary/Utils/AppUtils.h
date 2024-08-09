@@ -24,6 +24,12 @@ namespace SharedLib
 
     void PrintDeviceImageCapbility(VkPhysicalDevice phyDevice);
 
+    void CopyRamDataToGpuBuffer(void*         pSrc,
+                                VmaAllocator* pAllocator,
+                                VkBuffer      dstBuffer,
+                                VmaAllocation dstAllocation,
+                                uint32_t      byteNum);
+
     struct VulkanInfos
     {
         VkDevice      device; // NOTE: The push descriptors feature has to be enabled.

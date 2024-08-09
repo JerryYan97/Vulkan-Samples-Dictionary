@@ -1,6 +1,9 @@
 #pragma once
 #include <string>
 #include <vector>
+#include <vulkan/vulkan.h>
+
+VK_DEFINE_HANDLE(VmaAllocator)
 
 namespace SharedLib
 {
@@ -16,6 +19,8 @@ namespace SharedLib
         ~AssetsLoaderManager();
 
         virtual void Load(const std::string& absPath, Level& oLevel) = 0;
+        void InitEntitesGpuRsrc(VkDevice device, VmaAllocator* pAllocator);
+        void FinializeEntities(VkDevice device, VmaAllocator* pAllocator);
 
     protected:
         std::vector<Entity*> m_entities;
