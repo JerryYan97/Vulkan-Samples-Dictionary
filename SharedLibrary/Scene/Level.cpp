@@ -208,6 +208,202 @@ namespace SharedLib
             m_baseColorGpuImg.imageDescInfo.imageView = m_baseColorGpuImg.imageView;
             m_baseColorGpuImg.imageDescInfo.sampler = m_baseColorGpuImg.imageSampler;
         }
+
+        // Create normal's GPU image.
+        {
+            VkExtent3D extent{};
+            {
+                extent.width  = m_normalTex.pixWidth;
+                extent.height = m_normalTex.pixHeight;
+                extent.depth  = 1;
+            }
+
+            VkImageCreateInfo normalImgInfo{};
+            {
+                normalImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+                normalImgInfo.imageType = VK_IMAGE_TYPE_2D;
+                normalImgInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+                normalImgInfo.extent = extent;
+                normalImgInfo.mipLevels = 1;
+                normalImgInfo.arrayLayers = 1;
+                normalImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+                normalImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
+                normalImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+                normalImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            }
+
+            vmaCreateImage(*pAllocator,
+                           &normalImgInfo,
+                           &gpuImgAllocInfo,
+                           &m_normalGpuImg.image,
+                           &m_normalGpuImg.imageAllocation,
+                           nullptr);
+
+            VkImageViewCreateInfo info{};
+            {
+                info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+                info.image = m_normalGpuImg.image;
+                info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+                info.format = VK_FORMAT_R8G8B8A8_UNORM;
+                info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                info.subresourceRange.levelCount = 1;
+                info.subresourceRange.layerCount = 1;
+            }
+            VK_CHECK(vkCreateImageView(device, &info, nullptr, &m_normalGpuImg.imageView));
+
+            VK_CHECK(vkCreateSampler(device, &samplerInfo, nullptr, &m_normalGpuImg.imageSampler));
+
+            m_normalGpuImg.imageDescInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            m_normalGpuImg.imageDescInfo.imageView = m_normalGpuImg.imageView;
+            m_normalGpuImg.imageDescInfo.sampler = m_normalGpuImg.imageSampler;
+        }
+
+        // Metallic roughness
+        {
+            VkExtent3D extent{};
+            {
+                extent.width = m_metallicRoughnessTex.pixWidth;
+                extent.height = m_metallicRoughnessTex.pixHeight;
+                extent.depth = 1;
+            }
+
+            VkImageCreateInfo metalllicRoughnessImgInfo{};
+            {
+                metalllicRoughnessImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+                metalllicRoughnessImgInfo.imageType = VK_IMAGE_TYPE_2D;
+                metalllicRoughnessImgInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+                metalllicRoughnessImgInfo.extent = extent;
+                metalllicRoughnessImgInfo.mipLevels = 1;
+                metalllicRoughnessImgInfo.arrayLayers = 1;
+                metalllicRoughnessImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+                metalllicRoughnessImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
+                metalllicRoughnessImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+                metalllicRoughnessImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            }
+
+            vmaCreateImage(*pAllocator,
+                           &metalllicRoughnessImgInfo,
+                           &gpuImgAllocInfo,
+                           &m_metallicRoughnessGpuImg.image,
+                           &m_metallicRoughnessGpuImg.imageAllocation,
+                           nullptr);
+
+            VkImageViewCreateInfo info{};
+            {
+                info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+                info.image = m_metallicRoughnessGpuImg.image;
+                info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+                info.format = VK_FORMAT_R8G8B8A8_UNORM;
+                info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                info.subresourceRange.levelCount = 1;
+                info.subresourceRange.layerCount = 1;
+            }
+            VK_CHECK(vkCreateImageView(device, &info, nullptr, &m_metallicRoughnessGpuImg.imageView));
+
+            VK_CHECK(vkCreateSampler(device, &samplerInfo, nullptr, &m_metallicRoughnessGpuImg.imageSampler));
+
+            m_metallicRoughnessGpuImg.imageDescInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            m_metallicRoughnessGpuImg.imageDescInfo.imageView = m_metallicRoughnessGpuImg.imageView;
+            m_metallicRoughnessGpuImg.imageDescInfo.sampler = m_metallicRoughnessGpuImg.imageSampler;
+        }
+
+        // Occlusion image
+        {
+            VkExtent3D extent{};
+            {
+                extent.width = m_occlusionTex.pixWidth;
+                extent.height = m_occlusionTex.pixHeight;
+                extent.depth = 1;
+            }
+
+            VkImageCreateInfo occlusionImgInfo{};
+            {
+                occlusionImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+                occlusionImgInfo.imageType = VK_IMAGE_TYPE_2D;
+                occlusionImgInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+                occlusionImgInfo.extent = extent;
+                occlusionImgInfo.mipLevels = 1;
+                occlusionImgInfo.arrayLayers = 1;
+                occlusionImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+                occlusionImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
+                occlusionImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+                occlusionImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            }
+
+            vmaCreateImage(*pAllocator,
+                           &occlusionImgInfo,
+                           &gpuImgAllocInfo,
+                           &m_occlusionGpuImg.image,
+                           &m_occlusionGpuImg.imageAllocation,
+                           nullptr);
+
+            VkImageViewCreateInfo info{};
+            {
+                info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+                info.image = m_occlusionGpuImg.image;
+                info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+                info.format = VK_FORMAT_R8G8B8A8_UNORM;
+                info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                info.subresourceRange.levelCount = 1;
+                info.subresourceRange.layerCount = 1;
+            }
+            VK_CHECK(vkCreateImageView(device, &info, nullptr, &m_occlusionGpuImg.imageView));
+
+            VK_CHECK(vkCreateSampler(device, &samplerInfo, nullptr, &m_occlusionGpuImg.imageSampler));
+
+            m_occlusionGpuImg.imageDescInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            m_occlusionGpuImg.imageDescInfo.imageView = m_occlusionGpuImg.imageView;
+            m_occlusionGpuImg.imageDescInfo.sampler = m_occlusionGpuImg.imageSampler;
+        }
+
+        // Emissive image
+        {
+            VkExtent3D extent{};
+            {
+                extent.width = m_emissiveTex.pixWidth;
+                extent.height = m_emissiveTex.pixHeight;
+                extent.depth = 1;
+            }
+
+            VkImageCreateInfo emissiveImgInfo{};
+            {
+                emissiveImgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+                emissiveImgInfo.imageType = VK_IMAGE_TYPE_2D;
+                emissiveImgInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+                emissiveImgInfo.extent = extent;
+                emissiveImgInfo.mipLevels = 1;
+                emissiveImgInfo.arrayLayers = 1;
+                emissiveImgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+                emissiveImgInfo.tiling = VK_IMAGE_TILING_LINEAR;
+                emissiveImgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+                emissiveImgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            }
+
+            vmaCreateImage(*pAllocator,
+                           &emissiveImgInfo,
+                           &gpuImgAllocInfo,
+                           &m_emissiveGpuImg.image,
+                           &m_emissiveGpuImg.imageAllocation,
+                           nullptr);
+
+            VkImageViewCreateInfo info{};
+            {
+                info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+                info.image = m_emissiveGpuImg.image;
+                info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+                info.format = VK_FORMAT_R8G8B8A8_SRGB;
+                info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                info.subresourceRange.levelCount = 1;
+                info.subresourceRange.layerCount = 1;
+            }
+            VK_CHECK(vkCreateImageView(device, &info, nullptr, &m_emissiveGpuImg.imageView));
+
+            VK_CHECK(vkCreateSampler(device, &samplerInfo, nullptr, &m_emissiveGpuImg.imageSampler));
+
+            m_emissiveGpuImg.imageDescInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            m_emissiveGpuImg.imageDescInfo.imageView = m_emissiveGpuImg.imageView;
+            m_emissiveGpuImg.imageDescInfo.sampler = m_emissiveGpuImg.imageSampler;
+        }
     }
 
     // ================================================================================================================
