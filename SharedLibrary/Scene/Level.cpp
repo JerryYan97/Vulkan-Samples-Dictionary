@@ -62,24 +62,25 @@ namespace SharedLib
         uint32_t vertCount = m_posData.size() / 3;
 
         // Create vertex buffer and send to GPU memory
-        // pos<3>, normal<3>, tangent<3>, uv<2>.
-        m_vertData.resize(vertCount * 11);
+        // pos<3>, normal<3>, tangent<4>, uv<2>.
+        m_vertData.resize(vertCount * 12);
         for (uint32_t i = 0; i < vertCount; i++)
         {
-            m_vertData[i * 11 + 0] = m_posData[i * 3 + 0];
-            m_vertData[i * 11 + 1] = m_posData[i * 3 + 1];
-            m_vertData[i * 11 + 2] = m_posData[i * 3 + 2];
+            m_vertData[i * 12 + 0] = m_posData[i * 3 + 0];
+            m_vertData[i * 12 + 1] = m_posData[i * 3 + 1];
+            m_vertData[i * 12 + 2] = m_posData[i * 3 + 2];
 
-            m_vertData[i * 11 + 3] = m_normalData[i * 3 + 0];
-            m_vertData[i * 11 + 4] = m_normalData[i * 3 + 1];
-            m_vertData[i * 11 + 5] = m_normalData[i * 3 + 2];
+            m_vertData[i * 12 + 3] = m_normalData[i * 3 + 0];
+            m_vertData[i * 12 + 4] = m_normalData[i * 3 + 1];
+            m_vertData[i * 12 + 5] = m_normalData[i * 3 + 2];
 
-            m_vertData[i * 11 + 6] = m_tangentData[i * 3 + 0];
-            m_vertData[i * 11 + 7] = m_tangentData[i * 3 + 1];
-            m_vertData[i * 11 + 8] = m_tangentData[i * 3 + 2];
+            m_vertData[i * 12 + 6] = m_tangentData[i * 4 + 0];
+            m_vertData[i * 12 + 7] = m_tangentData[i * 4 + 1];
+            m_vertData[i * 12 + 8] = m_tangentData[i * 4 + 2];
+            m_vertData[i * 12 + 9] = m_tangentData[i * 4 + 3];
 
-            m_vertData[i * 11 + 9] = m_texCoordData[i * 2 + 0];
-            m_vertData[i * 11 + 10] = m_texCoordData[i * 2 + 1];
+            m_vertData[i * 12 + 10] = m_texCoordData[i * 2 + 0];
+            m_vertData[i * 12 + 11] = m_texCoordData[i * 2 + 1];
         }
 
         // Init the GpuBuffer for the vert buffer.
@@ -356,7 +357,8 @@ namespace SharedLib
             m_occlusionGpuImg.imageDescInfo.sampler = m_occlusionGpuImg.imageSampler;
         }
 
-        // Emissive image
+        // Emissive image -- Currently we don't support emissive texture.
+        /*
         {
             VkExtent3D extent{};
             {
@@ -404,6 +406,7 @@ namespace SharedLib
             m_emissiveGpuImg.imageDescInfo.imageView = m_emissiveGpuImg.imageView;
             m_emissiveGpuImg.imageDescInfo.sampler = m_emissiveGpuImg.imageSampler;
         }
+        */
     }
 
     // ================================================================================================================

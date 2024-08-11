@@ -19,7 +19,10 @@ namespace SharedLib
     void AssetsLoaderManager::InitEntitesGpuRsrc(VkDevice      device,
                                                  VmaAllocator* pAllocator)
     {
-
+        for(auto entity : m_entities)
+        {
+            entity->InitGpuRsrc(device, pAllocator);
+        }
     }
 
     // ================================================================================================================
@@ -174,6 +177,26 @@ namespace SharedLib
                     {
                         assert(false, "The loaded mesh doesn't have uv data.");
                         meshPrimitive.m_texCoordData = std::vector<float>(posAccessor.count * 2, 0.f);
+                    }
+
+                    // Load tangent
+                    int tangentIdx = -1;
+                    if (mesh.primitives[i].attributes.count("TANGENT"))
+                    {
+                        tangentIdx = mesh.primitives[i].attributes.at("TANGENT");
+                        const auto& tangentAccessor = model.accessors[tangentIdx];
+
+                        assert(tangentAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT, "The tangent accessor data type should be float.");
+                        assert(tangentAccessor.type == TINYGLTF_TYPE_VEC4, "The tangent accessor type should be vec4.");
+                        assert(tangentAccessor.count == posAccessor.count, "The tangent data count should be the same as the pos data count.");
+
+                        meshPrimitive.m_tangentData.resize(4 * tangentAccessor.count);
+                        SharedLib::ReadOutAccessorData(meshPrimitive.m_tangentData.data(), tangentAccessor, model.bufferViews, model.buffers);
+                    }
+                    else
+                    {
+                        // assert(false, "The loaded mesh doesn't have tangent data.");
+                        meshPrimitive.m_tangentData = std::vector<float>(posAccessor.count * 4, 0.f);
                     }
 
                     // Load the base color texture or create a default pure color texture.

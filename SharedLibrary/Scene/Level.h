@@ -12,6 +12,7 @@ namespace SharedLib
         Entity() {}
         ~Entity() {}
 
+        virtual void InitGpuRsrc(VkDevice device, VmaAllocator* pAllocator) {}
         virtual void Finialize() = 0;
 
         float m_position[3];
@@ -65,7 +66,7 @@ namespace SharedLib
 
         void Finialize() override {}
 
-        virtual void InitGpuRsrc(VkDevice device, VmaAllocator* pAllocator);
+        virtual void InitGpuRsrc(VkDevice device, VmaAllocator* pAllocator) override;
         virtual void FinializeGpuRsrc(VkDevice device, VmaAllocator* pAllocator);
 
         std::vector<MeshPrimitive> m_meshPrimitives;
