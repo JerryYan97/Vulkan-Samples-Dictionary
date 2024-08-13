@@ -1248,12 +1248,11 @@ void SSAOApp::AppInit()
     m_pGltfLoaderManager->Load(sceneLoadPathAbs, *m_pLevel);
     m_pGltfLoaderManager->InitEntitesGpuRsrc(m_device, m_pAllocator);
 
-    /*
     InitGeoPassShaderModules();
     InitGeoPassPipelineDescriptorSetLayout();
     InitGeoPassPipelineLayout();
     InitGeoPassPipeline();
-    */
+    
 
     /*
     InitDeferredLightingPassShaderModules();
@@ -1264,5 +1263,5 @@ void SSAOApp::AppInit()
     */
 
     InitSwapchainSyncObjects();
-    InitGammaCorrectionPipelineAndRsrc();
+    // InitGammaCorrectionPipelineAndRsrc();
 }

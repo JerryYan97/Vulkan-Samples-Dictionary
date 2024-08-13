@@ -7,7 +7,6 @@ struct VSOutput
     float4 Normal : NORMAL0;
     float4 Tangent : TANGENT0;
     float2 UV : TEXCOORD0;
-    nointerpolation uint meshIdx : BLENDINDICES0;
 };
 
 struct VSInput
@@ -24,14 +23,7 @@ struct VertUBO
     float4x4 vpMat;
 };
 
-struct PushConstantBuffer
-{
-    uint meshIdx;
-};
-
 [[vk::binding(0, 0)]] cbuffer UBO0 { VertUBO i_vertUbo; };
-
-[[vk::push_constant]] PushConstantBuffer i_pushConstantBuffer;
 
 VSOutput main(
     VSInput i_vertInput)
@@ -43,7 +35,6 @@ VSOutput main(
     output.Pos = mul(i_vertUbo.vpMat, output.WorldPos);
     output.Tangent = mul(i_vertUbo.modelMat, float4(i_vertInput.vTangent.xyz, 0.0));
     output.UV = i_vertInput.vUv;
-    output.meshIdx = i_pushConstantBuffer.meshIdx;
 
     return output;
 }
