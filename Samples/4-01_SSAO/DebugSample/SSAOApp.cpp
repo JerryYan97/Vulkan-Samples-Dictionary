@@ -453,35 +453,35 @@ void SSAOApp::InitGeoPassPipelineDescriptorSetLayout()
     }
     bindings.push_back(cameraUboBinding);
 
-    // Binding for the spheres' offsets
-    VkDescriptorSetLayoutBinding offsetsSSBOBinding{};
+    // Binding for the base color texture
+    VkDescriptorSetLayoutBinding baseColorTextureBinding{};
     {
-        offsetsSSBOBinding.binding = 1;
-        offsetsSSBOBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-        offsetsSSBOBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        offsetsSSBOBinding.descriptorCount = 1;
+        baseColorTextureBinding.binding = 1;
+        baseColorTextureBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        baseColorTextureBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        baseColorTextureBinding.descriptorCount = 1;
     }
-    bindings.push_back(offsetsSSBOBinding);
+    bindings.push_back(baseColorTextureBinding);
 
-    // Binding for the spheres' albedos
-    VkDescriptorSetLayoutBinding albedoSSBOBinding{};
+    // Binding for the normal texture
+    VkDescriptorSetLayoutBinding normalTextureBinding{};
     {
-        albedoSSBOBinding.binding = 2;
-        albedoSSBOBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        albedoSSBOBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        albedoSSBOBinding.descriptorCount = 1;
+        normalTextureBinding.binding = 2;
+        normalTextureBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        normalTextureBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        normalTextureBinding.descriptorCount = 1;
     }
-    bindings.push_back(albedoSSBOBinding);
+    bindings.push_back(normalTextureBinding);
 
-    // Binding for the spheres' metallic roughness material parameters
-    VkDescriptorSetLayoutBinding metallicRoughnessSSBOBinding{};
+    // Binding for the roughness metallic texture
+    VkDescriptorSetLayoutBinding roughnessMetallicTextureBinding{};
     {
-        metallicRoughnessSSBOBinding.binding = 3;
-        metallicRoughnessSSBOBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        metallicRoughnessSSBOBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        metallicRoughnessSSBOBinding.descriptorCount = 1;
+        roughnessMetallicTextureBinding.binding = 3;
+        roughnessMetallicTextureBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        roughnessMetallicTextureBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        roughnessMetallicTextureBinding.descriptorCount = 1;
     }
-    bindings.push_back(metallicRoughnessSSBOBinding);
+    bindings.push_back(roughnessMetallicTextureBinding);
 
     // Create pipeline's descriptors layout
     // The Vulkan spec states: The VkDescriptorSetLayoutBinding::binding members of the elements of the pBindings array 
@@ -696,28 +696,24 @@ std::vector<float> SSAOApp::GetDeferredLightingPushConstantData()
 void SSAOApp::InitGBuffer()
 {
     // It looks like AMD doesn't support the R32G32B32_SFLOAT image format.
-    const VkFormat PosNormalAlbedoImgFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
-    const VkFormat MetallicRoughnessImgFormat = VK_FORMAT_R32G32_SFLOAT;
+    const VkFormat GBuffersImgFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
 
-    VkImageCreateInfo posNormalAlbedoImageInfo{};
+    VkImageCreateInfo gbufferImageInfo{};
     {
-        posNormalAlbedoImageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-        posNormalAlbedoImageInfo.imageType = VK_IMAGE_TYPE_2D;
-        posNormalAlbedoImageInfo.format = PosNormalAlbedoImgFormat;
-        posNormalAlbedoImageInfo.extent.width = m_swapchainImageExtent.width;
-        posNormalAlbedoImageInfo.extent.height = m_swapchainImageExtent.height;
-        posNormalAlbedoImageInfo.extent.depth = 1;
-        posNormalAlbedoImageInfo.mipLevels = 1;
-        posNormalAlbedoImageInfo.arrayLayers = 1;
-        posNormalAlbedoImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-        posNormalAlbedoImageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        posNormalAlbedoImageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-        posNormalAlbedoImageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        posNormalAlbedoImageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+        gbufferImageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        gbufferImageInfo.imageType = VK_IMAGE_TYPE_2D;
+        gbufferImageInfo.format = GBuffersImgFormat;
+        gbufferImageInfo.extent.width = m_swapchainImageExtent.width;
+        gbufferImageInfo.extent.height = m_swapchainImageExtent.height;
+        gbufferImageInfo.extent.depth = 1;
+        gbufferImageInfo.mipLevels = 1;
+        gbufferImageInfo.arrayLayers = 1;
+        gbufferImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+        gbufferImageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        gbufferImageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+        gbufferImageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        gbufferImageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     }
-
-    VkImageCreateInfo metallicRoughnessImageInfo = posNormalAlbedoImageInfo;
-    metallicRoughnessImageInfo.format = MetallicRoughnessImgFormat;
 
     VmaAllocationCreateInfo gBufferImgAllocInfo{};
     {
@@ -734,21 +730,18 @@ void SSAOApp::InitGBuffer()
         oneMipOneLayerSubRsrcRange.layerCount = 1;
     }
 
-    VkImageViewCreateInfo posNormalAlbedoImageViewInfo{};
+    VkImageViewCreateInfo gbufferImageViewInfo{};
     {
-        posNormalAlbedoImageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        gbufferImageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         // posNormalAlbedoImageViewInfo.image = colorImage;
-        posNormalAlbedoImageViewInfo.format = PosNormalAlbedoImgFormat;
-        posNormalAlbedoImageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        posNormalAlbedoImageViewInfo.components.r = VK_COMPONENT_SWIZZLE_R;
-        posNormalAlbedoImageViewInfo.components.g = VK_COMPONENT_SWIZZLE_G;
-        posNormalAlbedoImageViewInfo.components.b = VK_COMPONENT_SWIZZLE_B;
-        posNormalAlbedoImageViewInfo.components.a = VK_COMPONENT_SWIZZLE_A;
-        posNormalAlbedoImageViewInfo.subresourceRange = oneMipOneLayerSubRsrcRange;
+        gbufferImageViewInfo.format = GBuffersImgFormat;
+        gbufferImageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        gbufferImageViewInfo.components.r = VK_COMPONENT_SWIZZLE_R;
+        gbufferImageViewInfo.components.g = VK_COMPONENT_SWIZZLE_G;
+        gbufferImageViewInfo.components.b = VK_COMPONENT_SWIZZLE_B;
+        gbufferImageViewInfo.components.a = VK_COMPONENT_SWIZZLE_A;
+        gbufferImageViewInfo.subresourceRange = oneMipOneLayerSubRsrcRange;
     }
-
-    VkImageViewCreateInfo metallicRoughnessImageViewInfo = posNormalAlbedoImageViewInfo;
-    metallicRoughnessImageViewInfo.format = MetallicRoughnessImgFormat;
 
     VkSamplerCreateInfo samplerInfo{};
     {
@@ -764,58 +757,58 @@ void SSAOApp::InitGBuffer()
         samplerInfo.maxAnisotropy = 1.0f;
     }
 
-    m_gBufferFormats.push_back(PosNormalAlbedoImgFormat);
-    m_gBufferFormats.push_back(PosNormalAlbedoImgFormat);
-    m_gBufferFormats.push_back(PosNormalAlbedoImgFormat);
-    m_gBufferFormats.push_back(MetallicRoughnessImgFormat);
+    m_gBufferFormats.push_back(GBuffersImgFormat);
+    m_gBufferFormats.push_back(GBuffersImgFormat);
+    m_gBufferFormats.push_back(GBuffersImgFormat);
+    m_gBufferFormats.push_back(GBuffersImgFormat);
 
     m_worldPosTextures.resize(m_swapchainImgCnt);
     m_normalTextures.resize(m_swapchainImgCnt);
     m_albedoTextures.resize(m_swapchainImgCnt);
-    m_metallicRoughnessTextures.resize(m_swapchainImgCnt);
+    m_roughnessMetallicOcclusionTextures.resize(m_swapchainImgCnt);
 
     for (uint32_t i = 0; i < m_swapchainImgCnt; i++)
     {
         vmaCreateImage(*m_pAllocator,
-                       &posNormalAlbedoImageInfo,
+                       &gbufferImageInfo,
                        &gBufferImgAllocInfo,
                        &m_worldPosTextures[i].image,
                        &m_worldPosTextures[i].imageAllocation, nullptr);
 
         vmaCreateImage(*m_pAllocator,
-                       &posNormalAlbedoImageInfo,
+                       &gbufferImageInfo,
                        &gBufferImgAllocInfo,
                        &m_normalTextures[i].image,
                        &m_normalTextures[i].imageAllocation, nullptr);
 
         vmaCreateImage(*m_pAllocator,
-                       &posNormalAlbedoImageInfo,
+                       &gbufferImageInfo,
                        &gBufferImgAllocInfo,
                        &m_albedoTextures[i].image,
                        &m_albedoTextures[i].imageAllocation, nullptr);
 
         vmaCreateImage(*m_pAllocator,
-                       &metallicRoughnessImageInfo,
+                       &gbufferImageInfo,
                        &gBufferImgAllocInfo,
-                       &m_metallicRoughnessTextures[i].image,
-                       &m_metallicRoughnessTextures[i].imageAllocation, nullptr);
+                       &m_roughnessMetallicOcclusionTextures[i].image,
+                       &m_roughnessMetallicOcclusionTextures[i].imageAllocation, nullptr);
         
-        posNormalAlbedoImageViewInfo.image = m_worldPosTextures[i].image;
-        VK_CHECK(vkCreateImageView(m_device, &posNormalAlbedoImageViewInfo, nullptr, &m_worldPosTextures[i].imageView));
+        gbufferImageViewInfo.image = m_worldPosTextures[i].image;
+        VK_CHECK(vkCreateImageView(m_device, &gbufferImageViewInfo, nullptr, &m_worldPosTextures[i].imageView));
 
-        posNormalAlbedoImageViewInfo.image = m_normalTextures[i].image;
-        VK_CHECK(vkCreateImageView(m_device, &posNormalAlbedoImageViewInfo, nullptr, &m_normalTextures[i].imageView));
+        gbufferImageViewInfo.image = m_normalTextures[i].image;
+        VK_CHECK(vkCreateImageView(m_device, &gbufferImageViewInfo, nullptr, &m_normalTextures[i].imageView));
 
-        posNormalAlbedoImageViewInfo.image = m_albedoTextures[i].image;
-        VK_CHECK(vkCreateImageView(m_device, &posNormalAlbedoImageViewInfo, nullptr, &m_albedoTextures[i].imageView));
+        gbufferImageViewInfo.image = m_albedoTextures[i].image;
+        VK_CHECK(vkCreateImageView(m_device, &gbufferImageViewInfo, nullptr, &m_albedoTextures[i].imageView));
 
-        metallicRoughnessImageViewInfo.image = m_metallicRoughnessTextures[i].image;
-        VK_CHECK(vkCreateImageView(m_device, &metallicRoughnessImageViewInfo, nullptr, &m_metallicRoughnessTextures[i].imageView));
+        gbufferImageViewInfo.image = m_roughnessMetallicOcclusionTextures[i].image;
+        VK_CHECK(vkCreateImageView(m_device, &gbufferImageViewInfo, nullptr, &m_roughnessMetallicOcclusionTextures[i].imageView));
 
         VK_CHECK(vkCreateSampler(m_device, &samplerInfo, nullptr, &m_worldPosTextures[i].imageSampler));
         VK_CHECK(vkCreateSampler(m_device, &samplerInfo, nullptr, &m_normalTextures[i].imageSampler));
         VK_CHECK(vkCreateSampler(m_device, &samplerInfo, nullptr, &m_albedoTextures[i].imageSampler));
-        VK_CHECK(vkCreateSampler(m_device, &samplerInfo, nullptr, &m_metallicRoughnessTextures[i].imageSampler));
+        VK_CHECK(vkCreateSampler(m_device, &samplerInfo, nullptr, &m_roughnessMetallicOcclusionTextures[i].imageSampler));
 
         m_worldPosTextures[i].imageDescInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         m_worldPosTextures[i].imageDescInfo.imageView = m_worldPosTextures[i].imageView;
@@ -829,9 +822,9 @@ void SSAOApp::InitGBuffer()
         m_albedoTextures[i].imageDescInfo.imageView = m_albedoTextures[i].imageView;
         m_albedoTextures[i].imageDescInfo.sampler = m_albedoTextures[i].imageSampler;
 
-        m_metallicRoughnessTextures[i].imageDescInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        m_metallicRoughnessTextures[i].imageDescInfo.imageView = m_metallicRoughnessTextures[i].imageView;
-        m_metallicRoughnessTextures[i].imageDescInfo.sampler = m_metallicRoughnessTextures[i].imageSampler;
+        m_roughnessMetallicOcclusionTextures[i].imageDescInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        m_roughnessMetallicOcclusionTextures[i].imageDescInfo.imageView = m_roughnessMetallicOcclusionTextures[i].imageView;
+        m_roughnessMetallicOcclusionTextures[i].imageDescInfo.sampler = m_roughnessMetallicOcclusionTextures[i].imageSampler;
     }
 }
 
@@ -843,17 +836,17 @@ void SSAOApp::DestroyGBuffer()
         vmaDestroyImage(*m_pAllocator, m_worldPosTextures[i].image, m_worldPosTextures[i].imageAllocation);
         vmaDestroyImage(*m_pAllocator, m_normalTextures[i].image, m_normalTextures[i].imageAllocation);
         vmaDestroyImage(*m_pAllocator, m_albedoTextures[i].image, m_albedoTextures[i].imageAllocation);
-        vmaDestroyImage(*m_pAllocator, m_metallicRoughnessTextures[i].image, m_metallicRoughnessTextures[i].imageAllocation);
+        vmaDestroyImage(*m_pAllocator, m_roughnessMetallicOcclusionTextures[i].image, m_roughnessMetallicOcclusionTextures[i].imageAllocation);
 
         vkDestroyImageView(m_device, m_worldPosTextures[i].imageView, nullptr);
         vkDestroyImageView(m_device, m_normalTextures[i].imageView, nullptr);
         vkDestroyImageView(m_device, m_albedoTextures[i].imageView, nullptr);
-        vkDestroyImageView(m_device, m_metallicRoughnessTextures[i].imageView, nullptr);
+        vkDestroyImageView(m_device, m_roughnessMetallicOcclusionTextures[i].imageView, nullptr);
 
         vkDestroySampler(m_device, m_worldPosTextures[i].imageSampler, nullptr);
         vkDestroySampler(m_device, m_normalTextures[i].imageSampler, nullptr);
         vkDestroySampler(m_device, m_albedoTextures[i].imageSampler, nullptr);
-        vkDestroySampler(m_device, m_metallicRoughnessTextures[i].imageSampler, nullptr);
+        vkDestroySampler(m_device, m_roughnessMetallicOcclusionTextures[i].imageSampler, nullptr);
     }
 }
 

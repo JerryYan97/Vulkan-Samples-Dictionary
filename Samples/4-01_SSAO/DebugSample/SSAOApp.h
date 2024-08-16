@@ -147,7 +147,7 @@ private:
     std::vector<SharedLib::GpuImg> m_worldPosTextures;
     std::vector<SharedLib::GpuImg> m_albedoTextures;
     std::vector<SharedLib::GpuImg> m_normalTextures;
-    std::vector<SharedLib::GpuImg> m_metallicRoughnessTextures;
+    std::vector<SharedLib::GpuImg> m_roughnessMetallicOcclusionTextures;
     std::vector<VkFormat> m_gBufferFormats;
 
     // Deferred lighting pass radiance textures
