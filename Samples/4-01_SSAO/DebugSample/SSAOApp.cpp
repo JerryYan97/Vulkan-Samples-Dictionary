@@ -511,13 +511,13 @@ VkPipelineVertexInputStateCreateInfo SSAOApp::CreateGeoPassPipelineVertexInputIn
     memset(pVertBindingDesc, 0, sizeof(VkVertexInputBindingDescription));
     {
         pVertBindingDesc->binding = 0;
-        pVertBindingDesc->stride = 6 * sizeof(float);
+        pVertBindingDesc->stride = 12 * sizeof(float);
         pVertBindingDesc->inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
     }
     m_heapMemPtrVec.push_back(pVertBindingDesc);
 
-    VkVertexInputAttributeDescription* pVertAttrDescs = new VkVertexInputAttributeDescription[2];
-    memset(pVertAttrDescs, 0, sizeof(VkVertexInputAttributeDescription) * 2);
+    VkVertexInputAttributeDescription* pVertAttrDescs = new VkVertexInputAttributeDescription[4];
+    memset(pVertAttrDescs, 0, sizeof(VkVertexInputAttributeDescription) * 4);
     {
         // Position
         pVertAttrDescs[0].location = 0;
@@ -529,6 +529,16 @@ VkPipelineVertexInputStateCreateInfo SSAOApp::CreateGeoPassPipelineVertexInputIn
         pVertAttrDescs[1].binding = 0;
         pVertAttrDescs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
         pVertAttrDescs[1].offset = 3 * sizeof(float);
+        // Tangent
+        pVertAttrDescs[2].location = 2;
+        pVertAttrDescs[2].binding = 0;
+        pVertAttrDescs[2].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        pVertAttrDescs[2].offset = 4 * sizeof(float);
+        // UV
+        pVertAttrDescs[3].location = 3;
+        pVertAttrDescs[3].binding = 0;
+        pVertAttrDescs[3].format = VK_FORMAT_R32G32B32_SFLOAT;
+        pVertAttrDescs[3].offset = 2 * sizeof(float);
     }
     m_heapArrayMemPtrVec.push_back(pVertAttrDescs);
 
@@ -673,6 +683,7 @@ void SSAOApp::InitGeoPassPipeline()
 }
 
 // ================================================================================================================
+/*
 std::vector<float> SSAOApp::GetDeferredLightingPushConstantData()
 {
     std::vector<float> data;
@@ -691,6 +702,7 @@ std::vector<float> SSAOApp::GetDeferredLightingPushConstantData()
 
     return data;
 }
+*/
 
 // ================================================================================================================
 void SSAOApp::InitGBuffer()
@@ -1167,14 +1179,19 @@ void SSAOApp::DestroyDeferredLightingPassRadianceTextures()
 void SSAOApp::CmdGeoPass(VkCommandBuffer cmdBuffer)
 {
     // Loop through all the meshes in the scene and render them to G-Buffer.
-    
+    for (uint32_t i = 0; i < m_pLevel->m_meshEntities.size(); i++)
+    {
+    }
 }
 
 // ================================================================================================================
 void SSAOApp::CmdSSAOAppMultiTypeRendering(VkCommandBuffer cmdBuffer)
 {
     // Only direct light and ambient light.
+    if (m_presentType == PresentType::DIFFUSE)
+    {
 
+    }
 }
 
 // ================================================================================================================

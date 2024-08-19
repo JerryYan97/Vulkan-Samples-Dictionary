@@ -109,7 +109,6 @@ namespace SharedLib
         bool AddMshEntity(const std::string& name, MeshEntity* entity);
         bool AddLightEntity(const std::string& name, LightEntity* entity);
 
-    private:
         std::unordered_map<std::string, MeshEntity*>  m_meshEntities;
         std::unordered_map<std::string, LightEntity*> m_lightEntities;
     };
