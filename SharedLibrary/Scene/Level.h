@@ -47,6 +47,15 @@ namespace SharedLib
         void InitGpuRsrc(VkDevice device, VmaAllocator* pAllocator);
         void FinializeGpuRsrc(VkDevice device, VmaAllocator* pAllocator);
 
+        VkBuffer* GetVertBuffer() { return &m_vertBuffer.buffer; }
+        VkBuffer  GetIndexBuffer() { return m_indexBuffer.buffer; }
+
+        VkDescriptorImageInfo* GetBaseColorImgDescInfo() { return &m_baseColorGpuImg.imageDescInfo; }
+        VkDescriptorImageInfo* GetMetallicRoughnessImgDescInfo() { return &m_metallicRoughnessGpuImg.imageDescInfo; }
+        VkDescriptorImageInfo* GetNormalImgDescInfo() { return &m_normalGpuImg.imageDescInfo; }
+        VkDescriptorImageInfo* GetOcclusionImgDescInfo() { return &m_occlusionGpuImg.imageDescInfo; }
+        VkDescriptorImageInfo* GetEmissiveImgDescInfo() { return &m_emissiveGpuImg.imageDescInfo; }
+
     protected:
         GpuBuffer m_vertBuffer;
         GpuBuffer m_indexBuffer;

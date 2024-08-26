@@ -1179,8 +1179,61 @@ void SSAOApp::DestroyDeferredLightingPassRadianceTextures()
 void SSAOApp::CmdGeoPass(VkCommandBuffer cmdBuffer)
 {
     // Loop through all the meshes in the scene and render them to G-Buffer.
-    for (uint32_t i = 0; i < m_pLevel->m_meshEntities.size(); i++)
+    VkClearValue depthClearVal{};
+    depthClearVal.depthStencil.depth = 0.f;
+    VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
+
+    VkRenderingAttachmentInfoKHR geoPassDepthAttachmentInfo{};
     {
+        geoPassDepthAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+        geoPassDepthAttachmentInfo.imageView = GetSwapchainDepthImageView();
+        geoPassDepthAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
+        geoPassDepthAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        geoPassDepthAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        geoPassDepthAttachmentInfo.clearValue = depthClearVal;
+    }
+
+    std::vector<VkRenderingAttachmentInfoKHR> gBufferAttachmentsInfos = GetGBufferAttachments();
+
+    VkRenderingInfoKHR geoPassRenderInfo{};
+    {
+        geoPassRenderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+        geoPassRenderInfo.renderArea.offset = { 0, 0 };
+        geoPassRenderInfo.renderArea.extent = GetSwapchainImageExtent();
+        geoPassRenderInfo.layerCount = 1;
+        geoPassRenderInfo.colorAttachmentCount = gBufferAttachmentsInfos.size();
+        geoPassRenderInfo.pColorAttachments = gBufferAttachmentsInfos.data();
+        geoPassRenderInfo.pDepthAttachment = &geoPassDepthAttachmentInfo;
+    }
+
+    vkCmdBeginRendering(cmdBuffer, &geoPassRenderInfo);
+
+    vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_geoPassPipeline.GetVkPipeline());
+    for (const auto& meshEntity : m_pLevel->m_meshEntities)
+    {
+        for (int i = 0; i < meshEntity.second->m_meshPrimitives.size(); i++)
+        {
+            auto& meshPrimitive = meshEntity.second->m_meshPrimitives[i];
+
+            VkDeviceSize offsets[] = { 0 };
+            vkCmdBindVertexBuffers(cmdBuffer, 0, 1, meshPrimitive.GetVertBuffer(), offsets);
+            vkCmdBindIndexBuffer(cmdBuffer, meshPrimitive.GetIndexBuffer(), 0, VK_INDEX_TYPE_UINT16);
+
+            // Bind the descriptor set for the geometry pass rendering.
+            std::vector<SharedLib::PushDescriptorInfo> pushDescriptors;
+            pushDescriptors.push_back({ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, &m_vpUboBuffers[m_acqSwapchainImgIdx].bufferDescInfo });
+            pushDescriptors.push_back({ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, meshPrimitive.GetBaseColorImgDescInfo() });
+            pushDescriptors.push_back({ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, meshPrimitive.GetNormalImgDescInfo() });
+            pushDescriptors.push_back({ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, meshPrimitive.GetMetallicRoughnessImgDescInfo() });
+            pushDescriptors.push_back({ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, meshPrimitive.GetOcclusionImgDescInfo() });
+
+            CmdAutoPushDescriptors(cmdBuffer, m_geoPassPipelineLayout, pushDescriptors);
+
+            vkCmdDrawIndexed(cmdBuffer, meshPrimitive.m_idxDataUint16.size(), 1, 0, 0, 0);
+
+            // Add a barrier to make sure the last draw finishes.
+
+        }
     }
 }
 

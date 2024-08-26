@@ -28,6 +28,7 @@ do { \
 // TODO3: GPU image format should have more information like currnet GPU image format.
 namespace SharedLib
 {
+    // The second element is either VkDescriptorType* or VkDescriptorImageInfo*.
     typedef std::pair<VkDescriptorType, void*> PushDescriptorInfo;
 
     struct GpuBuffer
