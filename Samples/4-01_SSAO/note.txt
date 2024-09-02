@@ -29,3 +29,7 @@ The Direct Light needs a shadow pass:
 I am thinking that we can use the RT feature to do the shadow pass to get rid of implementing BVH/AABB spatial accerleration structure.
 https://www.willusher.io/graphics/2019/09/06/faster-shadow-rays-on-rtx/
 Ray Trace Ambient Occlusion: https://intro-to-dxr.cwyman.org/presentations/IntroDXR_ShaderTutorial.pdf
+
+
+Some references:
+Frustrum Culling: https://learnopengl.com/Guest-Articles/2021/Scene/Frustum-Culling

@@ -255,20 +255,18 @@ void SSAOApp::CmdGBufferLayoutTrans(
         gBufferRenderTargetTransBarrierTemplate.newLayout = newLayout;
         gBufferRenderTargetTransBarrierTemplate.subresourceRange = colorOneMipOneLevelSubResRange;
     }
-
-    /*
-    gBufferRenderTargetTransBarrierTemplate.image = m_worldPosTextures[m_currentFrame].image;
+    
+    gBufferRenderTargetTransBarrierTemplate.image = m_worldPosTextures[m_acqSwapchainImgIdx].image;
     gBufferToRenderTargetBarriers.push_back(gBufferRenderTargetTransBarrierTemplate);
 
-    gBufferRenderTargetTransBarrierTemplate.image = m_normalTextures[m_currentFrame].image;
+    gBufferRenderTargetTransBarrierTemplate.image = m_normalTextures[m_acqSwapchainImgIdx].image;
     gBufferToRenderTargetBarriers.push_back(gBufferRenderTargetTransBarrierTemplate);
 
-    gBufferRenderTargetTransBarrierTemplate.image = m_albedoTextures[m_currentFrame].image;
+    gBufferRenderTargetTransBarrierTemplate.image = m_albedoTextures[m_acqSwapchainImgIdx].image;
     gBufferToRenderTargetBarriers.push_back(gBufferRenderTargetTransBarrierTemplate);
 
-    gBufferRenderTargetTransBarrierTemplate.image = m_metallicRoughnessTextures[m_currentFrame].image;
+    gBufferRenderTargetTransBarrierTemplate.image = m_roughnessMetallicOcclusionTextures[m_acqSwapchainImgIdx].image;
     gBufferToRenderTargetBarriers.push_back(gBufferRenderTargetTransBarrierTemplate);
-    */
 
     vkCmdPipelineBarrier(
         cmdBuffer,
@@ -1209,10 +1207,25 @@ void SSAOApp::CmdGeoPass(VkCommandBuffer cmdBuffer)
     vkCmdBeginRendering(cmdBuffer, &geoPassRenderInfo);
 
     vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_geoPassPipeline.GetVkPipeline());
+
+    int meshEntityCnt = 0;
     for (const auto& meshEntity : m_pLevel->m_meshEntities)
     {
         for (int i = 0; i < meshEntity.second->m_meshPrimitives.size(); i++)
         {
+            // NOTE: It's also possible that we don't need a barrier here, because each draw doesn't have dependency.
+            // Add a barrier to wait for previous geometry draw to finish.
+            if ((meshEntityCnt != 0) && (i != 0))
+            {
+                vkCmdPipelineBarrier(cmdBuffer,
+                                     VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                     VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                     0,
+                                     0, nullptr,
+                                     0, nullptr,
+                                     0, nullptr);
+            }
+
             auto& meshPrimitive = meshEntity.second->m_meshPrimitives[i];
 
             VkDeviceSize offsets[] = { 0 };
@@ -1230,12 +1243,54 @@ void SSAOApp::CmdGeoPass(VkCommandBuffer cmdBuffer)
             CmdAutoPushDescriptors(cmdBuffer, m_geoPassPipelineLayout, pushDescriptors);
 
             vkCmdDrawIndexed(cmdBuffer, meshPrimitive.m_idxDataUint16.size(), 1, 0, 0, 0);
-
-            // Add a barrier to make sure the last draw finishes.
-
         }
+        meshEntityCnt++;
     }
 }
+
+// ================================================================================================================
+/*
+void SSAOApp::CmdTransferGBuffersToShaderRsrc(VkCommandBuffer cmdBuffer)
+{
+
+    // Add a barrier to wait for previous geometry pass to finish and transition the geometry render targets to SSAO multi type pass
+    // rendering inputs.
+    // Transform the layout of the swapchain from undefined to render target.
+    VkImageMemoryBarrier swapchainRenderTargetTransBarrier{};
+    {
+        swapchainRenderTargetTransBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        swapchainRenderTargetTransBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        swapchainRenderTargetTransBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        swapchainRenderTargetTransBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        swapchainRenderTargetTransBarrier.image = app.GetSwapchainColorImage();
+        swapchainRenderTargetTransBarrier.subresourceRange = swapchainPresentSubResRange;
+    }
+
+    // NOTE: This barrier is only needed at the beginning of the swapchain creation.
+    VkImageMemoryBarrier swapchainDepthTargetTransBarrier{};
+    {
+        swapchainDepthTargetTransBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        swapchainDepthTargetTransBarrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        swapchainDepthTargetTransBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        swapchainDepthTargetTransBarrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+        swapchainDepthTargetTransBarrier.image = app.GetSwapchainDepthImage();
+        swapchainDepthTargetTransBarrier.subresourceRange = swapchainDepthSubResRange;
+    }
+
+    VkImageMemoryBarrier swapchainImgTrans[2] = {
+        swapchainRenderTargetTransBarrier, swapchainDepthTargetTransBarrier
+    };
+
+    vkCmdPipelineBarrier(currentCmdBuffer,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        0,
+        0, nullptr,
+        0, nullptr,
+        2, swapchainImgTrans);
+
+}
+*/
 
 // ================================================================================================================
 void SSAOApp::CmdSSAOAppMultiTypeRendering(VkCommandBuffer cmdBuffer)
@@ -1324,7 +1379,6 @@ void SSAOApp::AppInit()
     InitDeferredLightingPassPipeline();
     InitDeferredLightingPassRadianceTextures();
     */
-
     InitSwapchainSyncObjects();
     // InitGammaCorrectionPipelineAndRsrc();
 }

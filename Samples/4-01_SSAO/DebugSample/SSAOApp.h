@@ -73,6 +73,7 @@ public:
     void ImGuiFrame() override;
 
     void CmdGeoPass(VkCommandBuffer cmdBuffer);
+    // void CmdTransferGBuffersToShaderRsrc(VkCommandBuffer cmdBuffer); -- NOTE: I can use the TransferGBuffer func.
     void CmdSSAOAppMultiTypeRendering(VkCommandBuffer cmdBuffer);
 
 private:
@@ -86,6 +87,13 @@ private:
     
     void InitVpUboObjects();
     void DestroyVpUboObjects();
+
+    // void CreateGBufferTransBarriers(); NOTE: We cannot use this because GBuffer sizes can be different for each frame.
+
+    void InitAlbedoRenderingPipeline();
+    void InitAlbedoRenderingPipelineDescriptorSetLayout();
+    void InitAlbedoRenderingPipelineLayout();
+    void InitAlbedoRenderingShaderModules();
 
     /*
     void InitDeferredLightingPassPipeline();
@@ -132,6 +140,13 @@ private:
     VkDescriptorSetLayout m_geoPassPipelineDesSetLayout;
     VkPipelineLayout      m_geoPassPipelineLayout;
     SharedLib::Pipeline   m_geoPassPipeline;
+
+    // Albedo rendering pipeline resources
+    VkShaderModule        m_albedoRenderingVsShaderModule;
+    VkShaderModule        m_albedoRenderingPsShaderModule;
+    VkDescriptorSetLayout m_albedoRenderingPipelineDesSetLayout;
+    VkPipelineLayout      m_albedoRenderingPipelineLayout;
+    SharedLib::Pipeline   m_albedoRenderingPipeline;
 
     // Deferred lighting pipeline resources
     /*
