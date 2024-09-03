@@ -141,8 +141,10 @@ private:
     VkPipelineLayout      m_geoPassPipelineLayout;
     SharedLib::Pipeline   m_geoPassPipeline;
 
+    // The Screen Quad VS is shared between different rendering pipelines.
+    VkShaderModule        m_screenQuadVsShaderModule;
+
     // Albedo rendering pipeline resources
-    VkShaderModule        m_albedoRenderingVsShaderModule;
     VkShaderModule        m_albedoRenderingPsShaderModule;
     VkDescriptorSetLayout m_albedoRenderingPipelineDesSetLayout;
     VkPipelineLayout      m_albedoRenderingPipelineLayout;

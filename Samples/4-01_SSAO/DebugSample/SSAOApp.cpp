@@ -1249,50 +1249,6 @@ void SSAOApp::CmdGeoPass(VkCommandBuffer cmdBuffer)
 }
 
 // ================================================================================================================
-/*
-void SSAOApp::CmdTransferGBuffersToShaderRsrc(VkCommandBuffer cmdBuffer)
-{
-
-    // Add a barrier to wait for previous geometry pass to finish and transition the geometry render targets to SSAO multi type pass
-    // rendering inputs.
-    // Transform the layout of the swapchain from undefined to render target.
-    VkImageMemoryBarrier swapchainRenderTargetTransBarrier{};
-    {
-        swapchainRenderTargetTransBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        swapchainRenderTargetTransBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        swapchainRenderTargetTransBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        swapchainRenderTargetTransBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        swapchainRenderTargetTransBarrier.image = app.GetSwapchainColorImage();
-        swapchainRenderTargetTransBarrier.subresourceRange = swapchainPresentSubResRange;
-    }
-
-    // NOTE: This barrier is only needed at the beginning of the swapchain creation.
-    VkImageMemoryBarrier swapchainDepthTargetTransBarrier{};
-    {
-        swapchainDepthTargetTransBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        swapchainDepthTargetTransBarrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        swapchainDepthTargetTransBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        swapchainDepthTargetTransBarrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-        swapchainDepthTargetTransBarrier.image = app.GetSwapchainDepthImage();
-        swapchainDepthTargetTransBarrier.subresourceRange = swapchainDepthSubResRange;
-    }
-
-    VkImageMemoryBarrier swapchainImgTrans[2] = {
-        swapchainRenderTargetTransBarrier, swapchainDepthTargetTransBarrier
-    };
-
-    vkCmdPipelineBarrier(currentCmdBuffer,
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-        0,
-        0, nullptr,
-        0, nullptr,
-        2, swapchainImgTrans);
-
-}
-*/
-
-// ================================================================================================================
 void SSAOApp::CmdSSAOAppMultiTypeRendering(VkCommandBuffer cmdBuffer)
 {
     // Only direct light and ambient light.
@@ -1304,6 +1260,28 @@ void SSAOApp::CmdSSAOAppMultiTypeRendering(VkCommandBuffer cmdBuffer)
 
 // ================================================================================================================
 void SSAOApp::ImGuiFrame()
+{
+
+}
+
+// ================================================================================================================
+void SSAOApp::InitAlbedoRenderingShaderModules()
+{
+    m_albedoRenderingPsShaderModule = CreateShaderModule("/hlsl/albedo_frag.spv");
+}
+
+// ================================================================================================================
+void SSAOApp::InitAlbedoRenderingPipelineLayout()
+{}
+
+// ================================================================================================================
+void SSAOApp::InitAlbedoRenderingPipelineDescriptorSetLayout()
+{
+
+}
+
+// ================================================================================================================
+void SSAOApp::InitAlbedoRenderingPipeline()
 {
 
 }
@@ -1371,6 +1349,11 @@ void SSAOApp::AppInit()
     InitGeoPassPipelineLayout();
     InitGeoPassPipeline();
     
+    // Pipeline for the Albedo rendering.
+    InitAlbedoRenderingShaderModules();
+    InitAlbedoRenderingPipelineDescriptorSetLayout();
+    InitAlbedoRenderingPipelineLayout();
+    InitAlbedoRenderingPipeline();
 
     /*
     InitDeferredLightingPassShaderModules();

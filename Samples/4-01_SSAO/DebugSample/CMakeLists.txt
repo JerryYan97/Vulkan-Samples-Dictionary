@@ -49,10 +49,10 @@ set_property(SOURCE DUMMY_FILE
 add_custom_command(
         OUTPUT
             DUMMY_FILE
-        # COMMAND python
-        #     ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/ambient_lighting_vert.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
-        # COMMAND python
-        #     ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/ambient_lighting_frag.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
+        COMMAND python
+            ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/screen_quad_vert.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
+        COMMAND python
+            ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/ambient_lighting_frag.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
         COMMAND python
             ${SHARED_LIB_HLSL_DIR}/HLSLCompile.py ARGS --src ${CMAKE_CURRENT_SOURCE_DIR}/hlsl/geo_vert.hlsl --dstDir ${CMAKE_CURRENT_SOURCE_DIR}/hlsl
         COMMAND python
