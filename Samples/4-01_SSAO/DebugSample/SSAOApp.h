@@ -90,6 +90,8 @@ private:
 
     // void CreateGBufferTransBarriers(); NOTE: We cannot use this because GBuffer sizes can be different for each frame.
 
+    void InitScreenQuadVsShaderModule();
+
     void InitAlbedoRenderingPipeline();
     void InitAlbedoRenderingPipelineDescriptorSetLayout();
     void InitAlbedoRenderingPipelineLayout();

@@ -1265,6 +1265,12 @@ void SSAOApp::ImGuiFrame()
 }
 
 // ================================================================================================================
+void SSAOApp::InitScreenQuadVsShaderModule()
+{
+    m_screenQuadVsShaderModule = CreateShaderModule("/hlsl/screen_quad_vert.spv");
+}
+
+// ================================================================================================================
 void SSAOApp::InitAlbedoRenderingShaderModules()
 {
     m_albedoRenderingPsShaderModule = CreateShaderModule("/hlsl/albedo_frag.spv");
@@ -1272,12 +1278,48 @@ void SSAOApp::InitAlbedoRenderingShaderModules()
 
 // ================================================================================================================
 void SSAOApp::InitAlbedoRenderingPipelineLayout()
-{}
+{
+    // Create pipeline layout
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+    {
+        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        pipelineLayoutInfo.setLayoutCount = 1;
+        pipelineLayoutInfo.pSetLayouts = &m_albedoRenderingPipelineDesSetLayout;
+        pipelineLayoutInfo.pushConstantRangeCount = 0;
+    }
+
+    VK_CHECK(vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_albedoRenderingPipelineLayout));
+}
 
 // ================================================================================================================
 void SSAOApp::InitAlbedoRenderingPipelineDescriptorSetLayout()
 {
+    // Binding for the albedo gbuffer texture
+    VkDescriptorSetLayoutBinding albedoGBufferTextureBinding{};
+    {
+        albedoGBufferTextureBinding.binding = 0;
+        albedoGBufferTextureBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        albedoGBufferTextureBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        albedoGBufferTextureBinding.descriptorCount = 1;
+    }
 
+    // Create pipeline's descriptors layout
+    // The Vulkan spec states: The VkDescriptorSetLayoutBinding::binding members of the elements of the pBindings array 
+    // must each have different values 
+    // (https://vulkan.lunarg.com/doc/view/1.3.236.0/windows/1.3-extensions/vkspec.html#VUID-VkDescriptorSetLayoutCreateInfo-binding-00279)
+    VkDescriptorSetLayoutCreateInfo pipelineDesSetLayoutInfo{};
+    {
+        pipelineDesSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        // Setting this flag tells the descriptor set layouts that no actual descriptor sets are allocated but instead pushed at command buffer creation time
+        pipelineDesSetLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
+        pipelineDesSetLayoutInfo.bindingCount = 1;
+        pipelineDesSetLayoutInfo.pBindings = &albedoGBufferTextureBinding;
+    }
+
+    VK_CHECK(vkCreateDescriptorSetLayout(m_device,
+                                         &pipelineDesSetLayoutInfo,
+                                         nullptr,
+                                         &m_albedoRenderingPipelineDesSetLayout));
 }
 
 // ================================================================================================================
@@ -1343,6 +1385,8 @@ void SSAOApp::AppInit()
 
     m_pGltfLoaderManager->Load(sceneLoadPathAbs, *m_pLevel);
     m_pGltfLoaderManager->InitEntitesGpuRsrc(m_device, m_pAllocator);
+
+    InitScreenQuadVsShaderModule();
 
     InitGeoPassShaderModules();
     InitGeoPassPipelineDescriptorSetLayout();
