@@ -669,6 +669,41 @@ namespace SharedLib
     }
 
     // ================================================================================================================
+    void GlfwApplication::CmdSwapchainColorImgPresentToColorAttachment(
+        VkCommandBuffer cmdBuffer)
+    {
+        VkImageSubresourceRange swapchainPresentSubResRange{};
+        {
+            swapchainPresentSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            swapchainPresentSubResRange.baseMipLevel = 0;
+            swapchainPresentSubResRange.levelCount = 1;
+            swapchainPresentSubResRange.baseArrayLayer = 0;
+            swapchainPresentSubResRange.layerCount = 1;
+        }
+
+        // Transform the swapchain image layout from render target to present.
+        // Transform the layout of the swapchain from undefined to render target.
+        VkImageMemoryBarrier swapchainPresentTransBarrier{};
+        {
+            swapchainPresentTransBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            swapchainPresentTransBarrier.srcAccessMask = VK_ACCESS_NONE;
+            swapchainPresentTransBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            swapchainPresentTransBarrier.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+            swapchainPresentTransBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            swapchainPresentTransBarrier.image = GetSwapchainColorImage();
+            swapchainPresentTransBarrier.subresourceRange = swapchainPresentSubResRange;
+        }
+
+        vkCmdPipelineBarrier(cmdBuffer,
+            VK_PIPELINE_STAGE_NONE,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &swapchainPresentTransBarrier);
+    }
+
+    // ================================================================================================================
     void GlfwApplication::InitGammaCorrectionPipelineAndRsrc()
     {
         // Create shader modules

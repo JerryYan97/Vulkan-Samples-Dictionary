@@ -82,6 +82,11 @@ SSAOApp::SSAOApp() :
     m_geoPassPipelineDesSetLayout(VK_NULL_HANDLE),
     m_geoPassPipelineLayout(VK_NULL_HANDLE),
     m_geoPassPipeline(),
+    m_screenQuadVsShaderModule(VK_NULL_HANDLE),
+    m_albedoRenderingPsShaderModule(VK_NULL_HANDLE),
+    m_albedoRenderingPipelineDesSetLayout(VK_NULL_HANDLE),
+    m_albedoRenderingPipelineLayout(VK_NULL_HANDLE),
+    m_albedoRenderingPipeline(),
     // m_deferredLightingPassVsShaderModule(VK_NULL_HANDLE),
     // m_deferredLightingPassPsShaderModule(VK_NULL_HANDLE),
     // m_deferredLightingPassPipelineDesSetLayout(VK_NULL_HANDLE),
@@ -113,15 +118,18 @@ SSAOApp::~SSAOApp()
     // Destroy shader modules
     vkDestroyShaderModule(m_device, m_geoPassVsShaderModule, nullptr);
     vkDestroyShaderModule(m_device, m_geoPassPsShaderModule, nullptr);
+    vkDestroyShaderModule(m_device, m_screenQuadVsShaderModule, nullptr);
     // vkDestroyShaderModule(m_device, m_deferredLightingPassVsShaderModule, nullptr);
     // vkDestroyShaderModule(m_device, m_deferredLightingPassPsShaderModule, nullptr);
 
     // Destroy the pipeline layout
     vkDestroyPipelineLayout(m_device, m_geoPassPipelineLayout, nullptr);
+    vkDestroyPipelineLayout(m_device, m_albedoRenderingPipelineLayout, nullptr);
     // vkDestroyPipelineLayout(m_device, m_deferredLightingPassPipelineLayout, nullptr);
 
     // Destroy the descriptor set layout
     vkDestroyDescriptorSetLayout(m_device, m_geoPassPipelineDesSetLayout, nullptr);
+    vkDestroyDescriptorSetLayout(m_device, m_albedoRenderingPipelineDesSetLayout, nullptr);
     // vkDestroyDescriptorSetLayout(m_device, m_deferredLightingPassPipelineDesSetLayout, nullptr);
 }
 
@@ -1254,7 +1262,15 @@ void SSAOApp::CmdSSAOAppMultiTypeRendering(VkCommandBuffer cmdBuffer)
     // Only direct light and ambient light.
     if (m_presentType == PresentType::DIFFUSE)
     {
-
+        VkRenderingInfoKHR albedoRenderInfo{};
+        {
+            albedoRenderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+            albedoRenderInfo.renderArea.offset = { 0, 0 };
+            albedoRenderInfo.renderArea.extent = GetSwapchainImageExtent();
+            albedoRenderInfo.layerCount = 1;
+            albedoRenderInfo.colorAttachmentCount = gBufferAttachmentsInfos.size();
+            geoPassRenderInfo.pColorAttachments = gBufferAttachmentsInfos.data();
+        }
     }
 }
 
@@ -1325,7 +1341,21 @@ void SSAOApp::InitAlbedoRenderingPipelineDescriptorSetLayout()
 // ================================================================================================================
 void SSAOApp::InitAlbedoRenderingPipeline()
 {
+    VkPipelineRenderingCreateInfoKHR pipelineRenderCreateInfo{};
+    {
+        pipelineRenderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+        pipelineRenderCreateInfo.colorAttachmentCount = 1;
+        pipelineRenderCreateInfo.pColorAttachmentFormats = &m_choisenSurfaceFormat.format;
+    }
 
+    m_albedoRenderingPipeline.SetPipelineLayout(m_albedoRenderingPipelineLayout);
+
+    VkPipelineShaderStageCreateInfo shaderStgsInfo[2] = {};
+    shaderStgsInfo[0] = CreateDefaultShaderStgCreateInfo(m_screenQuadVsShaderModule, VK_SHADER_STAGE_VERTEX_BIT);
+    shaderStgsInfo[1] = CreateDefaultShaderStgCreateInfo(m_albedoRenderingPsShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT);
+    m_albedoRenderingPipeline.SetShaderStageInfo(shaderStgsInfo, 2);
+
+    m_albedoRenderingPipeline.CreatePipeline(m_device);
 }
 
 // ================================================================================================================

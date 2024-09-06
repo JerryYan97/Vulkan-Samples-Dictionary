@@ -33,3 +33,4 @@ Ray Trace Ambient Occlusion: https://intro-to-dxr.cwyman.org/presentations/Intro
 
 Some references:
 Frustrum Culling: https://learnopengl.com/Guest-Articles/2021/Scene/Frustum-Culling
+SSAO Blog: https://ajweeks.com/blog/2019/05/11/SSAO/

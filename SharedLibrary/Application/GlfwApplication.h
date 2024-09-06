@@ -55,6 +55,7 @@ namespace SharedLib
                                              VkPipelineStageFlags dstStageMask);
 
         void CmdSwapchainColorImgToPresent(VkCommandBuffer cmdBuffer);
+        void CmdSwapchainColorImgPresentToColorAttachment(VkCommandBuffer cmdBuffer);
         void CmdSwapchainColorImgClear(VkCommandBuffer cmdBuffer);
         void CmdSwapchainDepthImgClear(VkCommandBuffer cmdBuffer);
 
