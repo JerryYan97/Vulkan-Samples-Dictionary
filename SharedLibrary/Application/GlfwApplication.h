@@ -76,6 +76,8 @@ namespace SharedLib
         void InitGlfwWindowAndCallbacks();
         void InitGammaCorrectionPipelineAndRsrc();
 
+        VkRenderingAttachmentInfoKHR GetSwapchainColorAttachmentWithClearInfo();
+
         HEvent CreateMiddleMouseEvent(bool isDown);
         HEvent CreateKeyboardEvent(bool isDown, std::string eventName);
 

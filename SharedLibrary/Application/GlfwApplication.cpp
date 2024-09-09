@@ -899,4 +899,22 @@ namespace SharedLib
 
         return swapchainPresentSubResRange;
     }
+
+    // ================================================================================================================
+    VkRenderingAttachmentInfoKHR GlfwApplication::GetSwapchainColorAttachmentWithClearInfo()
+    {
+        VkClearValue clearColor = { {0.0f, 0.0f, 0.0f, 1.0f} };
+
+        VkRenderingAttachmentInfoKHR renderBackgroundAttachmentInfo{};
+        {
+            renderBackgroundAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+            renderBackgroundAttachmentInfo.imageView = GetSwapchainColorImageView();
+            renderBackgroundAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
+            renderBackgroundAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            renderBackgroundAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            renderBackgroundAttachmentInfo.clearValue = clearColor;
+        }
+
+        return renderBackgroundAttachmentInfo;
+    }
 }

@@ -489,6 +489,16 @@ void SSAOApp::InitGeoPassPipelineDescriptorSetLayout()
     }
     bindings.push_back(roughnessMetallicTextureBinding);
 
+    // Binding for the occlusion texture
+    VkDescriptorSetLayoutBinding occlusionTextureBinding{};
+    {
+        occlusionTextureBinding.binding = 4;
+        occlusionTextureBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        occlusionTextureBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        occlusionTextureBinding.descriptorCount = 1;
+    }
+    bindings.push_back(occlusionTextureBinding);
+
     // Create pipeline's descriptors layout
     // The Vulkan spec states: The VkDescriptorSetLayoutBinding::binding members of the elements of the pBindings array 
     // must each have different values 
@@ -554,7 +564,7 @@ VkPipelineVertexInputStateCreateInfo SSAOApp::CreateGeoPassPipelineVertexInputIn
         vertInputInfo.pNext = nullptr;
         vertInputInfo.vertexBindingDescriptionCount = 1;
         vertInputInfo.pVertexBindingDescriptions = pVertBindingDesc;
-        vertInputInfo.vertexAttributeDescriptionCount = 2;
+        vertInputInfo.vertexAttributeDescriptionCount = 4;
         vertInputInfo.pVertexAttributeDescriptions = pVertAttrDescs;
     }
 
@@ -1262,15 +1272,27 @@ void SSAOApp::CmdSSAOAppMultiTypeRendering(VkCommandBuffer cmdBuffer)
     // Only direct light and ambient light.
     if (m_presentType == PresentType::DIFFUSE)
     {
+        VkRenderingAttachmentInfo diffuseRenderColorAttachment = GetSwapchainColorAttachmentWithClearInfo();
+
         VkRenderingInfoKHR albedoRenderInfo{};
         {
             albedoRenderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
             albedoRenderInfo.renderArea.offset = { 0, 0 };
             albedoRenderInfo.renderArea.extent = GetSwapchainImageExtent();
             albedoRenderInfo.layerCount = 1;
-            albedoRenderInfo.colorAttachmentCount = gBufferAttachmentsInfos.size();
-            geoPassRenderInfo.pColorAttachments = gBufferAttachmentsInfos.data();
+            albedoRenderInfo.colorAttachmentCount = 1;
+            albedoRenderInfo.pColorAttachments = &diffuseRenderColorAttachment;
         }
+
+        vkCmdBeginRendering(cmdBuffer, &albedoRenderInfo);
+        vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_albedoRenderingPipeline.GetVkPipeline());
+
+        // Bind the descriptor set for the geometry pass rendering.
+        std::vector<SharedLib::PushDescriptorInfo> pushDescriptors;
+        pushDescriptors.push_back({ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &m_albedoTextures[m_acqSwapchainImgIdx].imageDescInfo });
+        CmdAutoPushDescriptors(cmdBuffer, m_albedoRenderingPipelineLayout, pushDescriptors);
+
+        vkCmdDraw(cmdBuffer, 6, 1, 0, 0);
     }
 }
 
@@ -1289,7 +1311,7 @@ void SSAOApp::InitScreenQuadVsShaderModule()
 // ================================================================================================================
 void SSAOApp::InitAlbedoRenderingShaderModules()
 {
-    m_albedoRenderingPsShaderModule = CreateShaderModule("/hlsl/albedo_frag.spv");
+    m_albedoRenderingPsShaderModule = CreateShaderModule("/hlsl/ambient_lighting_frag.spv");
 }
 
 // ================================================================================================================
