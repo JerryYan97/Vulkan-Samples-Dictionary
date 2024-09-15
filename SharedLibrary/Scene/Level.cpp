@@ -139,6 +139,12 @@ namespace SharedLib
                             &m_indexBuffer.buffer,
                             &m_indexBuffer.bufferAlloc,
                             nullptr);
+
+            SharedLib::CopyRamDataToGpuBuffer(m_idxDataUint16.data(),
+                                              pAllocator,
+                                              m_indexBuffer.buffer,
+                                              m_indexBuffer.bufferAlloc,
+                                              sizeof(uint16_t) * m_idxDataUint16.size());
         }
 
         VmaAllocationCreateInfo gpuImgAllocInfo{};
@@ -407,6 +413,8 @@ namespace SharedLib
             m_emissiveGpuImg.imageDescInfo.sampler = m_emissiveGpuImg.imageSampler;
         }
         */
+
+        // Send image data to the GPU Buffer and Transform their formats to the shader read optimal.
     }
 
     // ================================================================================================================

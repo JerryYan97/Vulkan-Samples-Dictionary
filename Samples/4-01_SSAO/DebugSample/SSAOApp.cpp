@@ -303,16 +303,16 @@ std::vector<VkRenderingAttachmentInfoKHR> SSAOApp::GetGBufferAttachments()
         attachmentInfo.clearValue = clearColor;
     }
 
-    // attachmentInfo.imageView = m_worldPosTextures[m_currentFrame].imageView;
+    attachmentInfo.imageView = m_worldPosTextures[m_acqSwapchainImgIdx].imageView;
     attachmentsInfos.push_back(attachmentInfo);
 
-    // attachmentInfo.imageView = m_normalTextures[m_currentFrame].imageView;
+    attachmentInfo.imageView = m_normalTextures[m_acqSwapchainImgIdx].imageView;
     attachmentsInfos.push_back(attachmentInfo);
 
-    // attachmentInfo.imageView = m_albedoTextures[m_currentFrame].imageView;
+    attachmentInfo.imageView = m_albedoTextures[m_acqSwapchainImgIdx].imageView;
     attachmentsInfos.push_back(attachmentInfo);
 
-    // attachmentInfo.imageView = m_metallicRoughnessTextures[m_currentFrame].imageView;
+    attachmentInfo.imageView = m_roughnessMetallicOcclusionTextures[m_acqSwapchainImgIdx].imageView;
     attachmentsInfos.push_back(attachmentInfo);
 
     return attachmentsInfos;
@@ -1199,6 +1199,9 @@ void SSAOApp::CmdGeoPass(VkCommandBuffer cmdBuffer)
     depthClearVal.depthStencil.depth = 0.f;
     VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
 
+    VkViewport viewport = GetCurrentSwapchainViewport();
+    VkRect2D scissor = GetCurrentSwapchainScissor();
+
     VkRenderingAttachmentInfoKHR geoPassDepthAttachmentInfo{};
     {
         geoPassDepthAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
@@ -1231,24 +1234,15 @@ void SSAOApp::CmdGeoPass(VkCommandBuffer cmdBuffer)
     {
         for (int i = 0; i < meshEntity.second->m_meshPrimitives.size(); i++)
         {
-            // NOTE: It's also possible that we don't need a barrier here, because each draw doesn't have dependency.
-            // Add a barrier to wait for previous geometry draw to finish.
-            if ((meshEntityCnt != 0) && (i != 0))
-            {
-                vkCmdPipelineBarrier(cmdBuffer,
-                                     VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                                     VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                                     0,
-                                     0, nullptr,
-                                     0, nullptr,
-                                     0, nullptr);
-            }
-
+            // NOTE: We cannot put any barriers in a render pass.
             auto& meshPrimitive = meshEntity.second->m_meshPrimitives[i];
 
             VkDeviceSize offsets[] = { 0 };
             vkCmdBindVertexBuffers(cmdBuffer, 0, 1, meshPrimitive.GetVertBuffer(), offsets);
             vkCmdBindIndexBuffer(cmdBuffer, meshPrimitive.GetIndexBuffer(), 0, VK_INDEX_TYPE_UINT16);
+
+            vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
+            vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
 
             // Bind the descriptor set for the geometry pass rendering.
             std::vector<SharedLib::PushDescriptorInfo> pushDescriptors;
@@ -1264,6 +1258,8 @@ void SSAOApp::CmdGeoPass(VkCommandBuffer cmdBuffer)
         }
         meshEntityCnt++;
     }
+
+    vkCmdEndRendering(cmdBuffer);
 }
 
 // ================================================================================================================
@@ -1293,6 +1289,8 @@ void SSAOApp::CmdSSAOAppMultiTypeRendering(VkCommandBuffer cmdBuffer)
         CmdAutoPushDescriptors(cmdBuffer, m_albedoRenderingPipelineLayout, pushDescriptors);
 
         vkCmdDraw(cmdBuffer, 6, 1, 0, 0);
+
+        vkCmdEndRendering(cmdBuffer);
     }
 }
 
@@ -1460,4 +1458,7 @@ void SSAOApp::AppInit()
     */
     InitSwapchainSyncObjects();
     // InitGammaCorrectionPipelineAndRsrc();
+
+    // TODO: I need to transfer all GPU Textures to the Shader Read Format.
+
 }

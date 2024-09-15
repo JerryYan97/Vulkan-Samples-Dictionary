@@ -917,4 +917,32 @@ namespace SharedLib
 
         return renderBackgroundAttachmentInfo;
     }
+
+    // ================================================================================================================
+    VkViewport GlfwApplication::GetCurrentSwapchainViewport()
+    {
+        VkViewport viewport{};
+        {
+            viewport.x = 0.f;
+            viewport.y = 0.f;
+            viewport.width = (float)m_swapchainImageExtent.width;
+            viewport.height = (float)m_swapchainImageExtent.height;
+            viewport.minDepth = 0.f;
+            viewport.maxDepth = 1.f;
+        }
+
+        return viewport;
+    }
+
+    // ================================================================================================================
+    VkRect2D GlfwApplication::GetCurrentSwapchainScissor()
+    {
+        VkRect2D scissor{};
+        {
+            scissor.offset = { 0, 0 };
+            scissor.extent = m_swapchainImageExtent;
+        }
+
+        return scissor;
+    }
 }

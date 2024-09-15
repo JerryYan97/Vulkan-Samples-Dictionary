@@ -35,6 +35,8 @@ namespace SharedLib
         VkImage GetSwapchainDepthImage() { return m_swapchainDepthImages[m_acqSwapchainImgIdx]; }
         VkImageView GetSwapchainDepthImageView() { return m_swapchainDepthImageViews[m_acqSwapchainImgIdx]; }
         VkExtent2D GetSwapchainImageExtent() { return m_swapchainImageExtent; }
+        VkViewport GetCurrentSwapchainViewport();
+        VkRect2D GetCurrentSwapchainScissor();
 
         int GetSwapchainImgCnt() { return m_swapchainImgCnt; }
 
