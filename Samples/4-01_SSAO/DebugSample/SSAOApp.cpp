@@ -1370,6 +1370,7 @@ void SSAOApp::InitAlbedoRenderingPipeline()
         pipelineRenderCreateInfo.pColorAttachmentFormats = &m_choisenSurfaceFormat.format;
     }
 
+    m_albedoRenderingPipeline.SetPNext(&pipelineRenderCreateInfo);
     m_albedoRenderingPipeline.SetPipelineLayout(m_albedoRenderingPipelineLayout);
 
     VkPipelineShaderStageCreateInfo shaderStgsInfo[2] = {};
@@ -1416,10 +1417,9 @@ void SSAOApp::AppInit()
     InitGraphicsQueue();
     InitPresentQueue();
 
-    InitGfxCommandPool();
-    // InitGfxCommandBuffers(SharedLib::MAX_FRAMES_IN_FLIGHT);
-
     InitSwapchain();
+    InitGfxCommandPool();
+    InitGfxCommandBuffers(m_swapchainImgCnt);
 
     InitVpUboObjects();
     
