@@ -3,6 +3,7 @@
 #include "../Utils/StrPathUtils.h"
 #include "../Utils/GltfUtils.h"
 #include "../Utils/MathUtils.h"
+#include <chrono>
 
 #define TINYGLTF_IMPLEMENTATION
 #include "tiny_gltf.h"
@@ -50,7 +51,13 @@ namespace SharedLib
                 std::string err;
                 std::string warn;
 
+                const auto start = std::chrono::high_resolution_clock::now();
                 bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, absPath);
+                const auto end = std::chrono::high_resolution_clock::now();
+
+                const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+                printf("Loading gltf file takes %d ms\n", duration.count()); // About 2000ms for the sponza model (50MB).
+
                 if (!warn.empty()) {
                     printf("Warn: %s\n", warn.c_str());
                 }

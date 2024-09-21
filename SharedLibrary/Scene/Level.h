@@ -12,7 +12,7 @@ namespace SharedLib
         Entity() {}
         ~Entity() {}
 
-        virtual void InitGpuRsrc(VkDevice device, VmaAllocator* pAllocator) {}
+        virtual void InitGpuRsrc(VkDevice device, VmaAllocator* pAllocator, VkCommandBuffer cmdBuffer, VkQueue queue) {}
         virtual void Finialize() = 0;
 
         float m_position[3];
@@ -44,7 +44,7 @@ namespace SharedLib
         ImgInfo m_occlusionTex;         // R32_SFLOAT
         ImgInfo m_emissiveTex;          // Currently don't support.
 
-        void InitGpuRsrc(VkDevice device, VmaAllocator* pAllocator);
+        void InitGpuRsrc(VkDevice device, VmaAllocator* pAllocator, VkCommandBuffer cmdBuffer, VkQueue queue);
         void FinializeGpuRsrc(VkDevice device, VmaAllocator* pAllocator);
 
         VkBuffer* GetVertBuffer() { return &m_vertBuffer.buffer; }
@@ -75,7 +75,7 @@ namespace SharedLib
 
         void Finialize() override {}
 
-        virtual void InitGpuRsrc(VkDevice device, VmaAllocator* pAllocator) override;
+        virtual void InitGpuRsrc(VkDevice device, VmaAllocator* pAllocator, VkCommandBuffer cmdBuffer, VkQueue queue) override;
         virtual void FinializeGpuRsrc(VkDevice device, VmaAllocator* pAllocator);
 
         std::vector<MeshPrimitive> m_meshPrimitives;

@@ -6,17 +6,35 @@ namespace SharedLib
 {
     struct GpuImg;
 
-    // Function names should start with 'Cmd' so their names should be 'CmdXxxx'.
-    // Maybe we should only change the layouts at the beginning of CmdXxxx functions.
-    void SendImgDataToGpu(VkCommandBuffer cmdBuffer,
+    // A helper function to transition the image layout. Block the thread until the transition is done.
+    void TransitionImgLayout(VkCommandBuffer cmdBuffer,
                              VkDevice device,
                              VkQueue gfxQueue,
-                             void* pData, uint32_t bytesCnt,
-                             VkImage dstImg,
-                             VkImageSubresourceRange subResRange,
-                             VkImageLayout           dstImgCurrentLayout,
-                             VkBufferImageCopy bufToImgCopyInfo,
-                             VmaAllocator allocator);
+                             VkImage img,
+                             VkImageLayout oldLayout,
+                             VkImageLayout newLayout,
+                             VkImageSubresourceRange subResRange);
+
+    // A helper function to send 2D image data to the GPU. Block the thread until the data is sent.
+    void Send2dImgDataToGpu(
+        VkCommandBuffer cmdBuffer,
+        VkDevice        device,
+        VkQueue         gfxQueue,
+        VmaAllocator    allocator,
+        ImgInfo*        pImgInfo,
+        VkImage         image);
+
+    // A helper function to send the image data to the GPU. Block the thread until the data is sent.
+    void SendImgDataToGpu(VkCommandBuffer cmdBuffer,
+                          VkDevice device,
+                          VkQueue gfxQueue,
+                          void* pData,
+                          uint32_t bytesCnt,
+                          VkImage dstImg,
+                          VkImageSubresourceRange subResRange,
+                          VkImageLayout           dstImgCurrentLayout,
+                          VkBufferImageCopy bufToImgCopyInfo,
+                          VmaAllocator allocator);
 
     // The output color is always a 3 channels -- RGB.
     // The input image is always 4 channels -- RGBA.

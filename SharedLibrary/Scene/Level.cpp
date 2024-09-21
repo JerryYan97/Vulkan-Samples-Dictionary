@@ -1,6 +1,7 @@
 #include "Level.h"
 #include "AppUtils.h"
 #include "VulkanDbgUtils.h"
+#include "CmdBufUtils.h"
 #include "vk_mem_alloc.h"
 
 namespace SharedLib
@@ -36,12 +37,14 @@ namespace SharedLib
     }
 
     // ================================================================================================================
-    void MeshEntity::InitGpuRsrc(VkDevice      device,
-                                 VmaAllocator* pAllocator)
+    void MeshEntity::InitGpuRsrc(VkDevice        device,
+                                 VmaAllocator*   pAllocator,
+                                 VkCommandBuffer cmdBuffer,
+                                 VkQueue         queue)
     {
         for (auto& meshPrimitive : m_meshPrimitives)
         {
-            meshPrimitive.InitGpuRsrc(device, pAllocator);
+            meshPrimitive.InitGpuRsrc(device, pAllocator, cmdBuffer, queue);
         }
     }
 
@@ -56,8 +59,10 @@ namespace SharedLib
     }
 
     // ================================================================================================================
-    void MeshPrimitive::InitGpuRsrc(VkDevice      device,
-                                    VmaAllocator* pAllocator)
+    void MeshPrimitive::InitGpuRsrc(VkDevice        device,
+                                    VmaAllocator*   pAllocator,
+                                    VkCommandBuffer cmdBuffer,
+                                    VkQueue         queue)
     {
         uint32_t vertCount = m_posData.size() / 3;
 
@@ -415,6 +420,12 @@ namespace SharedLib
         */
 
         // Send image data to the GPU Buffer and Transform their formats to the shader read optimal.
+        SharedLib::Send2dImgDataToGpu(cmdBuffer, device, queue, *pAllocator, &m_baseColorTex, m_baseColorGpuImg.image);
+        SharedLib::Send2dImgDataToGpu(cmdBuffer, device, queue, *pAllocator, &m_normalTex, m_normalGpuImg.image);
+        SharedLib::Send2dImgDataToGpu(cmdBuffer, device, queue, *pAllocator, &m_metallicRoughnessTex, m_metallicRoughnessGpuImg.image);
+        SharedLib::Send2dImgDataToGpu(cmdBuffer, device, queue, *pAllocator, &m_occlusionTex, m_occlusionGpuImg.image);
+
+
     }
 
     // ================================================================================================================

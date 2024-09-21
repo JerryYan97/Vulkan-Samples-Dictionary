@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <math.h>
 #include <algorithm>
+#include <chrono>
 #include "../../../SharedLibrary/Utils/VulkanDbgUtils.h"
 #include "../../../SharedLibrary/Camera/Camera.h"
 #include "../../../SharedLibrary/Event/Event.h"

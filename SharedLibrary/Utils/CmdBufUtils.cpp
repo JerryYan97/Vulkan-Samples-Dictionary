@@ -1,8 +1,57 @@
 #include "CmdBufUtils.h"
 #include "VulkanDbgUtils.h"
+#include "Application.h"
 
 namespace SharedLib
 {
+    // ================================================================================================================
+    void Send2dImgDataToGpu(
+        VkCommandBuffer cmdBuffer,
+        VkDevice        device,
+        VkQueue         gfxQueue,
+        VmaAllocator    allocator,
+        ImgInfo*        pImgInfo,
+        VkImage         image)
+    {
+        // The universal 2D texture SubresourceRange
+        VkImageSubresourceRange tex2dSubResRange{};
+        {
+            tex2dSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            tex2dSubResRange.baseMipLevel = 0;
+            tex2dSubResRange.levelCount = 1;
+            tex2dSubResRange.baseArrayLayer = 0;
+            tex2dSubResRange.layerCount = 1;
+        }
+
+        VkBufferImageCopy tex2dBufToImgCopy{};
+        {
+            VkExtent3D extent{};
+            {
+                extent.width = pImgInfo->pixWidth;
+                extent.height = pImgInfo->pixWidth;
+                extent.depth = 1;
+            }
+
+            tex2dBufToImgCopy.bufferRowLength = extent.width;
+            tex2dBufToImgCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            tex2dBufToImgCopy.imageSubresource.mipLevel = 0;
+            tex2dBufToImgCopy.imageSubresource.baseArrayLayer = 0;
+            tex2dBufToImgCopy.imageSubresource.layerCount = 1;
+            tex2dBufToImgCopy.imageExtent = extent;
+        }
+
+        SharedLib::SendImgDataToGpu(cmdBuffer,
+                                    device,
+                                    gfxQueue,
+                                    pImgInfo->dataVec.data(),
+                                    pImgInfo->dataVec.size(),
+                                    image,
+                                    tex2dSubResRange,
+                                    VK_IMAGE_LAYOUT_UNDEFINED,
+                                    tex2dBufToImgCopy,
+                                    allocator);
+    }
+
     // ================================================================================================================
     // The staging buffer has to be freed after the copy finishes, so this func has to control a fence.
     // Transfer the dstImg to VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL -- Change it to the shader read optimal.
