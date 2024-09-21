@@ -5,6 +5,7 @@
 namespace SharedLib
 {
     struct GpuImg;
+    struct ImgInfo;
 
     // A helper function to transition the image layout. Block the thread until the transition is done.
     void TransitionImgLayout(VkCommandBuffer cmdBuffer,

@@ -425,7 +425,18 @@ namespace SharedLib
         SharedLib::Send2dImgDataToGpu(cmdBuffer, device, queue, *pAllocator, &m_metallicRoughnessTex, m_metallicRoughnessGpuImg.image);
         SharedLib::Send2dImgDataToGpu(cmdBuffer, device, queue, *pAllocator, &m_occlusionTex, m_occlusionGpuImg.image);
 
-
+        VkImageSubresourceRange subresourceRange{};
+        {
+            subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            subresourceRange.baseMipLevel = 0;
+            subresourceRange.levelCount = 1;
+            subresourceRange.baseArrayLayer = 0;
+            subresourceRange.layerCount = 1;
+        }
+        SharedLib::TransitionImgLayout(cmdBuffer, device, queue, m_baseColorGpuImg.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, subresourceRange);
+        SharedLib::TransitionImgLayout(cmdBuffer, device, queue, m_normalGpuImg.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, subresourceRange);
+        SharedLib::TransitionImgLayout(cmdBuffer, device, queue, m_metallicRoughnessGpuImg.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, subresourceRange);
+        SharedLib::TransitionImgLayout(cmdBuffer, device, queue, m_occlusionGpuImg.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, subresourceRange);
     }
 
     // ================================================================================================================

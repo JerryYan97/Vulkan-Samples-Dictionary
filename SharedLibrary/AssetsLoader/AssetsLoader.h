@@ -19,7 +19,7 @@ namespace SharedLib
         ~AssetsLoaderManager();
 
         virtual void Load(const std::string& absPath, Level& oLevel) = 0;
-        void InitEntitesGpuRsrc(VkDevice device, VmaAllocator* pAllocator);
+        void InitEntitesGpuRsrc(VkDevice device, VmaAllocator* pAllocator, VkCommandBuffer cmdBuffer, VkQueue queue);
         void FinializeEntities(VkDevice device, VmaAllocator* pAllocator);
 
     protected:

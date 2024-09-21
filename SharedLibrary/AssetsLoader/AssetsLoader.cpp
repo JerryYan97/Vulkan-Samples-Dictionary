@@ -17,12 +17,14 @@ namespace SharedLib
     }
 
     // ================================================================================================================
-    void AssetsLoaderManager::InitEntitesGpuRsrc(VkDevice      device,
-                                                 VmaAllocator* pAllocator)
+    void AssetsLoaderManager::InitEntitesGpuRsrc(VkDevice        device,
+                                                 VmaAllocator*   pAllocator,
+                                                 VkCommandBuffer cmdBuffer,
+                                                 VkQueue         queue)
     {
         for(auto entity : m_entities)
         {
-            entity->InitGpuRsrc(device, pAllocator);
+            entity->InitGpuRsrc(device, pAllocator, cmdBuffer, queue);
         }
     }
 

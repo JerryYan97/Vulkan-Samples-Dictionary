@@ -5,6 +5,73 @@
 namespace SharedLib
 {
     // ================================================================================================================
+    void TransitionImgLayout(
+        VkCommandBuffer cmdBuffer,
+        VkDevice device,
+        VkQueue gfxQueue,
+        VkImage img,
+        VkImageLayout oldLayout,
+        VkImageLayout newLayout,
+        VkImageSubresourceRange subResRange)
+    {
+        VkFence stagingFence;
+
+        VkFenceCreateInfo fenceInfo{};
+        {
+            fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+            fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+        }
+        VK_CHECK(vkCreateFence(device, &fenceInfo, nullptr, &stagingFence));
+
+        VkCommandBufferBeginInfo beginInfo{};
+        {
+            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        }
+        VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &beginInfo));
+
+        // Transform the layout of the image
+        VkImageMemoryBarrier formatTransBarrier{};
+        {
+            formatTransBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            formatTransBarrier.image = img;
+            formatTransBarrier.subresourceRange = subResRange;
+            formatTransBarrier.srcAccessMask = 0;
+            formatTransBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            formatTransBarrier.oldLayout = oldLayout;
+            formatTransBarrier.newLayout = newLayout;
+        }
+
+        vkCmdPipelineBarrier(
+            cmdBuffer,
+            VK_PIPELINE_STAGE_HOST_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &formatTransBarrier);
+
+        // End the command buffer and submit the packets
+        vkEndCommandBuffer(cmdBuffer);
+
+        // Submit the filled command buffer to the graphics queue to draw the image
+        VkSubmitInfo submitInfo{};
+        {
+            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            submitInfo.commandBufferCount = 1;
+            submitInfo.pCommandBuffers = &cmdBuffer;
+        }
+        vkResetFences(device, 1, &stagingFence);
+        VK_CHECK(vkQueueSubmit(gfxQueue, 1, &submitInfo, stagingFence));
+
+        // Wait for the end of all transformation and reset the command buffer. The fence would be waited in the first loop.
+        vkWaitForFences(device, 1, &stagingFence, VK_TRUE, UINT64_MAX);
+        vkResetCommandBuffer(cmdBuffer, 0);
+
+        // Destroy temp resources
+        vkDestroyFence(device, stagingFence, nullptr);
+    }
+
+    // ================================================================================================================
     void Send2dImgDataToGpu(
         VkCommandBuffer cmdBuffer,
         VkDevice        device,

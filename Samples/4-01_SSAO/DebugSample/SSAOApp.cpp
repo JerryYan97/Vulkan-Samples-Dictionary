@@ -1435,7 +1435,7 @@ void SSAOApp::AppInit()
     sceneLoadPathAbs += +"/../data/Sponza/Sponza.gltf";
 
     m_pGltfLoaderManager->Load(sceneLoadPathAbs, *m_pLevel);
-    m_pGltfLoaderManager->InitEntitesGpuRsrc(m_device, m_pAllocator);
+    m_pGltfLoaderManager->InitEntitesGpuRsrc(m_device, m_pAllocator, GetGfxCmdBuffer(0), m_graphicsQueue);
 
     InitScreenQuadVsShaderModule();
 
