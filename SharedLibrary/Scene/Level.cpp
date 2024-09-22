@@ -458,9 +458,9 @@ namespace SharedLib
         vkDestroyImageView(device, m_metallicRoughnessGpuImg.imageView, nullptr);
         vkDestroySampler(device, m_metallicRoughnessGpuImg.imageSampler, nullptr);
 
-        vmaDestroyImage(*pAllocator, m_emissiveGpuImg.image, m_emissiveGpuImg.imageAllocation);
-        vkDestroyImageView(device, m_emissiveGpuImg.imageView, nullptr);
-        vkDestroySampler(device, m_emissiveGpuImg.imageSampler, nullptr);
+        // vmaDestroyImage(*pAllocator, m_emissiveGpuImg.image, m_emissiveGpuImg.imageAllocation);
+        // vkDestroyImageView(device, m_emissiveGpuImg.imageView, nullptr);
+        // vkDestroySampler(device, m_emissiveGpuImg.imageSampler, nullptr);
 
         vmaDestroyImage(*pAllocator, m_occlusionGpuImg.image, m_occlusionGpuImg.imageAllocation);
         vkDestroyImageView(device, m_occlusionGpuImg.imageView, nullptr);

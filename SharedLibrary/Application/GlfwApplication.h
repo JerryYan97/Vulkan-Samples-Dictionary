@@ -68,7 +68,8 @@ namespace SharedLib
                                               VkImageView     srcImgView,
                                               VkSampler       srcImgSampler);
 
-        VkImageSubresourceRange GetSwapchainPresentSubResRange();
+        VkImageSubresourceRange GetSwapchainColorPresentSubResRange();
+        VkImageSubresourceRange GetSwapchainDepthSubResRange();
 
     protected:
         void InitSwapchain();
@@ -77,6 +78,10 @@ namespace SharedLib
         void InitSwapchainSyncObjects();
         void InitGlfwWindowAndCallbacks();
         void InitGammaCorrectionPipelineAndRsrc();
+
+        // We assume that command buffer is created. These trans will block the thread until the transition is done.
+        void SwapchainColorImgsLayoutTrans(VkImageLayout oldLayout, VkImageLayout newLayout);
+        void SwapchainDepthImgsLayoutTrans(VkImageLayout oldLayout, VkImageLayout newLayout);
 
         VkRenderingAttachmentInfoKHR GetSwapchainColorAttachmentWithClearInfo();
 

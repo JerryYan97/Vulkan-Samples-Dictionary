@@ -16,25 +16,19 @@ int main()
     while (!app.WindowShouldClose())
     {
         VkDevice device = app.GetVkDevice();
-        VkFence inFlightFence = app.GetCurrentFrameFence();
-        VkCommandBuffer currentCmdBuffer = app.GetCurrentFrameGfxCmdBuffer();
-
         VkExtent2D swapchainImageExtent = app.GetSwapchainImageExtent();
 
         app.FrameStart();
 
-        // Wait for the resources from the possible on flight frame
-        vkWaitForFences(device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
-
-        // Get next available image from the swapchain
+        // Get next available image from the swapchain. Wait and reset current frame fence in case of the frame is not finished.
         if (app.WaitNextImgIdxOrNewSwapchain() == false)
         {
             continue;
         }
 
-        // Reset unused previous frame's resource
-        vkResetFences(device, 1, &inFlightFence);
-        vkResetCommandBuffer(currentCmdBuffer, 0);
+        // We use the acquired swapchain image index as the frame index, so GetCurrentXXX() functions need to be called after WaitNextImgIdxOrNewSwapchain().
+        VkFence inFlightFence = app.GetCurrentFrameFence();
+        VkCommandBuffer currentCmdBuffer = app.GetCurrentFrameGfxCmdBuffer();
 
         app.UpdateCameraAndGpuBuffer();
 

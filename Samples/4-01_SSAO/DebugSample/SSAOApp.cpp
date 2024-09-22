@@ -120,6 +120,7 @@ SSAOApp::~SSAOApp()
     vkDestroyShaderModule(m_device, m_geoPassVsShaderModule, nullptr);
     vkDestroyShaderModule(m_device, m_geoPassPsShaderModule, nullptr);
     vkDestroyShaderModule(m_device, m_screenQuadVsShaderModule, nullptr);
+    vkDestroyShaderModule(m_device, m_albedoRenderingPsShaderModule, nullptr);
     // vkDestroyShaderModule(m_device, m_deferredLightingPassVsShaderModule, nullptr);
     // vkDestroyShaderModule(m_device, m_deferredLightingPassPsShaderModule, nullptr);
 
@@ -1419,6 +1420,10 @@ void SSAOApp::AppInit()
     InitSwapchain();
     InitGfxCommandPool();
     InitGfxCommandBuffers(m_swapchainImgCnt);
+    SwapchainColorImgsLayoutTrans(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    SwapchainDepthImgsLayoutTrans(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+
+    InitImGui();
 
     InitVpUboObjects();
     

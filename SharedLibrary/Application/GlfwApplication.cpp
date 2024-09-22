@@ -7,6 +7,7 @@
 #include "../HLSL/g_gammaCorrection_vert.h"
 #include "../HLSL/g_gammaCorrection_frag.h"
 #include "VulkanDbgUtils.h"
+#include "CmdBufUtils.h"
 #include <glfw3.h>
 #include <cassert>
 #include <algorithm>
@@ -152,6 +153,14 @@ namespace SharedLib
         // Reset unused previous frame's resource
         vkResetFences(m_device, 1, &m_inFlightFences[m_acqSwapchainImgIdx]);
         vkResetCommandBuffer(m_gfxCmdBufs[m_acqSwapchainImgIdx], 0);
+
+        TransitionImgLayout(m_gfxCmdBufs[m_acqSwapchainImgIdx],
+                            m_device,
+                            m_graphicsQueue,
+                            m_swapchainColorImages[m_acqSwapchainImgIdx],
+                            VK_IMAGE_LAYOUT_UNDEFINED,
+                            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                            GetSwapchainColorPresentSubResRange());
 
         return true;
     }
@@ -380,6 +389,40 @@ namespace SharedLib
         }
         CreateSwapchainDepthImages(swapchainExtent);
         CreateSwapchainImageViews();
+    }
+
+    // ================================================================================================================
+    void GlfwApplication::SwapchainColorImgsLayoutTrans(
+        VkImageLayout oldLayout,
+        VkImageLayout newLayout)
+    {
+        for (int i = 0; i < m_swapchainColorImages.size(); ++i)
+        {
+            SharedLib::TransitionImgLayout(m_gfxCmdBufs[0],
+                                           m_device,
+                                           m_graphicsQueue,
+                                           m_swapchainColorImages[i],
+                                           oldLayout,
+                                           newLayout,
+                                           GetSwapchainColorPresentSubResRange());
+        }
+    }
+
+    // ================================================================================================================
+    void GlfwApplication::SwapchainDepthImgsLayoutTrans(
+        VkImageLayout oldLayout,
+        VkImageLayout newLayout)
+    {
+        for (int i = 0; i < m_swapchainDepthImages.size(); ++i)
+        {
+            SharedLib::TransitionImgLayout(m_gfxCmdBufs[0],
+                                           m_device,
+                                           m_graphicsQueue,
+                                           m_swapchainDepthImages[i],
+                                           oldLayout,
+                                           newLayout,
+                                           GetSwapchainDepthSubResRange());
+        }
     }
 
     // ================================================================================================================
@@ -886,11 +929,26 @@ namespace SharedLib
     }
 
     // ================================================================================================================
-    VkImageSubresourceRange GlfwApplication::GetSwapchainPresentSubResRange()
+    VkImageSubresourceRange GlfwApplication::GetSwapchainColorPresentSubResRange()
     {
         VkImageSubresourceRange swapchainPresentSubResRange{};
         {
             swapchainPresentSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            swapchainPresentSubResRange.baseMipLevel = 0;
+            swapchainPresentSubResRange.levelCount = 1;
+            swapchainPresentSubResRange.baseArrayLayer = 0;
+            swapchainPresentSubResRange.layerCount = 1;
+        }
+
+        return swapchainPresentSubResRange;
+    }
+
+    // ================================================================================================================
+    VkImageSubresourceRange GlfwApplication::GetSwapchainDepthSubResRange()
+    {
+        VkImageSubresourceRange swapchainPresentSubResRange{};
+        {
+            swapchainPresentSubResRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
             swapchainPresentSubResRange.baseMipLevel = 0;
             swapchainPresentSubResRange.levelCount = 1;
             swapchainPresentSubResRange.baseArrayLayer = 0;

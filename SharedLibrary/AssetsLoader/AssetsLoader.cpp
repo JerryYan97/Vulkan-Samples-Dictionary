@@ -13,7 +13,6 @@ namespace SharedLib
     // ================================================================================================================
     AssetsLoaderManager::~AssetsLoaderManager()
     {
-        
     }
 
     // ================================================================================================================
@@ -34,7 +33,7 @@ namespace SharedLib
     {
         for (auto entity : m_entities)
         {
-            entity->Finialize();
+            entity->Finialize(device, pAllocator);
             delete entity;
         }
     }

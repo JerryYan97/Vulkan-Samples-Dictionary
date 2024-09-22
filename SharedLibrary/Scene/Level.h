@@ -13,7 +13,7 @@ namespace SharedLib
         ~Entity() {}
 
         virtual void InitGpuRsrc(VkDevice device, VmaAllocator* pAllocator, VkCommandBuffer cmdBuffer, VkQueue queue) {}
-        virtual void Finialize() = 0;
+        virtual void Finialize(VkDevice device, VmaAllocator* pAllocator) = 0;
 
         float m_position[3];
 
@@ -73,7 +73,7 @@ namespace SharedLib
         MeshEntity() {}
         ~MeshEntity() {}
 
-        void Finialize() override {}
+        void Finialize(VkDevice device, VmaAllocator* pAllocator) override { FinializeGpuRsrc(device, pAllocator); }
 
         virtual void InitGpuRsrc(VkDevice device, VmaAllocator* pAllocator, VkCommandBuffer cmdBuffer, VkQueue queue) override;
         virtual void FinializeGpuRsrc(VkDevice device, VmaAllocator* pAllocator);
