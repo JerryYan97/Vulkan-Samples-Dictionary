@@ -32,7 +32,7 @@ PSOutput main(
     PSOutput output = (PSOutput)0;
 
 	output.worldPos = i_pixelWorldPos;
-	output.worldNormal = i_pixelWorldNormal;
+    output.worldNormal = i_normalTexture.Sample(i_normalSamplerState, i_uv);
 	output.albedo = i_baseColorTexture.Sample(i_baseColorSamplerState, i_uv);
 	output.param.xy  = i_roughnessMetallicTexture.Sample(i_roughnessMetallicSamplerState, i_uv).yz;
 	output.param.z = i_occlusionTexture.Sample(i_occlusionSamplerState, i_uv).x;
