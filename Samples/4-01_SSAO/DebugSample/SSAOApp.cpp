@@ -155,7 +155,7 @@ void SSAOApp::InitVpUboObjects()
     VkBufferCreateInfo bufferInfo{};
     {
         bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = 16 * sizeof(float);
+        bufferInfo.size = 32 * sizeof(float);
         bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
         bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     }
@@ -168,11 +168,21 @@ void SSAOApp::InitVpUboObjects()
     }
 
     m_vpUboBuffers.resize(m_swapchainImgCnt);
-
+    
+    float modelMat[16] = {
+        1.f, 0.f, 0.f, 0.f,
+        0.f, 1.f, 0.f, 0.f,
+        0.f, 0.f, 1.f, 0.f,
+        0.f, 0.f, 0.f, 1.f
+    };
     float vpMat[16] = {};
     float tmpViewMat[16] = {};
     float tmpPersMat[16] = {};
     m_pCamera->GenViewPerspectiveMatrices(tmpViewMat, tmpPersMat, vpMat);
+
+    float combinedMat[32] = {};
+    memcpy(combinedMat, modelMat, 16 * sizeof(float));
+    memcpy(combinedMat + 16, vpMat, 16 * sizeof(float));
 
     for (uint32_t i = 0; i < m_swapchainImgCnt; i++)
     {
@@ -183,17 +193,17 @@ void SSAOApp::InitVpUboObjects()
                         &m_vpUboBuffers[i].bufferAlloc,
                         nullptr);
 
-        CopyRamDataToGpuBuffer(vpMat,
+        CopyRamDataToGpuBuffer(combinedMat,
                                m_vpUboBuffers[i].buffer,
                                m_vpUboBuffers[i].bufferAlloc,
-                               16 * sizeof(float));
+                               32 * sizeof(float));
 
         // NOTE: For the push descriptors, the dstSet is ignored.
         //       This app doesn't have other resources so a fixed descriptor set is enough.
         {
             m_vpUboBuffers[i].bufferDescInfo.buffer = m_vpUboBuffers[i].buffer;
             m_vpUboBuffers[i].bufferDescInfo.offset = 0;
-            m_vpUboBuffers[i].bufferDescInfo.range = sizeof(float) * 16;
+            m_vpUboBuffers[i].bufferDescInfo.range = sizeof(float) * 32;
         }
     }
 }

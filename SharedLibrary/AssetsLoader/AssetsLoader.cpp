@@ -83,6 +83,8 @@ namespace SharedLib
                 // This example only supports gltf that only has one mesh and one skin.
                 assert(model.meshes.size() == 1, "This SharedLib Gltf Loader currently only supports one mesh.");
                 assert(model.skins.size() == 0, "This SharedLib Gltf Loader currently doesn't support the skinning."); // TODO: Support skinning and animation.
+                assert(model.scenes.size() == 1, "This SharedLib Gltf Loader currently only supports one scene.");
+                assert(model.scenes[0].nodes.size() == 1, "This SharedLib Gltf Loader currently only supports one node in the scene.");
 
                 // Load mesh and relevant info
                 // Any node MAY contain one mesh, defined in its mesh property. The mesh MAY be skinned using information provided in a referenced skin object.

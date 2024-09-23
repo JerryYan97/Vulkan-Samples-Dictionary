@@ -19,7 +19,7 @@ struct VSInput
 
 struct VertUBO
 {
-    float4x4 modelMat;
+    float4x4 modelMat; // NOTE: Currently we only support one node in the gltf loader scene graph, we the model matrix is just an identity matrix.
     float4x4 vpMat;
 };
 
