@@ -31,7 +31,7 @@ VSOutput main(
     VSOutput output = (VSOutput)0;
 
     output.WorldPos = mul(i_vertUbo.modelMat, float4(i_vertInput.vPosition, 1.0));
-    output.Normal.xyz = mul(i_vertUbo.modelMat, float4(i_vertInput.vNormal, 0.0));
+    output.Normal.xyz = mul(i_vertUbo.modelMat, float4(i_vertInput.vNormal, 0.0)).xyz;
     output.Pos = mul(i_vertUbo.vpMat, output.WorldPos);
     output.Tangent = mul(i_vertUbo.modelMat, float4(i_vertInput.vTangent.xyz, 0.0));
     output.UV = i_vertInput.vUv;
