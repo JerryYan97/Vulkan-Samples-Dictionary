@@ -561,12 +561,12 @@ VkPipelineVertexInputStateCreateInfo SSAOApp::CreateGeoPassPipelineVertexInputIn
         pVertAttrDescs[2].location = 2;
         pVertAttrDescs[2].binding = 0;
         pVertAttrDescs[2].format = VK_FORMAT_R32G32B32A32_SFLOAT;
-        pVertAttrDescs[2].offset = 4 * sizeof(float);
+        pVertAttrDescs[2].offset = 6 * sizeof(float);
         // UV
         pVertAttrDescs[3].location = 3;
         pVertAttrDescs[3].binding = 0;
-        pVertAttrDescs[3].format = VK_FORMAT_R32G32B32_SFLOAT;
-        pVertAttrDescs[3].offset = 2 * sizeof(float);
+        pVertAttrDescs[3].format = VK_FORMAT_R32G32_SFLOAT;
+        pVertAttrDescs[3].offset = 10 * sizeof(float);
     }
     m_heapArrayMemPtrVec.push_back(pVertAttrDescs);
 
