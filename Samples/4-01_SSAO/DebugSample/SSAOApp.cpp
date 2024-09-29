@@ -147,8 +147,9 @@ void SSAOApp::DestroyVpUboObjects()
 // ================================================================================================================
 void SSAOApp::InitVpUboObjects()
 {
-    float defaultPos[] = {-12.f, 0.f, 0.f};
+    float defaultPos[] = {0.f, 0.f, 0.f};
     m_pCamera->SetPos(defaultPos);
+    m_pCamera->SetFar(10000.f);
 
     // The alignment of a vec3 is 4 floats and the element alignment of a struct is the largest element alignment,
     // which is also the 4 float. Therefore, we need 32 floats as the buffer to store the VP's parameters.
@@ -310,7 +311,7 @@ std::vector<VkRenderingAttachmentInfoKHR> SSAOApp::GetGBufferAttachments()
     {
         attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
         attachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
-        attachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        attachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
         attachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         attachmentInfo.clearValue = clearColor;
     }
@@ -1219,9 +1220,9 @@ void SSAOApp::CmdGeoPass(VkCommandBuffer cmdBuffer)
         geoPassDepthAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
         geoPassDepthAttachmentInfo.imageView = GetSwapchainDepthImageView();
         geoPassDepthAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
-        geoPassDepthAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        geoPassDepthAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD; // We need to reuse the depth render target.
         geoPassDepthAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        geoPassDepthAttachmentInfo.clearValue = depthClearVal;
+        // geoPassDepthAttachmentInfo.clearValue = depthClearVal;
     }
 
     std::vector<VkRenderingAttachmentInfoKHR> gBufferAttachmentsInfos = GetGBufferAttachments();
@@ -1237,7 +1238,30 @@ void SSAOApp::CmdGeoPass(VkCommandBuffer cmdBuffer)
         geoPassRenderInfo.pDepthAttachment = &geoPassDepthAttachmentInfo;
     }
 
+    std::vector<VkClearAttachment> clearAttachments;
+    // Clear the G-Buffer attachments.
+    for(int i = 0; i < gBufferAttachmentsInfos.size(); ++i)
+    {
+        VkClearAttachment clearAttachment{};
+        clearAttachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        clearAttachment.colorAttachment = i;
+        clearAttachment.clearValue = clearColor;
+        clearAttachments.push_back(clearAttachment);
+    }
+    // Clear the depth attachment.
+    VkClearAttachment clearDepthAttachment{};
+    clearDepthAttachment.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    clearDepthAttachment.clearValue = depthClearVal;
+    clearAttachments.push_back(clearDepthAttachment);
+
+    VkClearRect clearRect{};
+    clearRect.rect = scissor;
+    clearRect.baseArrayLayer = 0;
+    clearRect.layerCount = 1;
+
     vkCmdBeginRendering(cmdBuffer, &geoPassRenderInfo);
+
+    vkCmdClearAttachments(cmdBuffer, clearAttachments.size(), clearAttachments.data(), 1, &clearRect);
 
     vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_geoPassPipeline.GetVkPipeline());
 
@@ -1448,6 +1472,7 @@ void SSAOApp::AppInit()
 
     std::string sceneLoadPathAbs = SOURCE_PATH;
     sceneLoadPathAbs += +"/../data/Sponza/Sponza.gltf";
+    // sceneLoadPathAbs += +"/../data/Box/Box.gltf";
 
     m_pGltfLoaderManager->Load(sceneLoadPathAbs, *m_pLevel);
     m_pGltfLoaderManager->InitEntitesGpuRsrc(m_device, m_pAllocator, GetGfxCmdBuffer(0), m_graphicsQueue);

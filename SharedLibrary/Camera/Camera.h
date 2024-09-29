@@ -26,6 +26,7 @@ namespace SharedLib
 
         void SetView(float* iView);
         void SetPos(float* iPos) { memcpy(m_pos, iPos, sizeof(m_pos)); }
+        void SetFar(float iFar) { m_far = iFar; }
 
     private:
         void OnMiddleMouseButtonEvent(HEvent& ievent);

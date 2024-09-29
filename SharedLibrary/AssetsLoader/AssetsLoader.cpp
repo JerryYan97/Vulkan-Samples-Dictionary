@@ -185,7 +185,7 @@ namespace SharedLib
                     }
                     else
                     {
-                        assert(false, "The loaded mesh doesn't have uv data.");
+                        // assert(false, "The loaded mesh doesn't have uv data.");
                         meshPrimitive.m_texCoordData = std::vector<float>(posAccessor.count * 2, 0.f);
                     }
 
