@@ -4,6 +4,9 @@
 #include <math.h>
 #include <algorithm>
 #include <chrono>
+#include "../../../ThirdPartyLibs/DearImGUI/imgui.h"
+#include "../../../ThirdPartyLibs/DearImGUI/backends/imgui_impl_glfw.h"
+#include "../../../ThirdPartyLibs/DearImGUI/backends/imgui_impl_vulkan.h"
 #include "../../../SharedLibrary/Utils/VulkanDbgUtils.h"
 #include "../../../SharedLibrary/Camera/Camera.h"
 #include "../../../SharedLibrary/Event/Event.h"
@@ -1331,9 +1334,38 @@ void SSAOApp::CmdSSAOAppMultiTypeRendering(VkCommandBuffer cmdBuffer)
 }
 
 // ================================================================================================================
-void SSAOApp::ImGuiFrame()
+void SSAOApp::ImGuiFrame(VkCommandBuffer cmdBuffer)
 {
+    // Start the Dear ImGui frame
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
 
+    ImGui::ShowDemoWindow();
+
+    ImGui::Render();
+
+    ImDrawData* drawData = ImGui::GetDrawData();
+    const bool is_minimized = (drawData->DisplaySize.x <= 0.0f || drawData->DisplaySize.y <= 0.0f);
+
+    // Begin the render pass and record relevant commands
+    // Link framebuffer into the render pass
+    VkRenderPassBeginInfo renderPassInfo{};
+    {
+        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        renderPassInfo.renderPass = m_guiRenderPass;
+        renderPassInfo.framebuffer = m_imGuiFramebuffers[m_acqSwapchainImgIdx];
+        renderPassInfo.renderArea.offset = { 0, 0 };
+        renderPassInfo.renderArea.extent = m_swapchainImageExtent;
+        // renderPassInfo.clearValueCount = 1;
+        // renderPassInfo.pClearValues = &clearColor;
+    }
+    vkCmdBeginRenderPass(cmdBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    // Record the GUI rendering commands.
+    ImGui_ImplVulkan_RenderDrawData(drawData, cmdBuffer);
+
+    vkCmdEndRenderPass(cmdBuffer);
 }
 
 // ================================================================================================================

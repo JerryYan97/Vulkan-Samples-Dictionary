@@ -1,4 +1,5 @@
 #include "DearImGuiApplication.h"
+#include "../../../SharedLibrary/Utils/VulkanDbgUtils.h"
 #include "../../../ThirdPartyLibs/DearImGUI/imgui.h"
 #include "../../../ThirdPartyLibs/DearImGUI/backends/imgui_impl_glfw.h"
 #include "../../../ThirdPartyLibs/DearImGUI/backends/imgui_impl_vulkan.h"
@@ -43,11 +44,12 @@ namespace SharedLib
         {
             guiRenderTargetAttachment.format = m_choisenSurfaceFormat.format;
             guiRenderTargetAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-            guiRenderTargetAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            // guiRenderTargetAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; // Note that we don't clear the ImGUI render target since we put DearImGUI at end of a render pass and it's transparent.
+            guiRenderTargetAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
             guiRenderTargetAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
             guiRenderTargetAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
             guiRenderTargetAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-            guiRenderTargetAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            guiRenderTargetAttachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
             guiRenderTargetAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
         }
 
@@ -156,12 +158,51 @@ namespace SharedLib
             initInfo.CheckVkResultFn = CheckVkResult;
         }
         ImGui_ImplVulkan_Init(&initInfo, m_guiRenderPass);
+
+        // Upload Fonts
+        {
+            // Use any command queue
+            VK_CHECK(vkResetCommandPool(m_device, m_gfxCmdPool, 0));
+
+            VkCommandBufferAllocateInfo fontUploadCmdBufAllocInfo{};
+            {
+                fontUploadCmdBufAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+                fontUploadCmdBufAllocInfo.commandPool = m_gfxCmdPool;
+                fontUploadCmdBufAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+                fontUploadCmdBufAllocInfo.commandBufferCount = 1;
+            }
+            VkCommandBuffer fontUploadCmdBuf;
+            VK_CHECK(vkAllocateCommandBuffers(m_device, &fontUploadCmdBufAllocInfo, &fontUploadCmdBuf));
+
+            VkCommandBufferBeginInfo begin_info{};
+            {
+                begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+                begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+            }
+            VK_CHECK(vkBeginCommandBuffer(fontUploadCmdBuf, &begin_info));
+
+            ImGui_ImplVulkan_CreateFontsTexture(fontUploadCmdBuf);
+
+            VkSubmitInfo end_info = {};
+            {
+                end_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+                end_info.commandBufferCount = 1;
+                end_info.pCommandBuffers = &fontUploadCmdBuf;
+            }
+
+            VK_CHECK(vkEndCommandBuffer(fontUploadCmdBuf));
+
+            VK_CHECK(vkQueueSubmit(m_graphicsQueue, 1, &end_info, VK_NULL_HANDLE));
+
+            VK_CHECK(vkDeviceWaitIdle(m_device));
+            ImGui_ImplVulkan_DestroyFontUploadObjects();
+        }
     }
 
     // ================================================================================================================
     void ImGuiApplication::FrameStart()
     {
-        GlfwApplication::FrameStart();
+        GlfwApplication::FrameStart(); // Contains the GlfwPollEvents() call.
     }
 
     // ================================================================================================================

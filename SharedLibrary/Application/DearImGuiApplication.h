@@ -47,17 +47,17 @@ namespace SharedLib
         virtual void FrameStart() override;
         virtual void FrameEnd() override;
 
-        virtual void ImGuiFrame() = 0;
+        virtual void ImGuiFrame(VkCommandBuffer cmdBuffer) = 0;
 
     protected:
-        void InitImGui();
+        void InitImGui(); // Note that we need to use a command buffer to upload the font texture, so we need to call this after the command buffer is created.
 
-        ImGuiInputHandler inputHandler;
-
-    private:
-        VkDescriptorPool m_descriptorPool; // It's only used for ImGui.
-        VkRenderPass     m_guiRenderPass;  // It's only used for ImGui.
+        ImGuiInputHandler m_inputHandler;
+        VkDescriptorPool  m_descriptorPool; // It's only used for ImGui.
+        VkRenderPass      m_guiRenderPass;  // It's only used for ImGui.
 
         std::vector<VkFramebuffer> m_imGuiFramebuffers; // They are only used for ImGui.
+
+    private:
     };
 }

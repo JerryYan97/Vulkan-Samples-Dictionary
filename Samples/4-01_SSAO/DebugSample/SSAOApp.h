@@ -70,7 +70,7 @@ public:
 
     void UpdateCameraAndGpuBuffer();
 
-    void ImGuiFrame() override;
+    void ImGuiFrame(VkCommandBuffer cmdBuffer) override;
 
     void CmdGeoPass(VkCommandBuffer cmdBuffer);
     // void CmdTransferGBuffersToShaderRsrc(VkCommandBuffer cmdBuffer); -- NOTE: I can use the TransferGBuffer func.

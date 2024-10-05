@@ -60,7 +60,13 @@ int main()
 
         app.CmdSSAOAppMultiTypeRendering(currentCmdBuffer);
 
-        app.CmdSwapchainColorImgToPresent(currentCmdBuffer);
+        // Theoritically, we should call ImGuiFrame() before the scene rendering passes to improve performance (Not opaque GUI)
+        // but it requires depth test so we call it after the scene rendering passes.
+        // In addition, the ImGUI Renderpass transfers the swapchain color target layout from COLOR_ATTACHMENT_OPTIMAL
+        // to PRESENT_SRC_KHR, so we don't need to manually transfer the layout.
+        app.ImGuiFrame(currentCmdBuffer);
+
+        // app.CmdSwapchainColorImgToPresent(currentCmdBuffer);
         
         VK_CHECK(vkEndCommandBuffer(currentCmdBuffer));
 
