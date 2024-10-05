@@ -56,6 +56,8 @@ public:
 
     // SharedLib::GpuImg GetDeferredLightingRadianceTexture(uint32_t i) { return m_lightingPassRadianceTextures[i]; }
 
+    void CmdSSAOFrameStartLayoutTrans(VkCommandBuffer cmdBuffer); // GBuffer and swapchain images layout transitions.
+
     void CmdGBufferLayoutTrans(VkCommandBuffer      cmdBuffer,
                                VkImageLayout        oldLayout,
                                VkImageLayout        newLayout,

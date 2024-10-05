@@ -39,3 +39,5 @@ SSAO Blog: https://ajweeks.com/blog/2019/05/11/SSAO/
 Note that the texture coordinates of Vulkan are also increasing from left to right, top to down.
 
 Note that large scene needs to set camera far plane far enough.
+
+Maybe I can just refactor this example to a multi-render Algorithem Dear ImGUI based Vulkan Renderer.

@@ -40,6 +40,9 @@ int main()
         VK_CHECK(vkBeginCommandBuffer(currentCmdBuffer, &beginInfo));
         
         // Transfer GBuffer layout from UNDEFINED/Shader Resource to Color Attachment.
+        app.CmdSSAOFrameStartLayoutTrans(currentCmdBuffer);
+        
+        /*
         app.CmdGBufferLayoutTrans(currentCmdBuffer,
                                   VK_IMAGE_LAYOUT_UNDEFINED,
                                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -47,6 +50,7 @@ int main()
                                   VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                                   VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                                   VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+        */
 
         app.CmdGeoPass(currentCmdBuffer);
         

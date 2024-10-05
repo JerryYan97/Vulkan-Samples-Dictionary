@@ -150,9 +150,9 @@ void SSAOApp::DestroyVpUboObjects()
 // ================================================================================================================
 void SSAOApp::InitVpUboObjects()
 {
-    float defaultPos[] = {0.f, 0.f, 0.f};
+    float defaultPos[] = {0.f, 1.f, 0.f};
     m_pCamera->SetPos(defaultPos);
-    m_pCamera->SetFar(10000.f);
+    m_pCamera->SetFar(3000.f);
 
     // The alignment of a vec3 is 4 floats and the element alignment of a struct is the largest element alignment,
     // which is also the 4 float. Therefore, we need 32 floats as the buffer to store the VP's parameters.
@@ -172,12 +172,12 @@ void SSAOApp::InitVpUboObjects()
     }
 
     m_vpUboBuffers.resize(m_swapchainImgCnt);
-    
+
     float modelMat[16] = {
-        1.f, 0.f, 0.f, 0.f,
-        0.f, 1.f, 0.f, 0.f,
-        0.f, 0.f, 1.f, 0.f,
-        0.f, 0.f, 0.f, 1.f
+        0.008f, 0.f,    0.f,    0.f,
+        0.f,    0.008f, 0.f,    0.f,
+        0.f,    0.f,    0.008f, 0.f,
+        0.f,    0.f,    0.f,    1.f
     };
     float vpMat[16] = {};
     float tmpViewMat[16] = {};
@@ -216,15 +216,26 @@ void SSAOApp::InitVpUboObjects()
 void SSAOApp::SendCameraDataToBuffer(
     uint32_t i)
 {
+    float modelMat[16] = {
+        0.008f, 0.f,    0.f,    0.f,
+        0.f,    0.008f, 0.f,    0.f,
+        0.f,    0.f,    0.008f, 0.f,
+        0.f,    0.f,    0.f,    1.f
+    };
+
     float vpMat[16] = {};
     float tmpViewMat[16] = {};
     float tmpPersMat[16] = {};
     m_pCamera->GenViewPerspectiveMatrices(tmpViewMat, tmpPersMat, vpMat);
 
-    CopyRamDataToGpuBuffer(vpMat,
+    float combinedMat[32] = {};
+    memcpy(combinedMat, modelMat, 16 * sizeof(float));
+    memcpy(combinedMat + 16, vpMat, 16 * sizeof(float));
+
+    CopyRamDataToGpuBuffer(combinedMat,
                            m_vpUboBuffers[i].buffer,
                            m_vpUboBuffers[i].bufferAlloc,
-                           16 * sizeof(float));
+                           32 * sizeof(float));
 }
 
 // ================================================================================================================
@@ -245,7 +256,77 @@ void SSAOApp::UpdateCameraAndGpuBuffer()
     SharedLib::HEvent keySDownEvent = CreateKeyboardEvent(g_isSDown, "KEY_S");
     m_pCamera->OnEvent(keySDownEvent);
 
-    // SendCameraDataToBuffer(m_currentFrame);
+    SendCameraDataToBuffer(m_acqSwapchainImgIdx);
+}
+
+// ================================================================================================================
+void SSAOApp::CmdSSAOFrameStartLayoutTrans(VkCommandBuffer cmdBuffer)
+{
+    // GBuffer layout transites from undefined to render target.
+    // Swapchain Depth Buffer from undefined to depth stencil attachment.
+    // Swapchain Color Buffer from undefined to color attachment.
+    VkImageSubresourceRange colorOneMipOneLevelSubResRange{};
+    {
+        colorOneMipOneLevelSubResRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        colorOneMipOneLevelSubResRange.baseMipLevel = 0;
+        colorOneMipOneLevelSubResRange.levelCount = 1;
+        colorOneMipOneLevelSubResRange.baseArrayLayer = 0;
+        colorOneMipOneLevelSubResRange.layerCount = 1;
+    }
+
+    VkImageSubresourceRange depthOneMipOneLevelSubResRange{};
+    {
+        depthOneMipOneLevelSubResRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        depthOneMipOneLevelSubResRange.baseMipLevel = 0;
+        depthOneMipOneLevelSubResRange.levelCount = 1;
+        depthOneMipOneLevelSubResRange.baseArrayLayer = 0;
+        depthOneMipOneLevelSubResRange.layerCount = 1;
+    }
+
+    std::vector<VkImageMemoryBarrier> ssaoPreGPassImgLayoutTransBarriers;
+
+    // Transform the layout of the GBuffer textures from undefined to render target.
+    VkImageMemoryBarrier gBufferRenderTargetTransBarrierTemplate{};
+    {
+        gBufferRenderTargetTransBarrierTemplate.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        gBufferRenderTargetTransBarrierTemplate.srcAccessMask = VK_ACCESS_NONE;
+        gBufferRenderTargetTransBarrierTemplate.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        gBufferRenderTargetTransBarrierTemplate.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        gBufferRenderTargetTransBarrierTemplate.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        gBufferRenderTargetTransBarrierTemplate.subresourceRange = colorOneMipOneLevelSubResRange;
+    }
+
+    gBufferRenderTargetTransBarrierTemplate.image = m_worldPosTextures[m_acqSwapchainImgIdx].image;
+    ssaoPreGPassImgLayoutTransBarriers.push_back(gBufferRenderTargetTransBarrierTemplate);
+
+    gBufferRenderTargetTransBarrierTemplate.image = m_normalTextures[m_acqSwapchainImgIdx].image;
+    ssaoPreGPassImgLayoutTransBarriers.push_back(gBufferRenderTargetTransBarrierTemplate);
+
+    gBufferRenderTargetTransBarrierTemplate.image = m_albedoTextures[m_acqSwapchainImgIdx].image;
+    ssaoPreGPassImgLayoutTransBarriers.push_back(gBufferRenderTargetTransBarrierTemplate);
+
+    gBufferRenderTargetTransBarrierTemplate.image = m_roughnessMetallicOcclusionTextures[m_acqSwapchainImgIdx].image;
+    ssaoPreGPassImgLayoutTransBarriers.push_back(gBufferRenderTargetTransBarrierTemplate);
+
+    // Transform the layout of the swapchain from undefined to color render target.
+    gBufferRenderTargetTransBarrierTemplate.image = GetSwapchainColorImage();
+    ssaoPreGPassImgLayoutTransBarriers.push_back(gBufferRenderTargetTransBarrierTemplate);
+
+    // Transform the layout of the swapchain depth buffer from undefined to depth stencil attachment.
+    gBufferRenderTargetTransBarrierTemplate.image = GetSwapchainDepthImage();
+    gBufferRenderTargetTransBarrierTemplate.subresourceRange = depthOneMipOneLevelSubResRange;
+    gBufferRenderTargetTransBarrierTemplate.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    ssaoPreGPassImgLayoutTransBarriers.push_back(gBufferRenderTargetTransBarrierTemplate);
+
+    vkCmdPipelineBarrier(
+        cmdBuffer,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        0,
+        0, nullptr,
+        0, nullptr,
+        ssaoPreGPassImgLayoutTransBarriers.size(),
+        ssaoPreGPassImgLayoutTransBarriers.data());
 }
 
 // ================================================================================================================
@@ -1241,7 +1322,13 @@ void SSAOApp::CmdGeoPass(VkCommandBuffer cmdBuffer)
         geoPassRenderInfo.pDepthAttachment = &geoPassDepthAttachmentInfo;
     }
 
+    VkClearRect clearRect{};
+    clearRect.rect = scissor;
+    clearRect.baseArrayLayer = 0;
+    clearRect.layerCount = 1;
+
     std::vector<VkClearAttachment> clearAttachments;
+    std::vector<VkClearRect> clearRects;
     // Clear the G-Buffer attachments.
     for(int i = 0; i < gBufferAttachmentsInfos.size(); ++i)
     {
@@ -1250,21 +1337,19 @@ void SSAOApp::CmdGeoPass(VkCommandBuffer cmdBuffer)
         clearAttachment.colorAttachment = i;
         clearAttachment.clearValue = clearColor;
         clearAttachments.push_back(clearAttachment);
+
+        clearRects.push_back(clearRect);
     }
     // Clear the depth attachment.
     VkClearAttachment clearDepthAttachment{};
     clearDepthAttachment.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
     clearDepthAttachment.clearValue = depthClearVal;
     clearAttachments.push_back(clearDepthAttachment);
-
-    VkClearRect clearRect{};
-    clearRect.rect = scissor;
-    clearRect.baseArrayLayer = 0;
-    clearRect.layerCount = 1;
+    clearRects.push_back(clearRect);
 
     vkCmdBeginRendering(cmdBuffer, &geoPassRenderInfo);
 
-    vkCmdClearAttachments(cmdBuffer, clearAttachments.size(), clearAttachments.data(), 1, &clearRect);
+    vkCmdClearAttachments(cmdBuffer, clearAttachments.size(), clearAttachments.data(), clearRects.size(), clearRects.data());
 
     vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_geoPassPipeline.GetVkPipeline());
 
