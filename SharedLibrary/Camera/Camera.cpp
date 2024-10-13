@@ -75,9 +75,62 @@ namespace SharedLib
         case crc32("KEY_D"):
             OnKeyDEvent(ievent);
             break;
+        case crc32("CAMERA_MOVE_FORWARD"):
+            MoveForward();
+            break;
+        case crc32("CAMERA_MOVE_BACKWARD"):
+            MoveBackward();
+            break;
+        case crc32("CAMERA_MOVE_LEFT"):
+            MoveLeft();
+            break;
+        case crc32("CAMERA_MOVE_RIGHT"):
+            MoveRight();
+            break;
+        case crc32("CAMERA_ROTATE"):
+            {
+                HEventArguments& args = ievent.GetArgs();
+                float xOffset = std::any_cast<float>(args[crc32("X_OFFSET")]);
+                float yOffset = std::any_cast<float>(args[crc32("Y_OFFSET")]);
+                MouseRotate(xOffset, yOffset);
+            }
+            break;
         default:
             break;
         }
+    }
+
+    // ================================================================================================================
+    void Camera::MoveForward()
+    {
+        float moveOffset[3] = {};
+        memcpy(moveOffset, m_view, 3 * sizeof(float));
+
+        ScalarMul(0.1f, moveOffset, 3);
+
+        VecAdd(moveOffset, m_pos, 3, m_pos);
+    }
+
+    // ================================================================================================================
+    void Camera::MoveBackward()
+    {
+        float moveOffset[3] = {};
+        memcpy(moveOffset, m_view, 3 * sizeof(float));
+
+        ScalarMul(-0.1f, moveOffset, 3);
+
+        VecAdd(moveOffset, m_pos, 3, m_pos);
+    }
+
+    // ================================================================================================================
+    void Camera::MoveLeft()
+    {
+        float right[3] = {};
+        CrossProductVec3(m_view, m_up, right);
+
+        ScalarMul(-0.1f, right, 3);
+
+        VecAdd(right, m_pos, 3, m_pos);
     }
 
     // ================================================================================================================
@@ -88,12 +141,7 @@ namespace SharedLib
         bool isDown = std::any_cast<bool>(args[crc32("IS_DOWN")]);
         if (isDown)
         {
-            float moveOffset[3] = {};
-            memcpy(moveOffset, m_view, 3 * sizeof(float));
-
-            ScalarMul(0.1f, moveOffset, 3);
-
-            VecAdd(moveOffset, m_pos, 3, m_pos);
+            MoveForward();
         }
     }
 
@@ -105,12 +153,7 @@ namespace SharedLib
         bool isDown = std::any_cast<bool>(args[crc32("IS_DOWN")]);
         if (isDown)
         {
-            float moveOffset[3] = {};
-            memcpy(moveOffset, m_view, 3 * sizeof(float));
-
-            ScalarMul(-0.1f, moveOffset, 3);
-
-            VecAdd(moveOffset, m_pos, 3, m_pos);
+            MoveBackward();
         }
     }
 
@@ -122,13 +165,19 @@ namespace SharedLib
         bool isDown = std::any_cast<bool>(args[crc32("IS_DOWN")]);
         if (isDown)
         {
-            float right[3] = {};
-            CrossProductVec3(m_view, m_up, right);
-
-            ScalarMul(-0.1f, right, 3);
-
-            VecAdd(right, m_pos, 3, m_pos);
+            MoveLeft();
         }
+    }
+
+    // ================================================================================================================
+    void Camera::MoveRight()
+    {
+        float right[3] = {};
+        CrossProductVec3(m_view, m_up, right);
+
+        ScalarMul(0.1f, right, 3);
+
+        VecAdd(right, m_pos, 3, m_pos);
     }
 
     // ================================================================================================================
@@ -139,13 +188,42 @@ namespace SharedLib
         bool isDown = std::any_cast<bool>(args[crc32("IS_DOWN")]);
         if (isDown)
         {
-            float right[3] = {};
-            CrossProductVec3(m_view, m_up, right);
-
-            ScalarMul(0.1f, right, 3);
-
-            VecAdd(right, m_pos, 3, m_pos);
+            MoveRight();
         }
+    }
+
+    // ================================================================================================================
+    void Camera::MouseRotate(
+        float iMouseXOffset,
+        float iMouseYOffset)
+    {
+        float xOffset = -iMouseXOffset;
+        float yOffset = -iMouseYOffset;
+
+        float pitchRadien = 0.5f * yOffset * M_PI / 180.f;
+        float headRadien = 0.5f * xOffset * M_PI / 180.f;
+
+        float pitchRotMat[9] = {};
+        GenRotationMatArb(m_holdRight, pitchRadien, pitchRotMat);
+
+        float headRotMat[9] = {};
+        float worldUp[3] = { 0.f, 1.f, 0.f };
+        GenRotationMatArb(worldUp, headRadien, headRotMat);
+
+        float rotMat[9] = {};
+        MatMulMat(headRotMat, pitchRotMat, rotMat, 3);
+
+        float newView[3];
+        MatMulVec(rotMat, m_holdStartView, 3, newView);
+
+        float newUp[3];
+        MatMulVec(rotMat, m_holdStartUp, 3, newUp);
+
+        NormalizeVec(newView, 3);
+        NormalizeVec(newUp, 3);
+
+        memcpy(m_view, newView, 3 * sizeof(float));
+        memcpy(m_up, newUp, 3 * sizeof(float));
     }
 
     // ================================================================================================================
@@ -162,33 +240,7 @@ namespace SharedLib
                 // UP-Down -- Pitch; Left-Right -- Head;
                 HFVec2 curPos = std::any_cast<HFVec2>(args[crc32("POS")]);
 
-                float xOffset = -(curPos.ele[0] - m_holdStartPos.ele[0]);
-                float yOffset = -(curPos.ele[1] - m_holdStartPos.ele[1]);
-
-                float pitchRadien = 0.5f * yOffset * M_PI / 180.f;
-                float headRadien = 0.5f * xOffset * M_PI / 180.f;
-
-                float pitchRotMat[9] = {};
-                GenRotationMatArb(m_holdRight, pitchRadien, pitchRotMat);
-
-                float headRotMat[9] = {};
-                float worldUp[3] = { 0.f, 1.f, 0.f };
-                GenRotationMatArb(worldUp, headRadien, headRotMat);
-
-                float rotMat[9] = {};
-                MatMulMat(headRotMat, pitchRotMat, rotMat, 3);
-
-                float newView[3];
-                MatMulVec(rotMat, m_holdStartView, 3, newView);
-
-                float newUp[3];
-                MatMulVec(rotMat, m_holdStartUp, 3, newUp);
-
-                NormalizeVec(newView, 3);
-                NormalizeVec(newUp, 3);
-
-                memcpy(m_view, newView, 3 * sizeof(float));
-                memcpy(m_up, newUp, 3 * sizeof(float));
+                MouseRotate(curPos.ele[0] - m_holdStartPos.ele[0], curPos.ele[1] - m_holdStartPos.ele[1]);
             }
             else
             {

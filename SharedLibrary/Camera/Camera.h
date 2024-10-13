@@ -29,6 +29,13 @@ namespace SharedLib
         void SetFar(float iFar) { m_far = iFar; }
 
     private:
+        void MoveForward();
+        void MoveBackward();
+        void MoveLeft();
+        void MoveRight();
+        void MouseRotate(float iMouseXOffset, float iMouseYOffset);
+
+        // All the following events 
         void OnMiddleMouseButtonEvent(HEvent& ievent);
         void OnKeyWEvent(HEvent& ievent);
         void OnKeySEvent(HEvent& ievent);

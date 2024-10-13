@@ -90,6 +90,8 @@ private:
     void InitVpUboObjects();
     void DestroyVpUboObjects();
 
+    void SetupInputHandler(); // Setup the command generator for the input handler.
+
     // void CreateGBufferTransBarriers(); NOTE: We cannot use this because GBuffer sizes can be different for each frame.
 
     void InitScreenQuadVsShaderModule();
@@ -183,4 +185,84 @@ private:
     SharedLib::Level*             m_pLevel;
 
     PresentType m_presentType = PresentType::DIFFUSE;
+
+
+    // Input Command Generator
+    class CameraRotateCommandGenerator : public SharedLib::CommandGenerator
+    {
+    public:
+        CameraRotateCommandGenerator() {}
+        ~CameraRotateCommandGenerator() {}
+
+        SharedLib::CustomizedCommand GenerateCommand(const std::vector<SharedLib::ImGuiInput> inputs) override
+        {
+            SharedLib::ImGuiInput mouseMoveInput = FindQualifiedInput(SharedLib::MOUSE_MOVE, inputs);
+            SharedLib::CustomizedCommand cameraRotateCommand;
+            cameraRotateCommand.m_commandTypeUID = m_cmdGenCmdTypeUID;
+            cameraRotateCommand.m_payloadFloats = mouseMoveInput.GetFloats();
+            return cameraRotateCommand;
+        }
+    };
+
+    class CameraMoveForwardCommandGenerator : public SharedLib::CommandGenerator
+    {
+    public:
+        CameraMoveForwardCommandGenerator() {}
+        ~CameraMoveForwardCommandGenerator() {}
+
+        SharedLib::CustomizedCommand GenerateCommand(const std::vector<SharedLib::ImGuiInput> inputs) override
+        {
+            SharedLib::CustomizedCommand cameraMoveForwardCommand;
+            cameraMoveForwardCommand.m_commandTypeUID = m_cmdGenCmdTypeUID;
+            return cameraMoveForwardCommand;
+        }
+    };
+
+    class CameraMoveBackwardCommandGenerator : public SharedLib::CommandGenerator
+    {
+    public:
+        CameraMoveBackwardCommandGenerator() {}
+        ~CameraMoveBackwardCommandGenerator() {}
+
+        SharedLib::CustomizedCommand GenerateCommand(const std::vector<SharedLib::ImGuiInput> inputs) override
+        {
+            SharedLib::CustomizedCommand cameraMoveBackwardCommand;
+            cameraMoveBackwardCommand.m_commandTypeUID = m_cmdGenCmdTypeUID;
+            return cameraMoveBackwardCommand;
+        }
+    };
+
+    class CameraMoveLeftCommandGenerator : public SharedLib::CommandGenerator
+    {
+    public:
+        CameraMoveLeftCommandGenerator() {}
+        ~CameraMoveLeftCommandGenerator() {}
+
+        SharedLib::CustomizedCommand GenerateCommand(const std::vector<SharedLib::ImGuiInput> inputs) override
+        {
+            SharedLib::CustomizedCommand cameraMoveLeftCommand;
+            cameraMoveLeftCommand.m_commandTypeUID = m_cmdGenCmdTypeUID;
+            return cameraMoveLeftCommand;
+        }
+    };
+
+    class CameraMoveRightCommandGenerator : public SharedLib::CommandGenerator
+    {
+    public:
+        CameraMoveRightCommandGenerator() {}
+        ~CameraMoveRightCommandGenerator() {}
+
+        SharedLib::CustomizedCommand GenerateCommand(const std::vector<SharedLib::ImGuiInput> inputs) override
+        {
+            SharedLib::CustomizedCommand cameraMoveRightCommand;
+            cameraMoveRightCommand.m_commandTypeUID = m_cmdGenCmdTypeUID;
+            return cameraMoveRightCommand;
+        }
+    };
+
+    CameraRotateCommandGenerator       m_cameraRotateCmdGen;
+    CameraMoveForwardCommandGenerator  m_cameraMoveForwardCmdGen;
+    CameraMoveBackwardCommandGenerator m_cameraMoveBackwardCmdGen;
+    CameraMoveLeftCommandGenerator     m_cameraMoveLeftCmdGen;
+    CameraMoveRightCommandGenerator    m_cameraMoveRightCmdGen;
 };

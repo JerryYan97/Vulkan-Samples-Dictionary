@@ -15,68 +15,7 @@
 
 #include "vk_mem_alloc.h"
 
-// TODO: These static variables and functions can be put into a header file so that other projects can reuse them.
-static bool g_isMiddleDown = false;
-static bool g_isWDown = false;
-static bool g_isSDown = false;
-static bool g_isADown = false;
-static bool g_isDDown = false;
-
-static void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
-{
-    if (button == GLFW_MOUSE_BUTTON_MIDDLE && action == GLFW_PRESS)
-    {
-        g_isMiddleDown = true;
-    }
-
-    if (button == GLFW_MOUSE_BUTTON_MIDDLE && action == GLFW_RELEASE)
-    {
-        g_isMiddleDown = false;
-    }
-}
-
-static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
-{
-    if (key == GLFW_KEY_W && action == GLFW_PRESS)
-    {
-        g_isWDown = true;
-    }
-
-    if (key == GLFW_KEY_W && action == GLFW_RELEASE)
-    {
-        g_isWDown = false;
-    }
-
-    if (key == GLFW_KEY_S && action == GLFW_PRESS)
-    {
-        g_isSDown = true;
-    }
-
-    if (key == GLFW_KEY_S && action == GLFW_RELEASE)
-    {
-        g_isSDown = false;
-    }
-
-    if (key == GLFW_KEY_A && action == GLFW_PRESS)
-    {
-        g_isADown = true;
-    }
-
-    if (key == GLFW_KEY_A && action == GLFW_RELEASE)
-    {
-        g_isADown = false;
-    }
-
-    if (key == GLFW_KEY_D && action == GLFW_PRESS)
-    {
-        g_isDDown = true;
-    }
-
-    if (key == GLFW_KEY_D && action == GLFW_RELEASE)
-    {
-        g_isDDown = false;
-    }
-}
+#define CUSTOM_DEBUGGING 1
 
 // ================================================================================================================
 SSAOApp::SSAOApp() :
@@ -241,6 +180,7 @@ void SSAOApp::SendCameraDataToBuffer(
 // ================================================================================================================
 void SSAOApp::UpdateCameraAndGpuBuffer()
 {
+    /*
     SharedLib::HEvent midMouseDownEvent = CreateMiddleMouseEvent(g_isMiddleDown);
     m_pCamera->OnEvent(midMouseDownEvent);
 
@@ -255,6 +195,48 @@ void SSAOApp::UpdateCameraAndGpuBuffer()
 
     SharedLib::HEvent keySDownEvent = CreateKeyboardEvent(g_isSDown, "KEY_S");
     m_pCamera->OnEvent(keySDownEvent);
+    */
+
+    std::vector<SharedLib::CustomizedCommand> commands = m_inputHandler.HandleInput();
+
+    // Transfer the customized commands to the events to drive camera. This is not ideal but it's a quick solution
+    // to reuse the control code.
+    for(const auto& command : commands)
+    {
+        if (m_cameraMoveForwardCmdGen.CheckCmdTypeUID(command.m_commandTypeUID))
+        {
+            SharedLib::HEventArguments args;
+            SharedLib::HEvent cameraForwardEvent(args, "CAMERA_MOVE_FORWARD");
+            m_pCamera->OnEvent(cameraForwardEvent);
+        }
+        else if (m_cameraMoveBackwardCmdGen.CheckCmdTypeUID(command.m_commandTypeUID))
+        {
+            SharedLib::HEventArguments args;
+            SharedLib::HEvent cameraBackwardEvent(args, "CAMERA_MOVE_BACKWARD");
+            m_pCamera->OnEvent(cameraBackwardEvent);
+        }
+        else if (m_cameraMoveLeftCmdGen.CheckCmdTypeUID(command.m_commandTypeUID))
+        {
+            SharedLib::HEventArguments args;
+            SharedLib::HEvent cameraLeftEvent(args, "CAMERA_MOVE_LEFT");
+            m_pCamera->OnEvent(cameraLeftEvent);
+        }
+        else if (m_cameraMoveRightCmdGen.CheckCmdTypeUID(command.m_commandTypeUID))
+        {
+            SharedLib::HEventArguments args;
+            SharedLib::HEvent cameraRightEvent(args, "CAMERA_MOVE_RIGHT");
+            m_pCamera->OnEvent(cameraRightEvent);
+        }
+        else if (m_cameraRotateCmdGen.CheckCmdTypeUID(command.m_commandTypeUID))
+        {
+            SharedLib::HEventArguments args;
+            args[crc32("X_OFFSET")] = command.m_payloadFloats[0];
+            args[crc32("Y_OFFSET")] = command.m_payloadFloats[1];
+
+            SharedLib::HEvent cameraRotateEvent(args, "CAMERA_ROTATE");
+            m_pCamera->OnEvent(cameraRotateEvent);
+        }
+    }
 
     SendCameraDataToBuffer(m_acqSwapchainImgIdx);
 }
@@ -1533,6 +1515,32 @@ void SSAOApp::InitAlbedoRenderingPipeline()
 }
 
 // ================================================================================================================
+void SSAOApp::SetupInputHandler()
+{
+    std::unordered_set<SharedLib::InputEnum> camRotateKeyCombs = {SharedLib::InputEnum::PRESS_MOUSE_MIDDLE_BUTTON,
+                                                                  SharedLib::InputEnum::MOUSE_MOVE};
+    m_cameraRotateCmdGen.SetKeyCombination(camRotateKeyCombs);
+
+    std::unordered_set<SharedLib::InputEnum> camMoveForwardKeyCombs = {SharedLib::InputEnum::PRESS_W };
+    m_cameraMoveForwardCmdGen.SetKeyCombination(camMoveForwardKeyCombs);
+
+    std::unordered_set<SharedLib::InputEnum> camMoveBackwardKeyCombs = {SharedLib::InputEnum::PRESS_S };
+    m_cameraMoveBackwardCmdGen.SetKeyCombination(camMoveBackwardKeyCombs);
+
+    std::unordered_set<SharedLib::InputEnum> camMoveLeftKeyCombs = {SharedLib::InputEnum::PRESS_A };
+    m_cameraMoveLeftCmdGen.SetKeyCombination(camMoveLeftKeyCombs);
+
+    std::unordered_set<SharedLib::InputEnum> camMoveRightKeyCombs = {SharedLib::InputEnum::PRESS_D };
+    m_cameraMoveRightCmdGen.SetKeyCombination(camMoveRightKeyCombs);
+
+    m_inputHandler.AddOrUpdateCommandGenerator(&m_cameraRotateCmdGen);
+    m_inputHandler.AddOrUpdateCommandGenerator(&m_cameraMoveForwardCmdGen);
+    m_inputHandler.AddOrUpdateCommandGenerator(&m_cameraMoveBackwardCmdGen);
+    m_inputHandler.AddOrUpdateCommandGenerator(&m_cameraMoveLeftCmdGen);
+    m_inputHandler.AddOrUpdateCommandGenerator(&m_cameraMoveRightCmdGen);
+}
+
+// ================================================================================================================
 void SSAOApp::AppInit()
 {
     glfwInit();
@@ -1545,8 +1553,8 @@ void SSAOApp::AppInit()
 
     // Init glfw window.
     InitGlfwWindowAndCallbacks();
-    glfwSetMouseButtonCallback(m_pWindow, MouseButtonCallback);
-    glfwSetKeyCallback(m_pWindow, KeyCallback);
+    // glfwSetMouseButtonCallback(m_pWindow, MouseButtonCallback);
+    // glfwSetKeyCallback(m_pWindow, KeyCallback);
 
     // Create vulkan surface from the glfw window.
     VK_CHECK(glfwCreateWindowSurface(m_instance, m_pWindow, nullptr, &m_surface));
@@ -1582,6 +1590,7 @@ void SSAOApp::AppInit()
     // InitMetallicRoughnessSSBO();
     InitGBuffer();
     // InitLightPosRadianceSSBOs();
+    SetupInputHandler();
 
     // Load in gltf scene.
     m_pGltfLoaderManager = new SharedLib::GltfLoaderManager();
