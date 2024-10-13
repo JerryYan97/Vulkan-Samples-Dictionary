@@ -180,24 +180,8 @@ void SSAOApp::SendCameraDataToBuffer(
 // ================================================================================================================
 void SSAOApp::UpdateCameraAndGpuBuffer()
 {
-    /*
-    SharedLib::HEvent midMouseDownEvent = CreateMiddleMouseEvent(g_isMiddleDown);
-    m_pCamera->OnEvent(midMouseDownEvent);
-
-    SharedLib::HEvent keyADownEvent = CreateKeyboardEvent(g_isADown, "KEY_A");
-    m_pCamera->OnEvent(keyADownEvent);
-
-    SharedLib::HEvent keyDDownEvent = CreateKeyboardEvent(g_isDDown, "KEY_D");
-    m_pCamera->OnEvent(keyDDownEvent);
-
-    SharedLib::HEvent keyWDownEvent = CreateKeyboardEvent(g_isWDown, "KEY_W");
-    m_pCamera->OnEvent(keyWDownEvent);
-
-    SharedLib::HEvent keySDownEvent = CreateKeyboardEvent(g_isSDown, "KEY_S");
-    m_pCamera->OnEvent(keySDownEvent);
-    */
-
     std::vector<SharedLib::CustomizedCommand> commands = m_inputHandler.HandleInput();
+    bool isCameraMiddleButtonDown = false;
 
     // Transfer the customized commands to the events to drive camera. This is not ideal but it's a quick solution
     // to reuse the control code.
@@ -230,12 +214,27 @@ void SSAOApp::UpdateCameraAndGpuBuffer()
         else if (m_cameraRotateCmdGen.CheckCmdTypeUID(command.m_commandTypeUID))
         {
             SharedLib::HEventArguments args;
-            args[crc32("X_OFFSET")] = command.m_payloadFloats[0];
-            args[crc32("Y_OFFSET")] = command.m_payloadFloats[1];
+            SharedLib::HFVec2 mousePos;
+            mousePos.ele[0] = command.m_payloadFloats[2];
+            mousePos.ele[1] = command.m_payloadFloats[3];
 
-            SharedLib::HEvent cameraRotateEvent(args, "CAMERA_ROTATE");
+            args[crc32("POS")] = mousePos;
+            args[crc32("IS_DOWN")] = true;
+
+            SharedLib::HEvent cameraRotateEvent(args, "MOUSE_MIDDLE_BUTTON");
             m_pCamera->OnEvent(cameraRotateEvent);
+
+            isCameraMiddleButtonDown = true;
         }
+    }
+
+    if (isCameraMiddleButtonDown == false)
+    {
+        // Send Empty packet to Camera to reset the hold state.
+        SharedLib::HEventArguments args;
+        args[crc32("IS_DOWN")] = false;
+        SharedLib::HEvent cameraRotateEvent(args, "MOUSE_MIDDLE_BUTTON");
+        m_pCamera->OnEvent(cameraRotateEvent);
     }
 
     SendCameraDataToBuffer(m_acqSwapchainImgIdx);
