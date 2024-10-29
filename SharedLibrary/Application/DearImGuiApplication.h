@@ -59,7 +59,7 @@ namespace SharedLib
         friend class ImGuiInputHandler; // ImGuiInputHandler clears the command type UID counter when it's created.
 
         virtual CustomizedCommand GenerateCommand(const std::vector<ImGuiInput> inputs) = 0;
-        bool CheckKeyCombination(const std::unordered_set<InputEnum>& curInputStates) { return curInputStates == m_keycombination; }
+        bool CheckKeyCombination(const std::unordered_set<InputEnum>& curInputStates);
         std::unordered_set<InputEnum> GetKeyCombination() { return m_keycombination; }
         void SetKeyCombination(const std::unordered_set<InputEnum>& keyCombination) { m_keycombination = keyCombination; }
 

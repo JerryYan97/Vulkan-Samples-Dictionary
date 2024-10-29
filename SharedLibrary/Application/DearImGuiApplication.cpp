@@ -91,7 +91,7 @@ namespace SharedLib
             frameInputs.push_back(ImGuiInput(InputEnum::PRESS_D));
         }
         
-        if(abs(io.MouseDelta.x) > 0 || abs(io.MouseDelta.y))
+        if(abs(io.MouseDelta.x) > 0.f || abs(io.MouseDelta.y) > 0.f)
         {
             ImGuiInput mouseMove(InputEnum::MOUSE_MOVE);
             mouseMove.AddFloat(io.MouseDelta.x);
@@ -120,6 +120,20 @@ namespace SharedLib
         }
 
         return commands;
+    }
+
+    // ================================================================================================================
+    bool CommandGenerator::CheckKeyCombination(
+        const std::unordered_set<InputEnum>& curInputStates)
+    {
+        for (const auto& itr : m_keycombination)
+        {
+            if (curInputStates.count(itr) == 0)
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     // ================================================================================================================
