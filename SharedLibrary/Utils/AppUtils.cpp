@@ -6,6 +6,8 @@
 #include "../../SharedLibrary/HLSL/g_cubemapFormat_frag.h"
 #include <fstream>
 #include <cassert>
+#include <vector>
+#include <unordered_set>
 
 namespace SharedLib
 {
@@ -793,5 +795,80 @@ namespace SharedLib
 
         std::cout << "Max array layers:" << imgFormatProperties.maxArrayLayers << std::endl;
         std::cout << "Max array layers:" << imgFormatProperties.maxMipLevels << std::endl;
+    }
+
+    // ================================================================================================================
+    void GetVulkanRtPhyDeviceProperties(VkPhysicalDevice                                    phyDevice,
+                                        VkPhysicalDeviceAccelerationStructurePropertiesKHR* oPhyDevAccStructProperties,
+                                        VkPhysicalDeviceRayTracingPipelinePropertiesKHR*    oPhyDevRtPipelineProperties)
+    {
+        {
+            VkPhysicalDeviceProperties physicalDevProperties;
+            vkGetPhysicalDeviceProperties(phyDevice, &physicalDevProperties);
+            std::cout << "Device name:" << physicalDevProperties.deviceName << std::endl;
+
+            // Note - if you don't include VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME in
+            // ppEnabledExtensionNames when you create instance, there will be no rayTracingPipelines
+
+            // Check if ray query is supported.
+            VkPhysicalDeviceRayQueryFeaturesKHR phyDevRayQueryFeatures = {};
+            {
+                phyDevRayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
+            }
+
+            // Check if Acceleration structure is supported. (Whether the native acceleration structure is supported.)
+            VkPhysicalDeviceAccelerationStructureFeaturesKHR phyDevAccStructFeatures = {};
+            {
+                phyDevAccStructFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+                phyDevAccStructFeatures.pNext = &phyDevRayQueryFeatures;
+            }
+
+            // Check if ray tracing extension is supported
+            VkPhysicalDeviceRayTracingPipelineFeaturesKHR rtPipelineFeatures = {};
+            {
+                rtPipelineFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
+                rtPipelineFeatures.pNext = &phyDevAccStructFeatures;
+            }
+
+            VkPhysicalDeviceFeatures2 phyDevFeatures2 = {};
+            {
+                phyDevFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+                phyDevFeatures2.pNext = &rtPipelineFeatures;
+            }
+
+            vkGetPhysicalDeviceFeatures2(phyDevice, &phyDevFeatures2);
+
+            std::cout << "Support raytracing pipeline: " << rtPipelineFeatures.rayTracingPipeline << std::endl;
+
+            if (rtPipelineFeatures.rayTracingPipeline)
+            {
+                // Accerlation structure properties.
+                {
+                    oPhyDevAccStructProperties->sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR;
+                }
+
+                // Ray tracing properties.
+                {
+                    oPhyDevRtPipelineProperties->sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
+                    oPhyDevRtPipelineProperties->pNext = oPhyDevAccStructProperties;
+                }
+
+                VkPhysicalDeviceProperties2 phyDevRtProperties2 = {};
+                {
+                    phyDevRtProperties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+                    phyDevRtProperties2.pNext = oPhyDevRtPipelineProperties;
+                }
+
+                vkGetPhysicalDeviceProperties2(phyDevice, &phyDevRtProperties2);
+
+                std::cout << "Max recursion depth: " << oPhyDevRtPipelineProperties->maxRayRecursionDepth << std::endl;
+
+                std::cout << "Has acceleration structure: " << phyDevAccStructFeatures.accelerationStructure << std::endl;
+
+                std::cout << "Max acceleration structure geometry count: " << oPhyDevAccStructProperties->maxGeometryCount << std::endl;
+
+                std::cout << "Has ray query: " << phyDevRayQueryFeatures.rayQuery << std::endl;
+            }
+        }
     }
 }

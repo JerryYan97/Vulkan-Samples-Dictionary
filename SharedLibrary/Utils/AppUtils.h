@@ -30,6 +30,10 @@ namespace SharedLib
                                 VmaAllocation dstAllocation,
                                 uint32_t      byteNum);
 
+    void GetVulkanRtPhyDeviceProperties(VkPhysicalDevice                                    phyDevice,
+                                        VkPhysicalDeviceAccelerationStructurePropertiesKHR* oPhyDevAccStructProperties,
+                                        VkPhysicalDeviceRayTracingPipelinePropertiesKHR*    oPhyDevRtPipelineProperties);
+
     struct VulkanInfos
     {
         VkDevice      device; // NOTE: The push descriptors feature has to be enabled.

@@ -161,7 +161,6 @@ namespace SharedLib
                             VK_IMAGE_LAYOUT_UNDEFINED,
                             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                             GetSwapchainColorPresentSubResRange());
-
         return true;
     }
 

@@ -8,16 +8,17 @@ I may want to design a materialized input system.
 Deploy enough point lights in the scene.
 --- Ambient Occlusion only affects ambient light. I may don't need the point lights.
 
-Step 1:
+Step 1: (Done)
 Render out Scene's Diffuse Color. (Basically works. Needs more debugging after setup ImGUI and Input Handler.)
 In this step, we only need one pipeline (geo_vert.hlsl + geo_frag.hlsl)
 Besides, I need to make the basic ImGui framework works. 
 
-Step 2:
-Add ImGUI on Top of it.
+Step 2: (Done)
+Add ImGUI on Top of it. (Checked)
 
 Step 3:
-Switch between Diffuse Color and Normal Color
+Implement Ambient Occlusion Factor Tex Generation Algorithm.
+Switch between Diffuse Color, Normal Color, Occlusion Factor Tex.
 
 Step 4 ~:
 Include SSAO.

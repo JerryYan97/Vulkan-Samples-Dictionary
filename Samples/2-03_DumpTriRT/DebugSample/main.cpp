@@ -3,6 +3,7 @@
 #include <unordered_set>
 #include <fstream>
 #include <cassert>
+#include <string>
 #include "vulkan/vulkan.h"
 #include "lodepng.h"
 
@@ -645,7 +646,8 @@ int main()
             VkAccelerationStructureGeometryTrianglesDataKHR accStructureGeoTriData = {};
             {
                 accStructureGeoTriData.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
-                accStructureGeoTriData.vertexFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+                // accStructureGeoTriData.vertexFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+                accStructureGeoTriData.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
                 accStructureGeoTriData.vertexData = vertBufferDeviceAddr;
                 accStructureGeoTriData.vertexStride = sizeof(float) * 3;
                 accStructureGeoTriData.maxVertex = 2;

@@ -161,6 +161,8 @@ namespace SharedLib
     // ================================================================================================================
     ImGuiApplication::~ImGuiApplication()
     {
+        vkDeviceWaitIdle(m_device);
+
         for (auto framebuffer : m_imGuiFramebuffers)
         {
             vkDestroyFramebuffer(m_device, framebuffer, nullptr);

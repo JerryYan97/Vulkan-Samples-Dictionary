@@ -18,6 +18,9 @@ https://github.com/nvpro-samples/gl_vk_meshlet_cadscene
 https://www.youtube.com/watch?v=n3cnUHYGbpw
 https://github.com/SaschaWillems/Vulkan/tree/master/examples/meshshader
 
+https://chaoticbob.github.io/2024/01/24/mesh-shading-part-1.html
+
+
 GLSL include:
 https://stackoverflow.com/questions/10754437/how-to-using-the-include-in-glsl-support-arb-shading-language-include
 
