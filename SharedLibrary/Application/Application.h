@@ -206,7 +206,7 @@ namespace SharedLib
         void InitKHRFuncPtrs();
 
         void InitGraphicsQueue();
-        void InitVmaAllocator();
+        void InitVmaAllocator(int flags = 0);
         void InitGfxCommandPool();
         void InitGfxCommandBuffers(const uint32_t cmdBufCnt);
 

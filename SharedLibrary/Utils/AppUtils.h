@@ -34,6 +34,8 @@ namespace SharedLib
                                         VkPhysicalDeviceAccelerationStructurePropertiesKHR* oPhyDevAccStructProperties,
                                         VkPhysicalDeviceRayTracingPipelinePropertiesKHR*    oPhyDevRtPipelineProperties);
 
+    VkDeviceOrHostAddressConstKHR GetVkDeviceOrHostAddressConstKHR(VkDevice device, VkBuffer buffer);
+
     struct VulkanInfos
     {
         VkDevice      device; // NOTE: The push descriptors feature has to be enabled.

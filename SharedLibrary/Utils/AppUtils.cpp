@@ -31,7 +31,7 @@ namespace SharedLib
 
     // ================================================================================================================
     void CopyRamDataToGpuBuffer(
-        void*         pSrc,
+        void* pSrc,
         VmaAllocator* pAllocator,
         VkBuffer      dstBuffer,
         VmaAllocation dstAllocation,
@@ -129,7 +129,7 @@ namespace SharedLib
 
         // Get necessary function pointers
         m_pfnVkCmdPushDescriptorSetKHR = (PFN_vkCmdPushDescriptorSetKHR)vkGetDeviceProcAddr(m_vkInfos.device,
-                                                                                            "vkCmdPushDescriptorSetKHR");
+            "vkCmdPushDescriptorSetKHR");
         if (!m_pfnVkCmdPushDescriptorSetKHR) {
             exit(1);
         }
@@ -160,7 +160,7 @@ namespace SharedLib
             outputCubemapSubResRange.baseArrayLayer = 0;
             outputCubemapSubResRange.layerCount = 6;
         }
-        
+
         // Transform the layout of the cubemap from render target to copy src.
         // Transform the layout of the 6 images from undef to copy dst.
         VkImageMemoryBarrier stg1ImgsTrans[2] = {};
@@ -273,10 +273,10 @@ namespace SharedLib
         vkCmdBeginRendering(cmdBuffer, &renderInfo);
 
         // Bind the graphics pipeline
-        m_pfnVkCmdPushDescriptorSetKHR(cmdBuffer, 
-                                       VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                       m_formatPipelineLayout,
-                                       0, m_descriptorSet0Writes.size(), m_descriptorSet0Writes.data());
+        m_pfnVkCmdPushDescriptorSetKHR(cmdBuffer,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            m_formatPipelineLayout,
+            0, m_descriptorSet0Writes.size(), m_descriptorSet0Writes.data());
 
         vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pPipeline->GetVkPipeline());
 
@@ -408,22 +408,22 @@ namespace SharedLib
         // m_vsFormatShaderModule = CreateShaderModule("/hlsl/CubeMapFormat_vert.spv");
         // m_psFormatShaderModule = CreateShaderModule("/hlsl/CubeMapFormat_frag.spv");
         m_vsFormatShaderModule = CreateShaderModuleFromRam((uint32_t*)SharedLib::cubemapFormat_vertScript,
-                                                           sizeof(SharedLib::cubemapFormat_vertScript));
+            sizeof(SharedLib::cubemapFormat_vertScript));
 
         m_psFormatShaderModule = CreateShaderModuleFromRam((uint32_t*)SharedLib::cubemapFormat_fragScript,
-                                                           sizeof(SharedLib::cubemapFormat_fragScript));
+            sizeof(SharedLib::cubemapFormat_fragScript));
 
     }
 
     // ================================================================================================================
     void CubemapFormatTransApp::SetInputCubemapImg(
-        VkImage    iCubemapImg, 
+        VkImage    iCubemapImg,
         VkExtent3D extent,
         VkImageSubresourceRange iSubres)
     {
-        m_inputCubemap       = iCubemapImg;
+        m_inputCubemap = iCubemapImg;
         m_inputCubemapExtent = extent;
-        m_inputSubres        = iSubres;
+        m_inputSubres = iSubres;
         assert(iSubres.levelCount == 1, "The mipmap level count must be 1.");
     }
 
@@ -587,10 +587,10 @@ namespace SharedLib
 
         float widthHeight[2] = { m_inputCubemapExtent.width, m_inputCubemapExtent.height };
         CopyRamDataToGpuBuffer(widthHeight,
-                               m_vkInfos.pAllocator,
-                               m_formatWidthHeightBuffer,
-                               m_formatWidthHeightAlloc,
-                               sizeof(float) * 2);
+            m_vkInfos.pAllocator,
+            m_formatWidthHeightBuffer,
+            m_formatWidthHeightAlloc,
+            sizeof(float) * 2);
 
         // Create format width height buffer descriptor set write info
         {
@@ -641,15 +641,15 @@ namespace SharedLib
             outputCubemapExtent.height = m_inputCubemapExtent.width;
             outputCubemapExtent.depth = 1;
         }
-        
-        CopyImgToRam(tmpGfxCmdBuffer, 
-                     m_vkInfos.device,
-                     m_vkInfos.gfxQueue,
-                     *m_vkInfos.pAllocator,
-                     m_outputCubemap,
-                     outputCubemapLayersSubres,
-                     outputCubemapExtent,
-                     4, sizeof(float), pImgData);
+
+        CopyImgToRam(tmpGfxCmdBuffer,
+            m_vkInfos.device,
+            m_vkInfos.gfxQueue,
+            *m_vkInfos.pAllocator,
+            m_outputCubemap,
+            outputCubemapLayersSubres,
+            outputCubemapExtent,
+            4, sizeof(float), pImgData);
 
         // Convert data from 4 elements to 3 elements data
         float* pImgData3Ele = new float[3 * m_inputCubemapExtent.width * m_inputCubemapExtent.height * 6];
@@ -673,7 +673,7 @@ namespace SharedLib
         VkExtent3D               srcImgExtent,
         uint32_t                 srcImgChannelCnt,
         uint32_t                 srcImgChannelByteCnt,
-        void*                    pDst)
+        void* pDst)
     {
         // Copy the rendered images to a buffer.
         VkBuffer stagingBuffer;
@@ -684,7 +684,7 @@ namespace SharedLib
         {
             stagingBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
             stagingBufAllocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT |
-                                        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
         }
 
         VkBufferCreateInfo stgBufInfo{};
@@ -712,10 +712,10 @@ namespace SharedLib
         VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &beginInfo));
 
         vkCmdCopyImageToBuffer(cmdBuffer,
-                               srcImg,
-                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                               stagingBuffer,
-                               1, &imgToBufferCopy);
+            srcImg,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            stagingBuffer,
+            1, &imgToBufferCopy);
 
         // Submit all the works recorded before
         VK_CHECK(vkEndCommandBuffer(cmdBuffer));
@@ -786,12 +786,12 @@ namespace SharedLib
     {
         VkImageFormatProperties imgFormatProperties{};
         vkGetPhysicalDeviceImageFormatProperties(phyDevice,
-                                                 VK_FORMAT_R32G32B32_SFLOAT,
-                                                 VK_IMAGE_TYPE_2D,
-                                                 VK_IMAGE_TILING_OPTIMAL,
-                                                 // VK_IMAGE_TILING_LINEAR,
-                                                 VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT,
-                                                 VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT, &imgFormatProperties);
+            VK_FORMAT_R32G32B32_SFLOAT,
+            VK_IMAGE_TYPE_2D,
+            VK_IMAGE_TILING_OPTIMAL,
+            // VK_IMAGE_TILING_LINEAR,
+            VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT, &imgFormatProperties);
 
         std::cout << "Max array layers:" << imgFormatProperties.maxArrayLayers << std::endl;
         std::cout << "Max array layers:" << imgFormatProperties.maxMipLevels << std::endl;
@@ -799,8 +799,8 @@ namespace SharedLib
 
     // ================================================================================================================
     void GetVulkanRtPhyDeviceProperties(VkPhysicalDevice                                    phyDevice,
-                                        VkPhysicalDeviceAccelerationStructurePropertiesKHR* oPhyDevAccStructProperties,
-                                        VkPhysicalDeviceRayTracingPipelinePropertiesKHR*    oPhyDevRtPipelineProperties)
+        VkPhysicalDeviceAccelerationStructurePropertiesKHR* oPhyDevAccStructProperties,
+        VkPhysicalDeviceRayTracingPipelinePropertiesKHR* oPhyDevRtPipelineProperties)
     {
         {
             VkPhysicalDeviceProperties physicalDevProperties;
@@ -870,5 +870,20 @@ namespace SharedLib
                 std::cout << "Has ray query: " << phyDevRayQueryFeatures.rayQuery << std::endl;
             }
         }
+    }
+
+    // ================================================================================================================
+    VkDeviceOrHostAddressConstKHR GetVkDeviceOrHostAddressConstKHR(VkDevice device, VkBuffer buffer)
+    {
+        VkDeviceOrHostAddressConstKHR vertBufferDeviceAddr = {};
+        {
+            VkBufferDeviceAddressInfo bufferDeviceAddrInfo = {};
+            {
+                bufferDeviceAddrInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+                bufferDeviceAddrInfo.buffer = buffer;
+            }
+            vertBufferDeviceAddr.deviceAddress = vkGetBufferDeviceAddress(device, &bufferDeviceAddrInfo);
+        }
+        return vertBufferDeviceAddr;
     }
 }

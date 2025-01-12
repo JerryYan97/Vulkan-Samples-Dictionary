@@ -3,6 +3,7 @@
 Vulkan Samples Dictionary is a project that includes both vulkan examples written in C++ and a ReadTheDoc page serving as a dictionary introducing each example.
 
 ![Examples Images](./img/helmetIBL.png)
+![Ceisum Man](./img/CeisumMan.gif)
 
 ## Purpose
 

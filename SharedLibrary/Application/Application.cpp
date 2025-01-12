@@ -248,7 +248,7 @@ namespace SharedLib
     }
 
     // ================================================================================================================
-    void Application::InitVmaAllocator()
+    void Application::InitVmaAllocator(int flags)
     {
         // Create the VMA
         VmaVulkanFunctions vkFuncs = {};
@@ -259,6 +259,7 @@ namespace SharedLib
 
         VmaAllocatorCreateInfo allocCreateInfo = {};
         {
+            allocCreateInfo.flags = flags;
             allocCreateInfo.vulkanApiVersion = VK_API_VERSION_1_3;
             allocCreateInfo.physicalDevice = m_physicalDevice;
             allocCreateInfo.device = m_device;
